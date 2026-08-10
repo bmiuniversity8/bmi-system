@@ -281,9 +281,12 @@ export async function refreshAccessToken(): Promise<string | null> {
  */
 export async function authFetch(url: string, options: RequestInit = {}, timeoutMs: number = 5000): Promise<Response> {
   const csrfToken = _memoryToken;
-  
+  const isFormData = options.body instanceof FormData;
+
   const headers: Record<string, string> = {
-    ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+    // Don't force JSON when the caller is sending multipart FormData (authFetch must not
+    // mangle the browser-generated multipart boundary).
+    ...(options.body && !isFormData ? { 'Content-Type': 'application/json' } : {}),
     ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
     // Send JWT as Authorization header so cross-origin Pages requests authenticate
     // even when the SameSite=None cookie doesn't flow correctly

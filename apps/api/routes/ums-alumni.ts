@@ -68,6 +68,89 @@ export async function handleUpsertAlumniProfile(req: Request, env: Env, userId: 
 
   return ok({ id, message: 'Alumni profile created' }, 201);
 }
+export async function handleCreateAlumniProfileForUser(req: Request, env: Env): Promise<Response> {
+  const body = await req.json().catch(() => null) as Record<string, unknown> | null;
+  if (!body) return error('Request body must be a JSON object');
+
+  const userId = body.user_id as string;
+  if (!userId) return error('user_id is required', 400);
+
+  const user = await env.PLATFORM_CONTEXT!.db.prepare(`SELECT id FROM users WHERE id = ?`).bind(userId).first();
+  if (!user) return error('User not found', 404);
+
+  const existing = await env.PLATFORM_CONTEXT!.db.prepare(`SELECT id FROM alumni_profiles WHERE user_id = ?`).bind(userId).first<{ id: string }>();
+  if (existing) {
+    await env.PLATFORM_CONTEXT!.db.prepare(
+      `UPDATE alumni_profiles SET graduation_year=?, program=?, current_employer=?,
+        current_role=?, linkedin_url=?, location=?, bio=?, updated_at=datetime('now')
+       WHERE user_id=?`
+    ).bind(body.graduation_year ?? null, body.program ?? null, body.current_employer ?? null,
+      body.current_role ?? null, body.linkedin_url ?? null, body.location ?? null, body.bio ?? null, userId).run();
+    return ok({ id: existing.id, message: 'Alumni profile updated' });
+  }
+
+  const id = crypto.randomUUID();
+  await env.PLATFORM_CONTEXT!.db.prepare(
+    `INSERT INTO alumni_profiles (id, user_id, graduation_year, program, current_employer, current_role, linkedin_url, location, bio)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(id, userId, body.graduation_year ?? null, body.program ?? null, body.current_employer ?? null,
+    body.current_role ?? null, body.linkedin_url ?? null, body.location ?? null, body.bio ?? null).run();
+
+  return ok({ id, message: 'Alumni profile created' }, 201);
+}
+
+export async function handleUpdateAlumniProfile(req: Request, env: Env, id: string): Promise<Response> {
+  const existing = await env.PLATFORM_CONTEXT!.db.prepare(`SELECT id FROM alumni_profiles WHERE id = ?`).bind(id).first();
+  if (!existing) return error('Alumni profile not found', 404);
+
+  const body = await req.json().catch(() => null) as Record<string, unknown> | null;
+  if (!body) return error('Request body must be a JSON object');
+
+  const user = await env.PLATFORM_CONTEXT!.db.prepare(
+    `SELECT id FROM users WHERE email = ?`
+  ).bind(body.email || null).first<{ id: string }>();
+
+  if (body.email && !user) return error('User with that email does not exist', 404);
+  const userId = body.email && user ? user.id : existing.id;
+
+  await env.PLATFORM_CONTEXT!.db.prepare(
+    `UPDATE alumni_profiles SET
+       user_id = COALESCE(?, user_id),
+       graduation_year = COALESCE(?, graduation_year),
+       program = COALESCE(?, program),
+       current_employer = COALESCE(?, current_employer),
+       current_role = COALESCE(?, current_role),
+       linkedin_url = COALESCE(?, linkedin_url),
+       location = COALESCE(?, location),
+       bio = COALESCE(?, bio),
+       updated_at = datetime('now')
+     WHERE id = ?`
+  ).bind(
+    body.email ? userId : null,
+    body.graduation_year ?? null,
+    body.program ?? null,
+    body.current_employer ?? null,
+    body.current_role ?? null,
+    body.linkedin_url ?? null,
+    body.location ?? null,
+    body.bio ?? null,
+    id
+  ).run();
+
+  const row = await env.PLATFORM_CONTEXT!.db.prepare(
+    `SELECT ap.*, u.first_name, u.last_name, u.email
+     FROM alumni_profiles ap JOIN users u ON ap.user_id = u.id WHERE ap.id = ?`
+  ).bind(id).first();
+
+  return ok(row);
+}
+
+export async function handleDeleteAlumniProfile(_req: Request, env: Env, id: string): Promise<Response> {
+  const existing = await env.PLATFORM_CONTEXT!.db.prepare(`SELECT id FROM alumni_profiles WHERE id = ?`).bind(id).first();
+  if (!existing) return error('Alumni profile not found', 404);
+  await env.PLATFORM_CONTEXT!.db.prepare(`DELETE FROM alumni_profiles WHERE id = ?`).bind(id).run();
+  return ok({ deleted: true });
+}
 
 // ── Alumni Events ─────────────────────────────────────────────────────────────
 

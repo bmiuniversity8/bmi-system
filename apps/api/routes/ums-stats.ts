@@ -98,21 +98,71 @@ interface CertificateRow {
   [key: string]: unknown;
 }
 
+function logVerification(env: Env, entry: {
+  certificateId: string | null;
+  serial: string;
+  studentName: string | null;
+  result: 'valid' | 'invalid' | 'revoked';
+  method: string;
+  ip?: string;
+  location?: string;
+  userAgent?: string;
+}): void {
+  try {
+    env.PLATFORM_CONTEXT!.db.prepare(
+      `INSERT INTO verification_logs (id, certificate_id, serial_number, student_name, result, method, ip_address, location, user_agent)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+      crypto.randomUUID(),
+      entry.certificateId,
+      entry.serial,
+      entry.studentName,
+      entry.result,
+      entry.method,
+      entry.ip || null,
+      entry.location || null,
+      entry.userAgent || null
+    ).run().catch(e => console.error('Failed to write verification log:', e));
+  } catch (e) {
+    // Never let a ledger write failure break certificate verification.
+    console.error('Failed to write verification log:', e);
+  }
+}
+
 export async function handleVerifyCertificate(request: Request, env: Env): Promise<Response> {
   const body = await typedJson<{ serial?: string; serial_number?: string; method?: string; hash?: string }>(request).catch(() => ({} as Record<string, unknown>)) as { serial?: string; serial_number?: string; method?: string; hash?: string };
   const serial = body.serial || body.serial_number;
   if (!serial) return error('Serial number is required', 400);
-  
+
+  const method = ['online', 'offline', 'qr_scan'].includes(body.method || '') ? body.method! : 'online';
+  const cfIp = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || undefined;
+  const cfCountry = request.headers.get('CF-IPCountry') || undefined;
+  const userAgent = request.headers.get('User-Agent') || undefined;
+
   const cert = await env.PLATFORM_CONTEXT!.db.prepare(
     `SELECT c.*, u.first_name || ' ' || u.last_name as student_name
      FROM certificates c LEFT JOIN users u ON c.student_id = u.id
      WHERE c.serial_number = ?`
   ).bind(serial).first<CertificateRow>();
-  
-  if (!cert) return ok({ valid: false, error: 'Certificate not found', code: 'NOT_FOUND' });
-  
+
+  if (!cert) {
+    logVerification(env, {
+      certificateId: null, serial, studentName: null,
+      result: 'invalid', method, ip: cfIp, location: cfCountry, userAgent,
+    });
+    return ok({ valid: false, error: 'Certificate not found', code: 'NOT_FOUND' });
+  }
+
+  const result: 'valid' | 'revoked' | 'invalid' =
+    cert.status === 'ISSUED' ? 'valid' : cert.status === 'REVOKED' ? 'revoked' : 'invalid';
+
+  logVerification(env, {
+    certificateId: cert.id, serial, studentName: cert.student_name || null,
+    result, method, ip: cfIp, location: cfCountry, userAgent,
+  });
+
   await env.PLATFORM_CONTEXT!.db.prepare(`UPDATE certificates SET verification_count = verification_count + 1, updated_at=datetime('now') WHERE id=?`).bind(cert.id).run();
-  
+
   return ok({
     valid: cert.status === 'ISSUED',
     certificate: {
@@ -125,7 +175,7 @@ export async function handleVerifyCertificate(request: Request, env: Env): Promi
     },
     verification: {
       timestamp: new Date().toISOString(),
-      method: body.method || 'online',
+      method,
       hash_verified: body.hash ? body.hash === cert.content_hash : false,
       verification_count: (cert.verification_count || 0) + 1,
     }
@@ -133,9 +183,46 @@ export async function handleVerifyCertificate(request: Request, env: Env): Promi
 }
 
 export async function handleCertificateVerificationStats(_request: Request, env: Env): Promise<Response> {
-  const total = (await env.PLATFORM_CONTEXT!.db.prepare(`SELECT COUNT(*) as c FROM certificates`).first<{c:number}>())?.c || 0;
-  const issued = (await env.PLATFORM_CONTEXT!.db.prepare(`SELECT COUNT(*) as c FROM certificates WHERE status='ISSUED'`).first<{c:number}>())?.c || 0;
-  const revoked = (await env.PLATFORM_CONTEXT!.db.prepare(`SELECT COUNT(*) as c FROM certificates WHERE status='REVOKED'`).first<{c:number}>())?.c || 0;
-  const totalVerifications = (await env.PLATFORM_CONTEXT!.db.prepare(`SELECT COALESCE(SUM(verification_count),0) as s FROM certificates`).first<{s:number}>())?.s || 0;
-  return ok({ total, issued, revoked, totalVerifications });
+  const db = env.PLATFORM_CONTEXT!.db;
+
+  const certTotal = (await db.prepare(`SELECT COUNT(*) as c FROM certificates`).first<{ c: number }>())?.c || 0;
+  const issued = (await db.prepare(`SELECT COUNT(*) as c FROM certificates WHERE status='ISSUED'`).first<{ c: number }>())?.c || 0;
+  const revoked = (await db.prepare(`SELECT COUNT(*) as c FROM certificates WHERE status='REVOKED'`).first<{ c: number }>())?.c || 0;
+  const suspended = (await db.prepare(`SELECT COUNT(*) as c FROM certificates WHERE status='SUSPENDED'`).first<{ c: number }>())?.c || 0;
+  const totalVerifications = (await db.prepare(`SELECT COALESCE(SUM(verification_count),0) as s FROM certificates`).first<{ s: number }>())?.s || 0;
+
+  // ── Activity metrics from the verification_logs ledger ───────────────────────
+  const today = (await db.prepare(`SELECT COUNT(*) as c FROM verification_logs WHERE date(created_at) = date('now')`).first<{ c: number }>())?.c || 0;
+  const thisMonth = (await db.prepare(`SELECT COUNT(*) as c FROM verification_logs WHERE strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now')`).first<{ c: number }>())?.c || 0;
+  const successTotal = (await db.prepare(`SELECT COUNT(*) as c FROM verification_logs WHERE result='valid'`).first<{ c: number }>())?.c || 0;
+  const loggedTotal = (await db.prepare(`SELECT COUNT(*) as c FROM verification_logs`).first<{ c: number }>())?.c || 0;
+  const uniqueVerifiers = (await db.prepare(`SELECT COUNT(DISTINCT ip_address) as c FROM verification_logs WHERE ip_address IS NOT NULL`).first<{ c: number }>())?.c || 0;
+  const successRate = loggedTotal > 0 ? Math.round((successTotal / loggedTotal) * 1000) / 10 : 0;
+
+  const byMethod: Record<string, number> = {};
+  const methodRows = await db.prepare(`SELECT method, COUNT(*) as c FROM verification_logs GROUP BY method`).all<{ method: string; c: number }>();
+  for (const r of methodRows.results) byMethod[r.method] = r.c;
+
+  const byFaculty: Record<string, number> = {};
+  const facultyRows = await db.prepare(
+    `SELECT COALESCE(s.program, c.degree_title, 'Other') AS label, COUNT(*) AS c
+     FROM certificates c
+     LEFT JOIN users u ON c.student_id = u.id
+     LEFT JOIN students s ON u.id = s.user_id
+     GROUP BY label
+     ORDER BY c DESC
+     LIMIT 20`
+  ).all<{ label: string; c: number }>();
+  for (const r of facultyRows.results) byFaculty[r.label] = r.c;
+
+  return ok({
+    total: certTotal,
+    issued,
+    revoked,
+    suspended,
+    totalVerifications,
+    activity: { today, this_month: thisMonth, success_rate: successRate, unique_verifiers: uniqueVerifiers },
+    by_method: byMethod,
+    by_faculty: byFaculty,
+  });
 }

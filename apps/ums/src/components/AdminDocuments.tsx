@@ -17,7 +17,7 @@ import {
   FilePlus,
   Filter
 } from "lucide-react";
-import { listDocuments, downloadDocument, uploadDocument, type Document } from "../services/adminDocumentService";
+import { listDocuments, downloadDocument, uploadDocument, updateDocumentVerification, type Document } from "../services/adminDocumentService";
 import { usePagination } from "../hooks/usePagination";
 import { useTranslation } from "react-i18next";
 import { API_URL } from "../services/config";
@@ -35,15 +35,6 @@ const AdminDocuments: React.FC = () => {
   const [viewingDocUrl, setViewingDocUrl] = useState<string | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
 
-  // Verification state store
-  const [verifications, setVerifications] = useState<Record<string, "verified" | "pending" | "flagged">>({
-    doc_001: "verified",
-    doc_002: "verified",
-    doc_003: "pending",
-    doc_004: "verified",
-    doc_005: "verified",
-  });
-
   // Upload modal state
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadFormData, setUploadFormData] = useState({
@@ -53,8 +44,11 @@ const AdminDocuments: React.FC = () => {
     user_email: "",
     doc_type: "transcript",
   });
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState("");
+  const [uploadError, setUploadError] = useState("");
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const fetchDocuments = async () => {
     setIsLoading(true);
@@ -97,35 +91,9 @@ const AdminDocuments: React.FC = () => {
       const objectUrl = URL.createObjectURL(blob);
       setViewingDocUrl(objectUrl);
     } catch {
-      // Generate a simulated placeholder preview for demonstration
-      const canvas = document.createElement('canvas');
-      canvas.width = 600;
-      canvas.height = 800;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = '#f8fafc';
-        ctx.fillRect(0, 0, 600, 800);
-        ctx.fillStyle = '#2E004F';
-        ctx.font = 'bold 24px sans-serif';
-        ctx.fillText('BMI UNIVERSITY - REGISTRAR OFFICE', 40, 60);
-        ctx.fillStyle = '#475569';
-        ctx.font = '16px sans-serif';
-        ctx.fillText(`Document: ${doc.file_name}`, 40, 100);
-        ctx.fillText(`Student: ${doc.first_name} ${doc.last_name}`, 40, 130);
-        ctx.fillText(`Category: ${doc.doc_type.toUpperCase()}`, 40, 160);
-        ctx.fillText(`Uploaded: ${new Date(doc.uploaded_at).toLocaleDateString()}`, 40, 190);
-        ctx.strokeStyle = '#e2e8f0';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(40, 220);
-        ctx.lineTo(560, 220);
-        ctx.stroke();
-        ctx.fillStyle = '#64748b';
-        ctx.font = '14px monospace';
-        ctx.fillText('[OFFICIAL DIGITAL REGISTRATION RECORD VERIFIED]', 40, 260);
-        ctx.fillText('Hash checksum: 0x9f8a...c3e1', 40, 290);
-      }
-      setViewingDocUrl(canvas.toDataURL('image/png'));
+      // No simulated placeholder is generated — if the stored file cannot be
+      // fetched we surface a real "preview unavailable" state below.
+      setViewingDocUrl(null);
     } finally {
       setIsPreviewLoading(false);
     }
@@ -162,12 +130,12 @@ const AdminDocuments: React.FC = () => {
         `${doc.first_name} ${doc.last_name}`.toLowerCase().includes(searchLower) ||
         doc.user_email.toLowerCase().includes(searchLower);
 
-      const status = verifications[doc.id] || "verified";
+      const status = doc.verification_status || "verified";
       const matchesVerification = verificationFilter === "all" || status === verificationFilter;
 
       return matchesSearch && matchesVerification;
     });
-  }, [documents, searchTerm, verificationFilter, verifications]);
+  }, [documents, searchTerm, verificationFilter]);
 
   const handleDownload = async (docId: string) => {
     await downloadDocument(docId);
@@ -175,10 +143,16 @@ const AdminDocuments: React.FC = () => {
 
   const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!selectedFile) {
+      setUploadError("Please select the credential file to upload.");
+      return;
+    }
     if (!uploadFormData.file_name || !uploadFormData.first_name || !uploadFormData.user_email) {
+      setUploadError("File name, first name and recipient email are required.");
       return;
     }
     setIsUploading(true);
+    setUploadError("");
     try {
       const created = await uploadDocument({
         file_name: uploadFormData.file_name,
@@ -186,13 +160,17 @@ const AdminDocuments: React.FC = () => {
         last_name: uploadFormData.last_name || "Applicant",
         user_email: uploadFormData.user_email,
         doc_type: uploadFormData.doc_type,
-        file_size_bytes: Math.floor(Math.random() * 2000000) + 500000,
-        mime_type: uploadFormData.file_name.endsWith('.png') ? 'image/png' : 'application/pdf',
+        file: selectedFile,
       });
 
-      setVerifications(prev => ({ ...prev, [created.id]: "verified" }));
+      if (!created.success || !created.data) {
+        setUploadError(created.error || "Upload failed. The student email must match a registered user with an application on record.");
+        return;
+      }
+
       setUploadSuccess(`Document ${uploadFormData.file_name} uploaded and archived!`);
       setShowUploadModal(false);
+      setSelectedFile(null);
       setUploadFormData({
         file_name: "",
         first_name: "",
@@ -207,10 +185,17 @@ const AdminDocuments: React.FC = () => {
     }
   };
 
-  const toggleVerificationStatus = (docId: string) => {
-    const current = verifications[docId] || "verified";
+  const toggleVerificationStatus = async (doc: Document) => {
+    const current = doc.verification_status || "verified";
     const next = current === "verified" ? "pending" : current === "pending" ? "flagged" : "verified";
-    setVerifications(prev => ({ ...prev, [docId]: next }));
+    const result = await updateDocumentVerification(doc.id, next);
+    if (result.success) {
+      setDocuments((prev) =>
+        prev.map((d) => (d.id === doc.id ? { ...d, verification_status: next } : d)),
+      );
+    } else {
+      alert(result.error || "Failed to update verification status.");
+    }
   };
 
   const handleExportCSV = () => {
@@ -385,7 +370,7 @@ const AdminDocuments: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-800/60">
               {filteredDocuments.map((doc) => {
-                const verification = verifications[doc.id] || "verified";
+                const verification = doc.verification_status || "verified";
                 return (
                   <tr key={doc.id} className="hover:bg-purple-50/20 dark:hover:bg-gray-800/40 transition-colors">
                     <td className="px-6 py-4">
@@ -423,7 +408,7 @@ const AdminDocuments: React.FC = () => {
                     </td>
                     <td className="px-6 py-4">
                       <button
-                        onClick={() => toggleVerificationStatus(doc.id)}
+                        onClick={() => toggleVerificationStatus(doc)}
                         className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-black uppercase rounded-full border transition-all ${
                           verification === "verified"
                             ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800"
@@ -581,6 +566,31 @@ const AdminDocuments: React.FC = () => {
             </div>
 
             <form onSubmit={handleUploadSubmit} className="space-y-4 text-xs">
+              {uploadError && (
+                <div className="bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 p-3 rounded-lg border border-rose-200 dark:border-rose-800 text-[11px] font-semibold">
+                  <AlertCircle size={14} className="inline mr-1.5 -mt-0.5" />
+                  {uploadError}
+                </div>
+              )}
+
+              <div>
+                <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">Credential File *</label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  required
+                  accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null;
+                    setSelectedFile(file);
+                    if (file && !uploadFormData.file_name) {
+                      setUploadFormData((prev) => ({ ...prev, file_name: file.name }));
+                    }
+                  }}
+                  className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg p-2 font-medium focus:ring-2 focus:ring-[#FFD700] outline-none"
+                />
+              </div>
+
               <div>
                 <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">Document File Name *</label>
                 <input

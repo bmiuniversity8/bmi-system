@@ -28,6 +28,7 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { getAIResponse } from "../services/aiService";
+import { listCommunications, createCommunication, deleteCommunication } from "../services/communicationsService";
 import { Student, StaffMember } from "../types";
 import { useDataStore } from "../stores/dataStore";
 
@@ -62,43 +63,51 @@ const Communications: React.FC = () => {
   const [showToast, setShowToast] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
-  const [history, setHistory] = useState<MessageLog[]>(() => {
-    const saved = localStorage.getItem("bmi_comms_history");
-    return saved
-      ? JSON.parse(saved)
-      : [
-          {
-            id: "MSG-8821",
-            type: "SMS",
-            recipient: "Cohort 2024",
-            date: "2024-05-18 09:12",
-            status: "Delivered",
-            text: "Institutional Protocol: Campus facilities will transition to holiday schedule effective midnight tonight.",
-          },
-          {
-            id: "MSG-8790",
-            type: "Email",
-            recipient: "Dr. Samuel Kiptoo",
-            date: "2024-05-15 14:05",
-            status: "Delivered",
-            subject: "Dean's Council Meeting",
-            text: "Respected Faculty,\nThe Dean requests your presence at the Zion Wing Seminar Room for the Q3 curriculum review.",
-          },
-          {
-            id: "MSG-8742",
-            type: "SMS",
-            recipient: "BMI-2022-001",
-            date: "2024-05-10 11:20",
-            status: "Failed",
-            text: "Urgent: Financial audit required. Please report to the Bursary Office node for ledger verification.",
-          },
-        ];
-  });
+  const [history, setHistory] = useState<MessageLog[]>([]);
+
+  const loadHistory = async () => {
+    setIsLoadingHistory(true);
+    const res = await listCommunications({ perPage: 200 });
+    if (res.success && res.data) {
+      setHistory(
+        res.data.map((r) => ({
+          id: r.id,
+          type: r.type,
+          recipient: r.recipient,
+          date: new Date(r.created_at).toLocaleString("en-GB", {
+            day: "2-digit",
+            month: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          status: r.status,
+          subject: r.subject || undefined,
+          text: r.body,
+        })),
+      );
+    }
+    setIsLoadingHistory(false);
+  };
 
   useEffect(() => {
-    localStorage.setItem("bmi_comms_history", JSON.stringify(history));
-  }, [history]);
+    loadHistory();
+  }, []);
+
+  const handleDeleteRecord = async (id: string) => {
+    const res = await deleteCommunication(id);
+    if (res.success) {
+      setHistory((prev) => prev.filter((h) => h.id !== id));
+      setToastMsg("Dispatch record removed from the ledger.");
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3000);
+    } else {
+      setToastMsg(res.error || "Failed to remove the record.");
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3000);
+    }
+  };
 
   const templates = [
     {
@@ -199,28 +208,41 @@ const Communications: React.FC = () => {
     }
 
     setIsDispatching(true);
-    await new Promise((resolve) => setTimeout(resolve, 1500));
 
-    const newMsg: MessageLog = {
-      id: `MSG-${Math.floor(Math.random() * 9000) + 1000}`,
+    const res = await createCommunication({
       type: activeChannel === "sms" ? "SMS" : "Email",
+      channel: activeChannel,
       recipient: getRecipientLabel(),
-      date: new Date().toLocaleString("en-GB", {
-        day: "2-digit",
-        month: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      status: "Delivered",
       subject: activeChannel === "email" ? subject : undefined,
-      text: message,
-    };
-
-    setHistory([newMsg, ...history]);
+      body: message,
+      status: "Delivered",
+    });
     setIsDispatching(false);
-    setToastMsg(
-      `${activeChannel.toUpperCase()} Broadcast dispatched successfully.`,
-    );
+
+    if (res.success && res.data) {
+      setHistory((prev) => [
+        {
+          id: res.data!.id,
+          type: res.data!.type,
+          recipient: res.data!.recipient,
+          date: new Date(res.data!.created_at).toLocaleString("en-GB", {
+            day: "2-digit",
+            month: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          status: res.data!.status,
+          subject: res.data!.subject || undefined,
+          text: res.data!.body,
+        },
+        ...prev,
+      ]);
+      setToastMsg(
+        `${activeChannel.toUpperCase()} Broadcast dispatched successfully.`,
+      );
+    } else {
+      setToastMsg(res.error || "Dispatch failed — could not reach the ledger.");
+    }
     setShowToast(true);
     setTimeout(() => setShowToast(false), 3000);
 
@@ -229,7 +251,7 @@ const Communications: React.FC = () => {
     setSelectedRecipientId("");
   };
 
-  const handleWhatsAppSend = () => {
+  const handleWhatsAppSend = async () => {
     if (!message) return;
     const cleanMsg = message.replace(/<[^>]*>?/gm, "");
     const formatNum = (num: string) => num.replace(/\D/g, "");
@@ -288,22 +310,32 @@ const Communications: React.FC = () => {
       }, idx * 800);
     });
 
-    setHistory([
-      {
-        id: `MSG-${Math.floor(Math.random() * 9000) + 1000}`,
-        type: "SMS",
-        recipient: `${getRecipientLabel()} (WhatsApp)`,
-        date: new Date().toLocaleString("en-GB", {
-          day: "2-digit",
-          month: "2-digit",
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-        status: "Delivered",
-        text: message,
-      },
-      ...history,
-    ]);
+    // Record the dispatch in the ledger (SMS record with WhatsApp channel)
+    const res = await createCommunication({
+      type: "SMS",
+      channel: "whatsapp",
+      recipient: `${getRecipientLabel()} (${targetNumbers.length} WhatsApp targets)`,
+      body: message,
+      status: "Delivered",
+    });
+    if (res.success && res.data) {
+      setHistory((prev) => [
+        {
+          id: res.data!.id,
+          type: res.data!.type,
+          recipient: res.data!.recipient,
+          date: new Date(res.data!.created_at).toLocaleString("en-GB", {
+            day: "2-digit",
+            month: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          status: res.data!.status,
+          text: res.data!.body,
+        },
+        ...prev,
+      ]);
+    }
 
     setToastMsg(
       `WhatsApp Gateway: Initiating dispatch to ${targetNumbers.length} entities.`,
@@ -446,20 +478,33 @@ const Communications: React.FC = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-[9px] font-bold text-purple-300 uppercase">
-                      Monthly SMS
+                      SMS Dispatches
                     </p>
-                    <p className="text-xl font-black">12.4k / 50k</p>
+                    <p className="text-xl font-black">
+                      {history.filter((h) => h.type === "SMS").length}
+                    </p>
                   </div>
                   <div>
                     <p className="text-[9px] font-bold text-purple-300 uppercase">
                       Deliverability
                     </p>
-                    <p className="text-xl font-black text-emerald-400">99.8%</p>
+                    <p className="text-xl font-black text-emerald-400">
+                      {history.length > 0
+                        ? `${Math.round(
+                            (history.filter((h) => h.status === "Delivered")
+                              .length /
+                              history.length) *
+                              1000,
+                          ) / 10}%`
+                        : "—"}
+                    </p>
                   </div>
                 </div>
                 <div className="pt-4 border-t border-white/10">
                   <p className="text-[10px] font-bold text-gray-400 leading-relaxed uppercase tracking-tighter">
-                    SMTP Relay healthy. Encryption: TLS 1.3 Active.
+                    {history.length > 0
+                      ? `${history.filter((h) => h.type === "Email").length} Email / ${history.filter((h) => h.status === "Failed").length} failed dispatch(s) in ledger.`
+                      : "No dispatches recorded in the ledger yet."}
                   </p>
                 </div>
               </div>
@@ -805,6 +850,7 @@ const Communications: React.FC = () => {
                                 <button
                                   className="p-2 text-gray-300 hover:text-red-500"
                                   title="Delete Archive"
+                                  onClick={() => handleDeleteRecord(log.id)}
                                 >
                                   <Trash2 size={16} />
                                 </button>
@@ -816,7 +862,9 @@ const Communications: React.FC = () => {
                   </table>
                   {history.length === 0 && (
                     <div className="py-20 text-center text-gray-400 font-black uppercase tracking-[0.4em] text-sm italic">
-                      Zero (0) dispatch records identified in comms ledger
+                      {isLoadingHistory
+                        ? "Loading dispatch ledger…"
+                        : "Zero (0) dispatch records identified in comms ledger"}
                     </div>
                   )}
                 </div>

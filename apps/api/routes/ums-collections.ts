@@ -92,6 +92,67 @@ export async function handleListLibraryBooks(request: Request, env: Env): Promis
   return json({ success: true, data: items, total, page, perPage });
 }
 
+export async function handleCreateLibraryBook(request: Request, env: Env): Promise<Response> {
+  const body = await typedJson<Record<string, unknown>>(request);
+  if (!body.title || !body.author) return error('title and author are required', 400);
+
+  const id = crypto.randomUUID();
+  const category = ['Theology', 'ICT', 'Business', 'Education', 'General'].includes(body.category as string) ? body.category as string : 'General';
+  const type = ['PDF', 'E-Book', 'Hardcopy', 'Journal', 'Video'].includes(body.type as string) ? body.type as string : 'Hardcopy';
+
+  await env.PLATFORM_CONTEXT!.db.prepare(
+    `INSERT INTO library_books (id, title, author, isbn, category, type, status, year, description, download_url, location, copies, is_active)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(
+    id, body.title, body.author, body.isbn || null, category, type, body.status || 'Available',
+    body.year != null ? String(body.year) : null, body.description || null, body.downloadUrl || body.download_url || null,
+    body.location || null, body.copies ?? 1, body.is_active ?? 1
+  ).run();
+
+  const row = await env.PLATFORM_CONTEXT!.db.prepare(`SELECT * FROM library_books WHERE id = ?`).bind(id).first();
+  return ok(row, 201);
+}
+
+export async function handleUpdateLibraryBook(request: Request, env: Env, id: string): Promise<Response> {
+  const body = await typedJson<Record<string, unknown>>(request);
+  const existing = await env.PLATFORM_CONTEXT!.db.prepare(`SELECT id FROM library_books WHERE id = ?`).bind(id).first();
+  if (!existing) return error('Book not found', 404);
+
+  const category = body.category && ['Theology', 'ICT', 'Business', 'Education', 'General'].includes(body.category as string) ? body.category as string : undefined;
+  const type = body.type && ['PDF', 'E-Book', 'Hardcopy', 'Journal', 'Video'].includes(body.type as string) ? body.type as string : undefined;
+
+  await env.PLATFORM_CONTEXT!.db.prepare(
+    `UPDATE library_books SET
+       title = COALESCE(?, title),
+       author = COALESCE(?, author),
+       isbn = COALESCE(?, isbn),
+       category = COALESCE(?, category),
+       type = COALESCE(?, type),
+       status = COALESCE(?, status),
+       year = COALESCE(?, year),
+       description = COALESCE(?, description),
+       download_url = COALESCE(?, download_url),
+       location = COALESCE(?, location),
+       copies = COALESCE(?, copies),
+       updated_at = datetime('now')
+     WHERE id = ?`
+  ).bind(
+    body.title ?? null, body.author ?? null, body.isbn ?? null, category ?? null, type ?? null,
+    body.status ?? null, body.year != null ? String(body.year) : null, body.description ?? null,
+    body.downloadUrl ?? body.download_url ?? null, body.location ?? null, body.copies ?? null, id
+  ).run();
+
+  const row = await env.PLATFORM_CONTEXT!.db.prepare(`SELECT * FROM library_books WHERE id = ?`).bind(id).first();
+  return ok(row);
+}
+
+export async function handleDeleteLibraryBook(_request: Request, env: Env, id: string): Promise<Response> {
+  const existing = await env.PLATFORM_CONTEXT!.db.prepare(`SELECT id FROM library_books WHERE id = ?`).bind(id).first();
+  if (!existing) return error('Book not found', 404);
+  await env.PLATFORM_CONTEXT!.db.prepare(`DELETE FROM library_books WHERE id = ?`).bind(id).run();
+  return ok({ deleted: true });
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // HOSTELS
 // ═══════════════════════════════════════════════════════════════════════════════

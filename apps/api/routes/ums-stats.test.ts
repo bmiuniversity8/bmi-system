@@ -182,6 +182,7 @@ describe('ums-stats certificate verification', () => {
     const db = {
       prepare: vi.fn().mockReturnValue({
         first: vi.fn().mockResolvedValue({ c: 5, s: 100 }),
+        all: vi.fn().mockResolvedValue({ results: [] }),
       })
     };
     const res = await handleCertificateVerificationStats(new Request('http://localhost'), makeEnv(db));

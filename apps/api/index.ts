@@ -1,7 +1,7 @@
 import { withSentry } from '@sentry/cloudflare';
 import { handleRegister, handleLogin, handleRefresh, handleLogout, handleMe, handleVerifyEmail, handleResendVerification, handleForgotPassword, handleResetPassword, handleMfaSetup, handleMfaEnable, handleMfaDisable, handleOAuthLogin, handleOAuthCallback } from './routes/auth';
 import { handleSubmitApplication, handleGetMyApplication, handleListApplications, handleGetApplication, handleUpdateStatus, handleGetStatusLogs, handleGetLifecycle, handleSaveDraft, handleAdminCreateApplication } from './routes/apply';
-import { handleUploadDocument, handleDownloadDocument, handleDeleteDocument, handleListDocuments } from './routes/documents';
+import { handleUploadDocument, handleDownloadDocument, handleDeleteDocument, handleListDocuments, handleAdminUploadDocument, handleUpdateDocumentVerification } from './routes/documents';
 import { handleRequestRecommendation, handleGetRecommendationInfo, handleUploadRecommendation, handleListRecommendations } from './routes/recommendations';
 import { requireAuth, rateLimit, withCors, getCorsHeaders, createLogger, requestLogger } from '@bmi/api-middleware';
 import { handleGetDashboard, handleGetCourses, handleEnroll, handleGetFinances, handlePayInvoice, handleDropCourse, handleGetTranscript, handleGetSettings, handleUpdateSettings, handleUpdatePhoto, handleGetTickets, handleCreateTicket } from './routes/student';
@@ -32,6 +32,7 @@ import {
   handleListStudyCenters, handleGetStudyCenter, handleGetStudyCenterStats,
   handleCreateStudyCenter, handleUpdateStudyCenter,
   handleListLibraryBooks,
+  handleCreateLibraryBook, handleUpdateLibraryBook, handleDeleteLibraryBook,
   handleListHostels, handleCreateHostel,
   handleListRoomAssignments, handleCreateRoomAssignment, handleDeleteRoomAssignment,
   handleListMedicalRecords, handleCreateMedicalRecord, handleDeleteMedicalRecord,
@@ -72,9 +73,12 @@ import {
 } from './routes/academic_standing';
 import { handleListLeaveRequests, handleGetLeaveRequest, handleCreateLeaveRequest, handleUpdateLeaveRequest, handleListPayroll, handleCreatePayrollRecord } from './routes/ums-hr';
 import { handleListBorrowings, handleCreateBorrowing, handleReturnBook, handleListFines, handleMarkFinePaid } from './routes/ums-library';
-import { handleListAlumniProfiles, handleUpsertAlumniProfile, handleListAlumniEvents, handleCreateAlumniEvent, handleListDonations, handleRecordDonation } from './routes/ums-alumni';
+import { handleListAlumniProfiles, handleUpsertAlumniProfile, handleCreateAlumniProfileForUser, handleUpdateAlumniProfile, handleDeleteAlumniProfile, handleListAlumniEvents, handleCreateAlumniEvent, handleListDonations, handleRecordDonation } from './routes/ums-alumni';
 import { handleListTransportRoutes, handleCreateTransportRoute, handleUpdateTransportRoute, handleListTransportPasses, handleIssueTransportPass, handleRevokeTransportPass } from './routes/ums-campus';
 import { handleListNotifications, handleMarkNotificationsRead, handleCreateNotification, handleBroadcastNotification } from './routes/ums-notifications';
+import { handleListVerificationLogs } from './routes/ums-verifications';
+import { handleListCommunications, handleCreateCommunication, handleDeleteCommunication } from './routes/ums-communications';
+import { handleGetSystemSettings, handleUpdateSystemSettings, handleResetSystemSettings } from './routes/ums-settings';
 const log = createLogger('bmi-api');
 
 interface AuthResult {
@@ -338,6 +342,27 @@ const ROUTES: Route[] = [
   { method: 'POST', path: /^\/api\/v1\/notifications\/read$/, roles: [], handler: async (req, env, _p, auth) =>handleMarkNotificationsRead(req, env, auth!.user.sub) },
   { method: 'POST', path: /^\/api\/v1\/notifications$/, roles: ['admin'], handler: async (req, env) =>handleCreateNotification(req, env) },
   { method: 'POST', path: /^\/api\/v1\/notifications\/broadcast$/, roles: ['admin'], handler: async (req, env) =>handleBroadcastNotification(req, env) },
+  // Library catalog CRUD (placed after static borrowing/fines paths so those resolve first)
+  { method: 'POST', path: /^\/api\/v1\/library$/, roles: ['admin', 'staff'], handler: async (req, env) =>handleCreateLibraryBook(req, env) },
+  { method: ['PUT', 'PATCH'], path: /^\/api\/v1\/library\/([^/]+)$/, roles: ['admin', 'staff'], handler: async (req, env, p) =>handleUpdateLibraryBook(req, env, p[1]) },
+  { method: 'DELETE', path: /^\/api\/v1\/library\/([^/]+)$/, roles: ['admin'], handler: async (req, env, p) =>handleDeleteLibraryBook(req, env, p[1]) },
+  // Verification dashboard (activity ledger)
+  { method: 'GET', path: /^\/api\/v1\/certificates\/verification\/logs$/, roles: ['admin', 'staff'], handler: async (req, env) =>handleListVerificationLogs(req, env) },
+  // Communications center
+  { method: 'GET', path: /^\/api\/v1\/communications$/, roles: ['admin', 'staff'], handler: async (req, env) =>handleListCommunications(req, env) },
+  { method: 'POST', path: /^\/api\/v1\/communications$/, roles: ['admin', 'staff'], handler: async (req, env, _p, auth) =>handleCreateCommunication(req, env, auth!.user.sub) },
+  { method: 'DELETE', path: /^\/api\/v1\/communications\/([^/]+)$/, roles: ['admin'], handler: async (req, env, p) =>handleDeleteCommunication(req, env, p[1]) },
+  // System settings
+  { method: 'GET', path: /^\/api\/v1\/settings\/admin$/, roles: ['admin'], handler: async (req, env) =>handleGetSystemSettings(req, env) },
+  { method: 'PUT', path: /^\/api\/v1\/settings\/admin$/, roles: ['admin'], handler: async (req, env, _p, auth) =>handleUpdateSystemSettings(req, env, auth!.user.sub) },
+  { method: 'POST', path: /^\/api\/v1\/settings\/admin\/reset$/, roles: ['admin'], handler: async (req, env) =>handleResetSystemSettings(req, env) },
+  // Admin document management
+  { method: 'POST', path: /^\/api\/admin\/documents$/, roles: ['admin', 'staff'], handler: async (req, env, _p, auth) =>handleAdminUploadDocument(req, env, auth!.user.sub) },
+  { method: 'PATCH', path: /^\/api\/admin\/documents\/([^/]+)\/verification$/, roles: ['admin', 'staff'], handler: async (req, env, p) =>handleUpdateDocumentVerification(req, env, p[1]) },
+  // Alumni profiles (admin/staff manage on behalf of students)
+  { method: 'POST', path: /^\/api\/v1\/alumni\/profiles\/create$/, roles: ['admin', 'staff'], handler: async (req, env) =>handleCreateAlumniProfileForUser(req, env) },
+  { method: ['PUT', 'PATCH'], path: /^\/api\/v1\/alumni\/profiles\/([^/]+)$/, roles: ['admin', 'staff'], handler: async (req, env, p) =>handleUpdateAlumniProfile(req, env, p[1]) },
+  { method: 'DELETE', path: /^\/api\/v1\/alumni\/profiles\/([^/]+)$/, roles: ['admin'], handler: async (req, env, p) =>handleDeleteAlumniProfile(req, env, p[1]) },
 ];
 
 import { bootstrap } from '@bmi/bootstrap';

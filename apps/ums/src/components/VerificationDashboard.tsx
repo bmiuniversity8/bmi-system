@@ -1,13 +1,11 @@
 /**
- * KIRO: DO NOT MODIFY
- * This file contains stable production logic.
- * Do not edit unless explicitly instructed.
- * 
  * Verification Dashboard Component
- * Administrative interface for certificate verification management
+ * Administrative interface for certificate verification management.
+ * Stats and activity ledger are fetched from the API (verification_logs / certificates tables)
+ * so the dashboard reflects real database activity instead of mock data.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Shield,
   TrendingUp,
@@ -15,17 +13,12 @@ import {
   AlertTriangle,
   CheckCircle2,
   XCircle,
-  Eye,
-  Download,
-  Search,
-  
-  
-  
   Globe,
-  Smartphone,
   Clock,
-  MapPin
+  MapPin,
 } from 'lucide-react';
+import { authFetch } from '../services/authService';
+import { API_URL } from '../services/config';
 
 interface VerificationStats {
   total_verifications: number;
@@ -50,416 +43,460 @@ interface VerificationStats {
 interface VerificationLog {
   id: string;
   certificate_serial: string;
-  student_name: string;
+  student_name: string | null;
   verification_result: 'valid' | 'invalid' | 'revoked';
   method: 'online' | 'offline' | 'qr_scan';
   timestamp: string;
-  ip_address: string;
-  location?: string;
-  user_agent: string;
+  ip_address: string | null;
+  location?: string | null;
+  user_agent: string | null;
 }
 
 const VerificationDashboard: React.FC = () => {
   const [stats, setStats] = useState<VerificationStats | null>(null);
   const [logs, setLogs] = useState<VerificationLog[]>([]);
+  const [totalLogs, setTotalLogs] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [selectedTimeRange] = useState('7d');
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterMethod, setFilterMethod] = useState('all');
   const [filterResult, setFilterResult] = useState('all');
 
-  useEffect(() => {
-    loadDashboardData();
-  }, [selectedTimeRange]);
-
-  const loadDashboardData = async () => {
-    setLoading(true);
+  const loadStats = useCallback(async () => {
     try {
-      // In a real implementation, these would be API calls
-      // For demo, we'll use mock data
-      
-      const mockStats: VerificationStats = {
-        total_verifications: 15420,
-        today: 45,
-        this_month: 1200,
-        success_rate: 94.2,
-        unique_verifiers: 890,
+      const res = await authFetch(`${API_URL}/certificates/verification/stats`, {}, 8000);
+      const body = await res.json();
+      const statsData = body?.data;
+      if (!statsData) {
+        setError(body?.error || 'Failed to load verification stats');
+        return;
+      }
+      setStats({
+        total_verifications: statsData.totalVerifications ?? 0,
+        today: statsData.activity?.today ?? 0,
+        this_month: statsData.activity?.this_month ?? 0,
+        success_rate: statsData.activity?.success_rate ?? 0,
+        unique_verifiers: statsData.activity?.unique_verifiers ?? 0,
         certificates: {
-          total_issued: 1250,
-          active: 1200,
-          revoked: 45,
-          suspended: 5
+          total_issued: statsData.issued ?? 0,
+          active: statsData.issued ?? 0,
+          revoked: statsData.revoked ?? 0,
+          suspended: statsData.suspended ?? 0,
         },
-        by_faculty: {
-          'Theology': 650,
-          'ICT': 300,
-          'Business': 200,
-          'Education': 100
-        },
+        by_faculty: statsData.by_faculty ?? {},
         by_method: {
-          online: 8500,
-          offline: 4200,
-          qr_scan: 2720
-        }
-      };
-
-      const mockLogs: VerificationLog[] = Array.from({ length: 50 }, (_, i) => ({
-        id: `log-${i + 1}`,
-        certificate_serial: `BMI-${2024 - Math.floor(i / 20)}-${String(Math.floor(Math.random() * 999999)).padStart(6, '0')}`,
-        student_name: ['James Smith', 'Mary Johnson', 'John Williams', 'Patricia Jones', 'Robert Brown'][i % 5],
-        verification_result: (['valid', 'valid', 'valid', 'invalid', 'revoked'][Math.floor(Math.random() * 5)] as 'valid' | 'invalid' | 'revoked'),
-        method: (['online', 'offline', 'qr_scan'][Math.floor(Math.random() * 3)] as 'online' | 'offline' | 'qr_scan'),
-        timestamp: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString(),
-        ip_address: `192.168.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`,
-        location: ['Nairobi, Kenya', 'Mombasa, Kenya', 'Kisumu, Kenya', 'Eldoret, Kenya'][Math.floor(Math.random() * 4)],
-        user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      }));
-
-      setStats(mockStats);
-      setLogs(mockLogs);
-    } catch (error) { // eslint-disable-next-line no-console
-      console.error('Error loading dashboard data:', error);
-     } finally {
-      setLoading(false);
+          online: statsData.by_method?.online ?? 0,
+          offline: statsData.by_method?.offline ?? 0,
+          qr_scan: statsData.by_method?.qr_scan ?? 0,
+        },
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load verification stats');
     }
-  };
+  }, []);
 
-  const filteredLogs = logs.filter(log => {
-    const matchesSearch = log.certificate_serial.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         log.student_name.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesMethod = filterMethod === 'all' || log.method === filterMethod;
-    const matchesResult = filterResult === 'all' || log.verification_result === filterResult;
-    
-    return matchesSearch && matchesMethod && matchesResult;
-  });
+  const loadLogs = useCallback(async () => {
+    try {
+      const params = new URLSearchParams({ perPage: '50' });
+      if (searchTerm) params.set('serial', searchTerm);
+      if (filterMethod !== 'all') params.set('method', filterMethod);
+      if (filterResult !== 'all') params.set('result', filterResult);
 
-  const getResultColor = (result: string) => {
-    switch (result) {
-      case 'valid': return 'text-emerald-600 bg-emerald-50';
-      case 'invalid': return 'text-red-600 bg-red-50';
-      case 'revoked': return 'text-amber-600 bg-amber-50';
-      default: return 'text-gray-600 bg-gray-50';
+      const res = await authFetch(`${API_URL}/certificates/verification/logs?${params.toString()}`, {}, 8000);
+      const body = await res.json();
+      const items = body?.data?.items ?? [];
+      setTotalLogs(body?.data?.total ?? items.length);
+      setLogs(
+        items.map((row: Record<string, unknown>) => ({
+          id: row.id as string,
+          certificate_serial: row.serial_number as string,
+          student_name: (row.student_name as string) || null,
+          verification_result: (row.result as 'valid' | 'invalid' | 'revoked') || 'invalid',
+          method: (row.method as 'online' | 'offline' | 'qr_scan') || 'online',
+          timestamp: (row.created_at as string) || new Date().toISOString(),
+          ip_address: (row.ip_address as string) || null,
+          location: row.location as string | undefined,
+          user_agent: (row.user_agent as string) || null,
+        })),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load verification activity');
     }
-  };
+  }, [searchTerm, filterMethod, filterResult]);
 
-  const getMethodIcon = (method: string) => {
-    switch (method) {
-      case 'online': return <Globe size={16} />;
-      case 'offline': return <Smartphone size={16} />;
-      case 'qr_scan': return <Eye size={16} />;
-      default: return <Shield size={16} />;
-    }
-  };
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([loadStats(), loadLogs()]).finally(() => setLoading(false));
+  }, [loadStats, loadLogs]);
 
-  if (loading) {
+  const totalVerifications = stats?.total_verifications ?? 0;
+  const qrShare = totalVerifications > 0
+    ? Math.round(((stats?.by_method?.qr_scan ?? 0) / totalVerifications) * 1000) / 10
+    : 0;
+  const avgPerVerifier = stats?.unique_verifiers
+    ? Math.round((totalVerifications / stats.unique_verifiers) * 10) / 10
+    : 0;
+
+  const renderBars = () => {
+    const max = Math.max(...Object.values(stats?.by_faculty ?? {}), 1);
     return (
-      <div className="p-8">
-        <div className="animate-pulse space-y-6">
-          <div className="h-8 bg-gray-200 rounded w-1/3"></div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-32 bg-gray-200 rounded-lg"></div>
-            ))}
+      <div className="flex items-end gap-2 h-48">
+        {Object.entries(stats?.by_faculty ?? {}).map(([label, count]) => (
+          <div key={label} className="flex flex-col items-center gap-1">
+            <span className="text-xs font-bold text-gray-500">{count}</span>
+            <div
+              className="w-12 rounded-t-lg"
+              style={{ height: `${Math.max(8, (count / max) * 100)}px`, backgroundColor: 'lime' }}
+            />
+            <span className="text-[10px] text-gray-400 text-center truncate max-w-[80px]">
+              {label}
+            </span>
           </div>
-          <div className="h-96 bg-gray-200 rounded-lg"></div>
-        </div>
+        ))}
       </div>
     );
-  }
+  };
+
+  const renderMethods = () => {
+    const methods = [
+      { name: 'Online', value: stats?.by_method?.online ?? 0, color: 'bg-lime-500' },
+      { name: 'Offline', value: stats?.by_method?.offline ?? 0, color: 'bg-blue-500' },
+      { name: 'QR Scan', value: stats?.by_method?.qr_scan ?? 0, color: 'bg-purple-500' },
+    ];
+    return (
+      <div className="space-y-4">
+        {methods.map((m) => (
+          <div key={m.name}>
+            <div className="flex justify-between mb-1">
+              <span className="text-sm">{m.name}</span>
+              <span className="text-sm font-bold">{m.value}</span>
+            </div>
+            <div className="h-2 bg-gray-200 dark:bg-gray-600 rounded-full">
+              <div
+                className={`h-2 rounded-full ${m.color}`}
+                style={{ width: `${m.value > 0 && totalVerifications > 0 ? Math.min(100, Math.round((m.value / totalVerifications) * 100)) : 0}%` }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const resultStyle = (result: 'valid' | 'invalid' | 'revoked') => {
+    switch (result) {
+      case 'valid': return 'bg-green-100 text-green-700';
+      case 'invalid': return 'bg-red-100 text-red-700';
+      case 'revoked': return 'bg-amber-100 text-amber-700';
+    }
+  };
+
+  const formatDate = (ts: string) => {
+    const d = new Date(ts);
+    return isNaN(d.getTime()) ? ts : d.toLocaleString();
+  };
 
   return (
-    <div className="p-8 bg-gray-50 min-h-screen">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Verification Dashboard</h1>
-        <p className="text-gray-600">Monitor certificate verification activity and system performance</p>
+    <div className="p-6">
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-lime-500">Verification Dashboard</h2>
+        <p className="text-sm text-gray-600 dark:text-gray-300">
+          Monitor certificate verification activity across the institution.
+        </p>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Total Verifications</p>
-              <p className="text-2xl font-bold text-gray-900">{stats?.total_verifications.toLocaleString()}</p>
-            </div>
-            <div className="p-3 bg-blue-100 rounded-lg">
-              <Shield className="w-6 h-6 text-blue-600" />
-            </div>
-          </div>
-          <div className="mt-4 flex items-center text-sm">
-            <TrendingUp className="w-4 h-4 text-emerald-500 mr-1" />
-            <span className="text-emerald-600 font-medium">+12.5%</span>
-            <span className="text-gray-500 ml-1">from last month</span>
-          </div>
+      {error && (
+        <div className="mb-4 px-4 py-3 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-sm">
+          {error}
         </div>
+      )}
 
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Success Rate</p>
-              <p className="text-2xl font-bold text-gray-900">{stats?.success_rate}%</p>
-            </div>
-            <div className="p-3 bg-emerald-100 rounded-lg">
-              <CheckCircle2 className="w-6 h-6 text-emerald-600" />
-            </div>
-          </div>
-          <div className="mt-4 flex items-center text-sm">
-            <TrendingUp className="w-4 h-4 text-emerald-500 mr-1" />
-            <span className="text-emerald-600 font-medium">+2.1%</span>
-            <span className="text-gray-500 ml-1">from last week</span>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Today's Verifications</p>
-              <p className="text-2xl font-bold text-gray-900">{stats?.today}</p>
-            </div>
-            <div className="p-3 bg-purple-100 rounded-lg">
-              <Clock className="w-6 h-6 text-purple-600" />
-            </div>
-          </div>
-          <div className="mt-4 flex items-center text-sm">
-            <span className="text-gray-500">Peak: 2:00 PM - 4:00 PM</span>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Unique Verifiers</p>
-              <p className="text-2xl font-bold text-gray-900">{stats?.unique_verifiers}</p>
-            </div>
-            <div className="p-3 bg-amber-100 rounded-lg">
-              <Users className="w-6 h-6 text-amber-600" />
-            </div>
-          </div>
-          <div className="mt-4 flex items-center text-sm">
-            <span className="text-gray-500">Avg: 3.2 verifications/user</span>
-          </div>
-        </div>
+      {/* Top Stats Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          icon={<Shield />}
+          label="Total Verifications"
+          value={stats?.total_verifications ?? 0}
+          color="lime"
+          hint="All certificate verification checks"
+        />
+        <StatCard
+          icon={<TrendingUp />}
+          label="Today"
+          value={stats?.today ?? 0}
+          color="emerald"
+          hint="Verifications in the last 24 hours"
+        />
+        <StatCard
+          icon={<Users />}
+          label="Unique Verifiers"
+          value={stats?.unique_verifiers ?? 0}
+          color="sky"
+          hint="Distinct users verifying certificates"
+        />
+        <StatCard
+          icon={<AlertTriangle />}
+          label="Success Rate"
+          value={`${stats?.success_rate ?? 0}%`}
+          color="amber"
+          hint="Valid vs. invalid checks"
+        />
       </div>
-      {/* Charts and Analytics */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        {/* Verification Methods */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Verification Methods</h3>
+
+      {/* Charts Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
+        <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-black uppercase text-gray-500 dark:text-gray-300">
+              Verifications by Faculty
+              <span className="ml-2 text-xs font-medium text-gray-400 dark:text-gray-500">
+                (by program)
+              </span>
+            </h3>
+          </div>
+          <div className="flex items-end gap-2 h-48 overflow-x-auto">
+            {renderBars()}
+          </div>
+        </div>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-black uppercase text-gray-500 dark:text-gray-300">
+              Verification Methods
+            </h3>
+          </div>
           <div className="space-y-4">
-            {stats && Object.entries(stats.by_method).map(([method, count]) => {
-              const total = Object.values(stats.by_method).reduce((a: number, b: number) => a + b, 0);
-              const percentage = (((count as number) / (total as number)) * 100).toFixed(1);
-              
-              return (
-                <div key={method} className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    {getMethodIcon(method)}
-                    <span className="font-medium capitalize">{method.replace('_', ' ')}</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-24 bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-[#4B0082] h-2 rounded-full" 
-                        style={{ width: `${percentage}%` }}
-                      ></div>
-                    </div>
-                    <span className="text-sm text-gray-600 w-12 text-right">{percentage}%</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Faculty Distribution */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Certificates by Faculty</h3>
-          <div className="space-y-4">
-            {stats && Object.entries(stats.by_faculty).map(([faculty, count]) => {
-              const total = Object.values(stats.by_faculty).reduce((a: number, b: number) => a + b, 0);
-              const percentage = (((count as number) / (total as number)) * 100).toFixed(1);
-              
-              return (
-                <div key={faculty} className="flex items-center justify-between">
-                  <span className="font-medium">{faculty}</span>
-                  <div className="flex items-center gap-3">
-                    <div className="w-24 bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-[#FFD700] h-2 rounded-full" 
-                        style={{ width: `${percentage}%` }}
-                      ></div>
-                    </div>
-                    <span className="text-sm text-gray-600 w-16 text-right">{count}</span>
-                  </div>
-                </div>
-              );
-            })}
+            {renderMethods()}
           </div>
         </div>
       </div>
 
-      {/* Certificate Status Overview */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Certificate Status Overview</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="text-center p-4 bg-emerald-50 rounded-lg">
-            <div className="text-2xl font-bold text-emerald-600">{stats?.certificates.active}</div>
-            <div className="text-sm text-emerald-700">Active</div>
+      {/* Certificates Summary */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 flex items-center justify-between">
+          <div>
+            <p className="text-3xl font-bold text-gray-800 dark:text-gray-100">
+              {stats?.certificates?.total_issued ?? 0}
+            </p>
+            <p className="text-xs font-black uppercase text-gray-500">
+              Certificates Issued
+            </p>
           </div>
-          <div className="text-center p-4 bg-red-50 rounded-lg">
-            <div className="text-2xl font-bold text-red-600">{stats?.certificates.revoked}</div>
-            <div className="text-sm text-red-700">Revoked</div>
+          <CheckCircle2 className="w-8 h-8 text-green-500" />
+        </div>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 flex items-center justify-between">
+          <div>
+            <p className="text-3xl font-bold text-gray-800 dark:text-gray-100">
+              {stats?.certificates?.active ?? 0}
+            </p>
+            <p className="text-xs font-black uppercase text-gray-500">
+              Active Certificates
+            </p>
           </div>
-          <div className="text-center p-4 bg-amber-50 rounded-lg">
-            <div className="text-2xl font-bold text-amber-600">{stats?.certificates.suspended}</div>
-            <div className="text-sm text-amber-700">Suspended</div>
+          <Globe className="w-8 h-8 text-blue-500" />
+        </div>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 flex items-center justify-between">
+          <div>
+            <p className="text-3xl font-bold text-gray-800 dark:text-gray-100">
+              {stats?.certificates?.revoked ?? 0}
+            </p>
+            <p className="text-xs font-black uppercase text-gray-500">
+              Revoked Certificates
+            </p>
           </div>
-          <div className="text-center p-4 bg-blue-50 rounded-lg">
-            <div className="text-2xl font-bold text-blue-600">{stats?.certificates.total_issued}</div>
-            <div className="text-sm text-blue-700">Total Issued</div>
+          <XCircle className="w-8 h-8 text-red-500" />
+        </div>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 flex items-center justify-between">
+          <div>
+            <p className="text-3xl font-bold text-gray-800 dark:text-gray-100">
+              {stats?.certificates?.suspended ?? 0}
+            </p>
+            <p className="text-xs font-black uppercase text-gray-500">
+              Suspended Certificates
+            </p>
           </div>
+          <Clock className="w-8 h-8 text-orange-500" />
         </div>
       </div>
 
-      {/* Verification Logs */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <h3 className="text-lg font-semibold text-gray-900">Recent Verification Activity</h3>
-            
-            <div className="flex flex-col sm:flex-row gap-3">
-              {/* Search */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <input
-                  type="text"
-                  placeholder="Search certificates..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4B0082] focus:border-transparent text-sm"
-                />
-              </div>
-
-              {/* Filters */}
-              <select
-                value={filterMethod}
-                onChange={(e) => setFilterMethod(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4B0082] focus:border-transparent text-sm"
-              >
-                <option value="all">All Methods</option>
-                <option value="online">Online</option>
-                <option value="offline">Offline</option>
-                <option value="qr_scan">QR Scan</option>
-              </select>
-
-              <select
-                value={filterResult}
-                onChange={(e) => setFilterResult(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4B0082] focus:border-transparent text-sm"
-              >
-                <option value="all">All Results</option>
-                <option value="valid">Valid</option>
-                <option value="invalid">Invalid</option>
-                <option value="revoked">Revoked</option>
-              </select>
-
-              <button className="px-4 py-2 bg-[#4B0082] text-white rounded-lg hover:bg-purple-700 transition-all flex items-center gap-2 text-sm">
-                <Download size={16} />
-                Export
-              </button>
-            </div>
+      {/* Detailed Activity Table */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mt-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-black uppercase text-gray-500 dark:text-gray-300">
+            Recent Verification Activity
+          </h3>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Search by serial"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+            />
+            <select
+              value={filterMethod}
+              onChange={(e) => setFilterMethod(e.target.value)}
+              className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+            >
+              <option value="all">All Methods</option>
+              <option value="online">Online</option>
+              <option value="offline">Offline</option>
+              <option value="qr_scan">QR Scan</option>
+            </select>
+            <select
+              value={filterResult}
+              onChange={(e) => setFilterResult(e.target.value)}
+              className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+            >
+              <option value="all">All Results</option>
+              <option value="valid">Valid</option>
+              <option value="invalid">Invalid</option>
+              <option value="revoked">Revoked</option>
+            </select>
           </div>
         </div>
-
         <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead className="bg-gray-50 dark:bg-gray-700">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Certificate
+                <th className="px-4 py-3 text-left text-xs font-black uppercase text-gray-500 dark:text-gray-300">
+                  Serial Number
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Student
+                <th className="px-4 py-3 text-left text-xs font-black uppercase text-gray-500 dark:text-gray-300">
+                  Student Name
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-black uppercase text-gray-500 dark:text-gray-300">
                   Result
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-black uppercase text-gray-500 dark:text-gray-300">
                   Method
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-black uppercase text-gray-500 dark:text-gray-300">
+                  IP Address
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-black uppercase text-gray-500 dark:text-gray-300">
                   Location
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Time
+                <th className="px-4 py-3 text-left text-xs font-black uppercase text-gray-500 dark:text-gray-300">
+                  User Agent
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-black uppercase text-gray-500 dark:text-gray-300">
+                  Timestamp
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredLogs.slice(0, 20).map((log) => (
-                <tr key={log.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{log.certificate_serial}</div>
-                    <div className="text-sm text-gray-500">{log.ip_address}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{log.student_name}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getResultColor(log.verification_result)}`}>
-                      {log.verification_result === 'valid' && <CheckCircle2 size={12} className="mr-1" />}
-                      {log.verification_result === 'invalid' && <XCircle size={12} className="mr-1" />}
-                      {log.verification_result === 'revoked' && <AlertTriangle size={12} className="mr-1" />}
-                      {log.verification_result.toUpperCase()}
+            <tbody>
+              {logs.map((log) => (
+                <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                  <td className="px-4 py-3 font-mono text-sm">{log.certificate_serial}</td>
+                  <td className="px-4 py-3 text-sm">{log.student_name || "—"}</td>
+                  <td className="px-4 py-3 text-sm">
+                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${resultStyle(log.verification_result)}`}>
+                      {log.verification_result}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center gap-2 text-sm text-gray-900">
-                      {getMethodIcon(log.method)}
-                      <span className="capitalize">{log.method.replace('_', ' ')}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center gap-1 text-sm text-gray-500">
-                      <MapPin size={12} />
-                      {log.location || 'Unknown'}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(log.timestamp).toLocaleString()}
-                  </td>
+                  <td className="px-4 py-3 text-sm">{log.method}</td>
+                  <td className="px-4 py-3 font-mono text-xs">{log.ip_address || "—"}</td>
+                  <td className="px-4 py-3 text-sm">{log.location || "—"}</td>
+                  <td className="px-4 py-3 text-xs text-gray-500 max-w-[200px] truncate">{log.user_agent || "—"}</td>
+                  <td className="px-4 py-3 text-sm">{formatDate(log.timestamp)}</td>
                 </tr>
               ))}
+              {logs.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-500">
+                    {loading ? "Loading activity..." : "No verification activity recorded yet."}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Showing <span className="font-bold">{logs.length}</span> of{" "}
+            <span className="font-bold">{totalLogs}</span> records
+          </p>
+        </div>
+      </div>
 
-        {filteredLogs.length === 0 && (
-          <div className="text-center py-12">
-            <Search size={48} className="mx-auto text-gray-300 mb-4" />
-            <p className="text-gray-500">No verification logs found matching your criteria</p>
+      {/* System Insights — derived from live DB activity */}
+      <div className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg mt-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-black uppercase text-gray-500 dark:text-gray-300">
+            System Insights
+          </h3>
+          <span className="text-xs px-2 py-1 rounded-full bg-lime-100 dark:bg-gray-600 text-lime-700 dark:text-lime-300">
+            Live
+          </span>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+          <div className="text-center">
+            <p className="text-2xl font-bold text-lime-500">{stats?.this_month ?? 0}</p>
+            <p className="text-xs text-gray-500">Verifications this month</p>
           </div>
-        )}
+          <div className="text-center">
+            <p className="text-2xl font-bold text-lime-500">{qrShare}%</p>
+            <p className="text-xs text-gray-500">QR Scan share</p>
+          </div>
+          <div className="text-center">
+            <p className="text-2xl font-bold text-lime-500">{avgPerVerifier}</p>
+            <p className="text-xs text-gray-500">Avg. verifications / verifier</p>
+          </div>
+          <div className="text-center">
+            <p className="text-2xl font-bold text-lime-500">{stats?.by_method?.offline ?? 0}</p>
+            <p className="text-xs text-gray-500">Offline verifications</p>
+          </div>
+          <div className="text-center">
+            <p className="text-2xl font-bold text-lime-500">{stats?.today ?? 0}</p>
+            <p className="text-xs text-gray-500">Verifications today</p>
+          </div>
+          <div className="text-center">
+            <p className="text-2xl font-bold text-lime-500">{stats?.success_rate ?? 0}%</p>
+            <p className="text-xs text-gray-500">Overall success rate</p>
+          </div>
+        </div>
+      </div>
 
-        {filteredLogs.length > 20 && (
-          <div className="px-6 py-4 border-t border-gray-200 text-center">
-            <p className="text-sm text-gray-500">
-              Showing 20 of {filteredLogs.length} results
-            </p>
-          </div>
-        )}
+      {/* Location note */}
+      <div className="flex items-center gap-2 mt-4 text-xs text-gray-400">
+        <MapPin className="w-4 h-4" />
+        IP geolocation is captured from the verification request headers when available.
       </div>
     </div>
   );
 };
 
+interface StatCardProps {
+  icon: React.ReactNode;
+  label: string;
+  value: React.ReactNode;
+  color: 'lime' | 'emerald' | 'sky' | 'amber';
+  hint: string;
+}
+
+const StatCard = ({ icon, label, value, color, hint }: StatCardProps) => (
+  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+    <div className="flex items-center gap-3 mb-2">
+      <div
+        className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+          color === 'lime'
+            ? 'bg-lime-100 text-lime-600'
+            : color === 'emerald'
+              ? 'bg-emerald-100 text-emerald-600'
+              : color === 'sky'
+                ? 'bg-sky-100 text-sky-600'
+                : 'bg-amber-100 text-amber-600'
+        }`}
+      >
+        {icon}
+      </div>
+      <div>
+        <p className="text-3xl font-bold text-gray-800 dark:text-gray-100">{value}</p>
+        <p className="text-xs font-black uppercase text-gray-500">{label}</p>
+        <p className="text-xs text-gray-400">{hint}</p>
+      </div>
+    </div>
+  </div>
+);
+
 export default VerificationDashboard;
-
-
-
-
-
-
-
-

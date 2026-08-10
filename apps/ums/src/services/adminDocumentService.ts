@@ -14,6 +14,7 @@ export interface Document {
   user_email: string;
   first_name: string;
   last_name: string;
+  verification_status?: 'verified' | 'pending' | 'flagged';
 }
 
 export interface PaginatedDocumentsResponse {
@@ -85,34 +86,75 @@ export async function downloadDocument(docId: string): Promise<void> {
   }
 }
 
+export interface UploadDocumentResponse {
+  success: boolean;
+  data?: Document;
+  error?: string;
+}
+
 export async function uploadDocument(data: {
   file_name: string;
   first_name: string;
   last_name: string;
   user_email: string;
   doc_type: string;
-  file_size_bytes: number;
-  mime_type: string;
-}): Promise<Document> {
-  // We mock the successful creation for the UI since the component doesn't actually upload file data
-  // but rather just sets up a document record metadata. 
-  // In a real implementation this might hit POST /api/admin/documents
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({
-        id: "doc_" + Math.random().toString(36).substr(2, 9),
-        application_id: "app_" + Math.random().toString(36).substr(2, 9),
-        user_id: "user_" + Math.random().toString(36).substr(2, 9),
-        doc_type: data.doc_type,
-        file_name: data.file_name,
-        r2_key: "mock/r2/key",
-        mime_type: data.mime_type,
-        file_size_bytes: data.file_size_bytes,
-        uploaded_at: new Date().toISOString(),
-        user_email: data.user_email,
-        first_name: data.first_name,
-        last_name: data.last_name,
-      });
-    }, 1000);
-  });
+  file: File;
+}): Promise<UploadDocumentResponse> {
+  try {
+    const formData = new FormData();
+    formData.append('user_email', data.user_email);
+    formData.append('file', data.file, data.file_name);
+
+    const url = `${API_URL.replace('/v1', '')}/admin/documents?doc_type=${encodeURIComponent(data.doc_type)}`;
+    const response = await authFetch(url, { method: 'POST', body: formData }, 30000);
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({ error: 'Upload failed' }));
+      return { success: false, error: body.error || `Upload failed (${response.status})` };
+    }
+    const result = await response.json();
+    if (result.success && result.data) {
+      return {
+        success: true,
+        data: {
+          id: result.data.document_id,
+          application_id: "",
+          user_id: result.data.user_id || "",
+          doc_type: data.doc_type,
+          file_name: data.file_name,
+          r2_key: "",
+          mime_type: result.data.mime_type || data.file.type || 'application/octet-stream',
+          file_size_bytes: data.file.size,
+          uploaded_at: new Date().toISOString(),
+          user_email: data.user_email,
+          first_name: data.first_name,
+          last_name: data.last_name,
+          verification_status: 'verified',
+        },
+      };
+    }
+    return { success: false, error: result.error || 'Upload failed' };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to upload document',
+    };
+  }
+}
+
+export async function updateDocumentVerification(
+  docId: string,
+  verification_status: 'verified' | 'pending' | 'flagged',
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const url = `${API_URL.replace('/v1', '')}/admin/documents/${docId}/verification`;
+    const response = await authFetch(url, {
+      method: 'PATCH',
+      body: JSON.stringify({ verification_status }),
+    });
+    const body = await response.json().catch(() => null);
+    return { success: response.ok, error: !response.ok ? (body?.error || 'Failed to update status') : undefined };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to update status' };
+  }
 }

@@ -212,6 +212,80 @@ export async function handleDeleteDocument(
   return ok({ deleted: true });
 }
 
+const DOC_TYPES = ['transcript', 'id_document', 'personal_statement', 'recommendation', 'other'];
+
+export async function handleAdminUploadDocument(request: Request, env: Env, adminId: string): Promise<Response> {
+  const url = new URL(request.url);
+  const docType = url.searchParams.get('doc_type') || 'other';
+  if (!DOC_TYPES.includes(docType)) return error('Invalid document type', 400);
+
+  const formData = await request.formData();
+  const file = formData.get('file') as File | null;
+  const userEmail = (formData.get('user_email') as string | null)?.trim().toLowerCase();
+
+  if (!file) return error('No file provided');
+  if (!userEmail) return error('user_email is required');
+  if (file.size > MAX_FILE_SIZE) return error('File too large. Maximum size is 10 MB.');
+  if (file.size === 0) return error('File is empty');
+
+  const user = await env.PLATFORM_CONTEXT!.db.prepare('SELECT id FROM users WHERE LOWER(email) = ?')
+    .bind(userEmail).first<{ id: string }>();
+  if (!user) return error('No user found with that email', 404);
+
+  const application = await env.PLATFORM_CONTEXT!.db.prepare(
+    `SELECT id FROM applications WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`
+  ).bind(user.id).first<{ id: string }>();
+  if (!application) return error('The user has no application on record; cannot attach a document', 404);
+
+  const fileBuffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(fileBuffer.slice(0, 12));
+  const detectedMime = detectMimeType(bytes);
+  if (!detectedMime) {
+    return error('File type could not be verified. Please upload a PDF, JPEG, PNG, or Word document.', 400);
+  }
+
+  let compressedBuffer = Buffer.from(fileBuffer);
+  if (['image/jpeg', 'image/png'].includes(detectedMime)) {
+    compressedBuffer = await compressImage(compressedBuffer, detectedMime);
+  }
+
+  const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').substring(0, 200);
+  const ext = safeFileName.split('.').pop()?.toLowerCase() || 'bin';
+  const allowedExts = ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'doc', 'docx'];
+  if (!allowedExts.includes(ext)) return error('File extension not allowed');
+
+  const r2Key = `documents/${user.id}/${application.id}/${docType}-${crypto.randomUUID()}.${ext}`;
+  await env.PLATFORM_CONTEXT!.storage.upload({
+    key: r2Key,
+    data: compressedBuffer,
+    mimeType: detectedMime,
+    metadata: { userId: user.id, applicationId: application.id, docType, originalName: safeFileName, uploadedBy: adminId },
+  });
+
+  const docId = crypto.randomUUID();
+  await env.PLATFORM_CONTEXT!.db.prepare(
+    `INSERT INTO documents (id, application_id, user_id, doc_type, file_name, r2_key, mime_type, file_size_bytes)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(docId, application.id, user.id, docType, safeFileName, r2Key, detectedMime, compressedBuffer.length).run();
+
+  await logAdminAction(env, adminId, 'upload_document', 'document', docId, { file_name: safeFileName, doc_type: docType, user_email: userEmail }, request);
+
+  return ok({ document_id: docId, file_name: safeFileName, doc_type: docType, user_id: user.id });
+}
+
+export async function handleUpdateDocumentVerification(request: Request, env: Env, docId: string): Promise<Response> {
+  const body = await request.json().catch(() => null) as { verification_status?: string } | null;
+  const status = body?.verification_status;
+  if (!status) return error('verification_status is required', 400);
+  if (!['verified', 'pending', 'flagged'].includes(status)) return error("verification_status must be 'verified', 'pending' or 'flagged'", 400);
+
+  const doc = await env.PLATFORM_CONTEXT!.db.prepare('SELECT id FROM documents WHERE id = ?').bind(docId).first();
+  if (!doc) return error('Document not found', 404);
+
+  await env.PLATFORM_CONTEXT!.db.prepare(`UPDATE documents SET verification_status = ? WHERE id = ?`).bind(status, docId).run();
+  return ok({ document_id: docId, verification_status: status });
+}
+
 export async function handleListDocuments(
   request: Request,
   env: Env
