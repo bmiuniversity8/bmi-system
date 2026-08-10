@@ -58,6 +58,12 @@ export function translateSqliteToPostgres(sql: string): string {
   // 11. Normalize ON CONFLICT(<col>) → ON CONFLICT (<col>) (Postgres requires whitespace)
   out = out.replace(/ON\s+CONFLICT\s*\(/gi, 'ON CONFLICT (');
 
+  // 12. json_group_array(x) → json_agg(x)
+  out = out.replace(/json_group_array\s*\(/gi, 'json_agg(');
+
+  // 13. json_object(k, v, ...) → json_build_object(k, v, ...)
+  out = out.replace(/json_object\s*\(/gi, 'json_build_object(');
+
   return out;
 }
 
