@@ -38,20 +38,27 @@ export type LibraryDb = NeonHttpDatabase<typeof librarySchema>;
 export type AlumniDb = NeonHttpDatabase<typeof alumniSchema & typeof campusSchema>;
 
 function getConnectionUrl(env: Env, perModuleVar: string): string | undefined {
-  const url =
-    env[perModuleVar as keyof Env] ??
-    env.DATABASE_URL ??
-    env.DATABASE_URL_CORE ??
-    // Hyperdrive binding (Connection String is available on the binding itself)
-    (env.CORE_HYPERDRIVE as any)?.connectionString ??
-    (env.HR_HYPERDRIVE as any)?.connectionString ??
-    (env.LIBRARY_HYPERDRIVE as any)?.connectionString ??
-    (env.ALUMNI_HYPERDRIVE as any)?.connectionString;
-  return typeof url === 'string' && url.length > 0 ? url : undefined;
+  const candidates = [
+    env[perModuleVar as keyof Env],
+    env.DATABASE_URL_CORE,
+    env.DATABASE_URL,
+    (env.CORE_HYPERDRIVE as any)?.connectionString,
+    (env.HR_HYPERDRIVE as any)?.connectionString,
+    (env.LIBRARY_HYPERDRIVE as any)?.connectionString,
+    (env.ALUMNI_HYPERDRIVE as any)?.connectionString,
+  ];
+
+  for (const c of candidates) {
+    if (typeof c === 'string' && c.trim().length > 0) {
+      return c.trim();
+    }
+  }
+  return undefined;
 }
 
 function createNeon(url: string, schema: Record<string, unknown>): NeonHttpDatabase<any> {
-  const client = neon(url);
+  const cleanUrl = url.trim();
+  const client = neon(cleanUrl);
   return drizzleNeonHttp(client as any, { schema: schema as any });
 }
 

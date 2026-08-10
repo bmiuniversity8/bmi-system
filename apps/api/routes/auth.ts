@@ -2,7 +2,7 @@ import { and, eq, isNull, sql } from 'drizzle-orm';
 import { hashPassword, verifyPassword } from '@bmi/api-middleware';
 import { signJWT, validatePasswordStrength, isCommonPassword } from '../lib/jwt';
 import { ok, error, generateCsrfToken } from '../lib/types';
-import { sendEmail } from '../lib/email';
+import { sendEmail, buildEmailLayout } from '../lib/email';
 import { getPortalUrl, getUmsUrl } from '../lib/config';
 import { generateTOTPSecret, verifyTOTP, getTOTPAuthUrl } from '../lib/totp';
 import { getOAuthConfig, exchangeCodeForToken, getUserInfo, type OAuthProvider } from '../lib/sso';
@@ -15,45 +15,45 @@ import type { Env } from '../lib/types';
 export async function handleRegister(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
   const startTime = performance.now();
   
-  const parsed = await parseBody(request, RegisterSchema);
-  if (parsed instanceof Response) return parsed;
-
-  const { email, password, first_name: cleanFirstName, last_name: cleanLastName, phone } = parsed;
-
-  // Parallelize password validation (CPU-bound operations)
-  const [strengthCheck, commonPasswordCheck] = await Promise.all([
-    Promise.resolve(validatePasswordStrength(password)),
-    Promise.resolve(isCommonPassword(password))
-  ]);
-
-  if (!strengthCheck.valid) {
-    return error(strengthCheck.errors[0]);
-  }
-
-  if (commonPasswordCheck) {
-    return error('This password is too common. Please choose a stronger password.');
-  }
-
-  // Use optimized user lookup with early exit
-  const db = createCoreDb(env);
-  const existingUser = (await db.select({ id: users.id }).from(users).where(eq(users.email, email.toLowerCase())).limit(1).execute())[0];
-
-  if (existingUser) {
-    return error('An account with this email already exists', 409);
-  }
-
-  // Pre-generate all IDs and tokens to minimize async operations
-  const userId = crypto.randomUUID();
-  const verificationToken = crypto.randomUUID();
-  const verificationId = crypto.randomUUID();
-
-  // Hash password in parallel with ID generation (already done above)
-  const passwordHash = await hashPassword(password, env.PASSWORD_PEPPER, env.PBKDF2_ITERATIONS);
-
-  // Atomic registration: user + email verification in one transaction
   try {
-    await db.transaction(async (tx) => {
-      await tx.insert(users).values({
+    const parsed = await parseBody(request, RegisterSchema);
+    if (parsed instanceof Response) return parsed;
+
+    const { email, password, first_name: cleanFirstName, last_name: cleanLastName, phone } = parsed;
+
+    // Parallelize password validation (CPU-bound operations)
+    const [strengthCheck, commonPasswordCheck] = await Promise.all([
+      Promise.resolve(validatePasswordStrength(password)),
+      Promise.resolve(isCommonPassword(password))
+    ]);
+
+    if (!strengthCheck.valid) {
+      return error(strengthCheck.errors[0]);
+    }
+
+    if (commonPasswordCheck) {
+      return error('This password is too common. Please choose a stronger password.');
+    }
+
+    // Use optimized user lookup with early exit
+    const db = createCoreDb(env);
+    const existingUser = (await db.select({ id: users.id }).from(users).where(eq(users.email, email.toLowerCase())).limit(1).execute())[0];
+
+    if (existingUser) {
+      return error('An account with this email already exists', 409);
+    }
+
+    // Pre-generate all IDs and tokens to minimize async operations
+    const userId = crypto.randomUUID();
+    const verificationToken = crypto.randomUUID();
+    const verificationId = crypto.randomUUID();
+
+    const pepper = env.PASSWORD_PEPPER || 'bmi-default-pepper-2026';
+    const passwordHash = await hashPassword(password, pepper, env.PBKDF2_ITERATIONS);
+
+    // Registration: insert user and email verification record
+    try {
+      await db.insert(users).values({
         id: userId,
         email: email.toLowerCase(),
         password_hash: passwordHash,
@@ -63,46 +63,52 @@ export async function handleRegister(request: Request, env: Env, ctx?: Execution
         role: 'applicant',
         is_verified: 0,
       });
-      await tx.insert(emailVerifications).values({
+      await db.insert(emailVerifications).values({
         id: verificationId,
         user_id: userId,
         token: verificationToken,
         expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000),
       });
-    });
-  } catch (e) {
-    console.error('Registration failed:', e);
-    return error('Registration failed. Please try again.');
-  }
-
-  // Async email processing - non-blocking for response
-  if (env.RESEND_API_KEY) {
-    const verifyUrl = `${getPortalUrl(env)}/verify?token=${verificationToken}`;
-    const emailPromise = sendRegistrationEmailOptimized(env, {
-      to: email.toLowerCase(),
-      firstName: cleanFirstName,
-      verifyUrl
-    });
-    
-    if (ctx) {
-      ctx.waitUntil(emailPromise.catch(error => {
-        console.error('Registration email failed:', error);
-      }));
-    } else {
-      await emailPromise;
+    } catch (e: any) {
+      console.error('Registration insert failed:', e);
+      return error(`Registration failed: ${e?.message || String(e)}`, 500);
     }
-  }
+    // Async email processing - non-blocking for response
+    if (env.RESEND_API_KEY) {
+      try {
+        const verifyUrl = `${getPortalUrl(env)}/verify?token=${verificationToken}`;
+        const emailPromise = sendRegistrationEmailOptimized(env, {
+          to: email.toLowerCase(),
+          firstName: cleanFirstName,
+          verifyUrl
+        });
+        
+        if (ctx) {
+          ctx.waitUntil(emailPromise.catch(error => {
+            console.error('Registration email failed:', error);
+          }));
+        } else {
+          await emailPromise.catch(e => console.error('Registration email promise error:', e));
+        }
+      } catch (e) {
+        console.error('Registration email trigger failed:', e);
+      }
+    }
 
-  // Track registration performance
-  const duration = performance.now() - startTime;
-  if (duration > 500) {
-    console.warn(`Slow registration detected: ${duration}ms for user ${email}`);
-  }
+    // Track registration performance
+    const duration = performance.now() - startTime;
+    if (duration > 500) {
+      console.warn(`Slow registration detected: ${duration}ms for user ${email}`);
+    }
 
-  return ok({ 
-    message: 'Account created! Please check your email to verify your account before logging in.',
-    _perf: { duration_ms: Math.round(duration) }
-  });
+    return ok({ 
+      message: 'Account created! Please check your email to verify your account before logging in.',
+      _perf: { duration_ms: Math.round(duration) }
+    });
+  } catch (err: any) {
+    console.error('Unhandled registration error:', err);
+    return error(`Registration error: ${err?.message || String(err)}`, 500);
+  }
 }
 
 // Optimized email sending with template caching
@@ -111,7 +117,6 @@ async function sendRegistrationEmailOptimized(env: Env, params: {
   firstName: string;
   verifyUrl: string;
 }): Promise<boolean> {
-  const { buildEmailLayout } = await import('../lib/email');
   const emailTemplate = buildEmailLayout(
     'Email Verification',
     `
