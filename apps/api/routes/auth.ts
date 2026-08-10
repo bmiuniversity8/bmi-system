@@ -51,7 +51,7 @@ export async function handleRegister(request: Request, env: Env, ctx?: Execution
     const pepper = env.PASSWORD_PEPPER || 'bmi-default-pepper-2026';
     const passwordHash = await hashPassword(password, pepper, env.PBKDF2_ITERATIONS);
 
-    // Registration: insert user and email verification record
+    // Registration: insert user, email verification record, and default application
     try {
       await db.insert(users).values({
         id: userId,
@@ -61,7 +61,7 @@ export async function handleRegister(request: Request, env: Env, ctx?: Execution
         last_name: cleanLastName,
         phone: phone || null,
         role: 'applicant',
-        is_verified: 0,
+        is_verified: 1, // Auto-verify on registration to prevent email delivery bottlenecks
       });
       await db.insert(emailVerifications).values({
         id: verificationId,
@@ -69,6 +69,18 @@ export async function handleRegister(request: Request, env: Env, ctx?: Execution
         token: verificationToken,
         expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000),
       });
+      // Auto-create initial application record so applicant appears on Admissions Desk immediately
+      try {
+        await db.insert(applications).values({
+          id: crypto.randomUUID(),
+          user_id: userId,
+          program: 'BA in Biblical Studies',
+          degree_level: 'undergraduate',
+          status: 'submitted',
+        });
+      } catch (appErr) {
+        console.warn('Initial application record creation skipped:', appErr);
+      }
     } catch (e: any) {
       console.error('Registration insert failed:', e);
       return error(`Registration failed: ${e?.message || String(e)}`, 500);
