@@ -820,7 +820,7 @@ export default function Admissions() {
                   <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">Degree Level</label>
                   <select
                     value={newFormData.degree_level}
-                    onChange={(e) => setNewFormData({ ...newFormData, degree_level: e.target.value })}
+                    onChange={(e) => setNewFormData({ ...newFormData, degree_level: e.target.value as 'undergraduate' | 'graduate' | 'doctorate' | 'certificate' })}
                     className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg p-2 font-medium focus:ring-2 focus:ring-[#FFD700] outline-none"
                   >
                     <option value="undergraduate">Undergraduate</option>

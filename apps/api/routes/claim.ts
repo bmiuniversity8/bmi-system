@@ -91,7 +91,7 @@ export async function handleClaimAccount(req: Request, env: Env, ctx: ExecutionC
           ).bind(crypto.randomUUID(), appRow.id, user.id).run();
         }
       }
-    } catch {}
+    } catch { /* best-effort status log, non-critical */ }
 
     return ok({ message: 'Account claimed successfully.' });
   } catch (e: unknown) {
