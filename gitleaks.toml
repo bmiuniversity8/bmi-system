@@ -1,30 +1,36 @@
 title = "BMI System gitleaks config"
 
-# Extend gitleaks defaults with project-specific blocks.
-# These exact leaked secrets must never reappear — not even as fragments.
+# Extend gitleaks defaults with project-specific patterns.
+# NOTE: this file must NEVER contain literal secret values (it is scanned too);
+# it uses structural patterns instead.
 
 [extend]
 useDefault = true
 
 [[rules]]
-description = "BMI leaked Neon connection string (password: ***REMOVED***)"
-regex = '''***REMOVED***|***REMOVED***'''
-tags = ["leak", "neon", "postgres"]
-
-[[rules]]
-description = "BMI leaked PASSWORD_PEPPER"
-regex = '''***REMOVED***'''
-tags = ["leak", "pepper"]
-
-[[rules]]
-description = "Generic Neon connection string"
+description = "Neon managed Postgres connection string"
 regex = '''postgres(?:ql)?://[A-Za-z0-9_]+:[^@\s:]+@ep-[a-z0-9-]+\.c-[a-z0-9-]+\.(?:aws|us-|ap-)[a-z0-9-]*\.(?:neon\.tech|neonbuild\.io)'''
 tags = ["neon", "postgres"]
+
+[[rules]]
+description = "Neon role password (npg_ prefix)"
+regex = '''npg_[A-Za-z0-9_]{9,}'''
+tags = ["neon", "password"]
 
 [[rules]]
 description = "Generic GitHub token"
 regex = '''gh[pousr]_[A-Za-z0-9]{20,}'''
 tags = ["github", "token"]
+
+[[rules]]
+description = "Generic AWS / GCP keys"
+regex = '''(AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35})'''
+tags = ["aws", "gcp", "key"]
+
+[[rules]]
+description = "High-entropy secret assigned to a known credential variable"
+regex = '''(?:JWT_SECRET|PASSWORD_PEPPER|DATABASE_URL_CORE|RESEND_API_KEY)\s*[=:]\s*['"][^'"\s]{16,}['"]'''
+tags = ["secret", "env"]
 
 [allowlist]
 description = "Legit local examples / docs placeholders / scanner's own config"
@@ -35,4 +41,5 @@ regexes = [
 ]
 paths = [
   '''gitleaks\.toml''',
+  '''\.dev\.vars\.example''',
 ]
