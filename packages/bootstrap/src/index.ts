@@ -117,12 +117,22 @@ function buildCloudflare(env: any): PlatformContext {
 
   // Database: prefer Neon (Postgres) when a connection string is configured,
   // otherwise fall back to D1 during the strangler-fig migration phase.
-  const coreConnectionUrl =
-    env.DATABASE_URL_CORE ??
-    env.DATABASE_URL ??
-    env.CORE_HYPERDRIVE?.connectionString ??
-    env.HYPERDRIVE?.connectionString;
-  const dbAdapter = typeof coreConnectionUrl === 'string' && coreConnectionUrl.length > 0
+  const candidates = [
+    env.DATABASE_URL_CORE,
+    env.DATABASE_URL,
+    env.CORE_HYPERDRIVE?.connectionString,
+    env.HYPERDRIVE?.connectionString,
+  ];
+
+  let coreConnectionUrl: string | undefined;
+  for (const c of candidates) {
+    if (typeof c === 'string' && c.trim().length > 0) {
+      coreConnectionUrl = c.trim();
+      break;
+    }
+  }
+
+  const dbAdapter = coreConnectionUrl
     ? new PostgresDatabaseAdapter(coreConnectionUrl)
     : new D1DatabaseAdapter(env.DB);
   return {
