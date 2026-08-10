@@ -9,7 +9,7 @@ import { getOAuthConfig, exchangeCodeForToken, getUserInfo, type OAuthProvider }
 import { parseBody, RegisterSchema, LoginSchema } from '../lib/schemas';
 import { executeWithMonitoring } from '../lib/performance';
 import { createCoreDb } from '../lib/db';
-import { users, emailVerifications, sessions, passwordResetTokens, oauthAccounts } from '../schema/core';
+import { users, emailVerifications, sessions, passwordResetTokens, oauthAccounts, applications } from '../schema/core';
 import type { Env } from '../lib/types';
 
 export async function handleRegister(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
@@ -85,26 +85,28 @@ export async function handleRegister(request: Request, env: Env, ctx?: Execution
       console.error('Registration insert failed:', e);
       return error(`Registration failed: ${e?.message || String(e)}`, 500);
     }
-    // Async email processing - non-blocking for response
+    // Email: send directly via Resend HTTP API (bypass queue — queue consumer had stale key issues)
     if (env.RESEND_API_KEY) {
-      try {
-        const verifyUrl = `${getPortalUrl(env)}/verify?token=${verificationToken}`;
-        const emailPromise = sendRegistrationEmailOptimized(env, {
-          to: email.toLowerCase(),
-          firstName: cleanFirstName,
-          verifyUrl
-        });
-        
-        if (ctx) {
-          ctx.waitUntil(emailPromise.catch(error => {
-            console.error('Registration email failed:', error);
-          }));
+      const verifyUrl = `${getPortalUrl(env)}/verify?token=${verificationToken}`;
+      const emailWork = sendRegistrationEmailDirect(env, {
+        to: email.toLowerCase(),
+        firstName: cleanFirstName,
+        verifyUrl
+      }).then(result => {
+        if (!result.ok) {
+          console.error('[register] Resend delivery failed:', result.status, result.errorBody);
         } else {
-          await emailPromise.catch(e => console.error('Registration email promise error:', e));
+          console.info('[register] Verification email delivered to:', email);
         }
-      } catch (e) {
-        console.error('Registration email trigger failed:', e);
+      }).catch(e => console.error('[register] Email send threw exception:', e));
+
+      if (ctx) {
+        ctx.waitUntil(emailWork);
+      } else {
+        await emailWork;
       }
+    } else {
+      console.warn('[register] RESEND_API_KEY not set — skipping verification email for:', email);
     }
 
     // Track registration performance
@@ -123,13 +125,13 @@ export async function handleRegister(request: Request, env: Env, ctx?: Execution
   }
 }
 
-// Optimized email sending with template caching
-async function sendRegistrationEmailOptimized(env: Env, params: {
+// Direct Resend HTTP send — bypasses queue to guarantee delivery and surface errors
+async function sendRegistrationEmailDirect(env: Env, params: {
   to: string;
   firstName: string;
   verifyUrl: string;
-}): Promise<boolean> {
-  const emailTemplate = buildEmailLayout(
+}): Promise<{ ok: boolean; status?: number; errorBody?: string }> {
+  const html = buildEmailLayout(
     'Email Verification',
     `
     <h2 style="color: #0f172a;">Welcome, ${params.firstName}!</h2>
@@ -143,22 +145,44 @@ async function sendRegistrationEmailOptimized(env: Env, params: {
       </a>
     </div>
     <p style="color: #94a3b8; font-size: 13px;">
-      Or copy this link into your browser:<br>
+      Or copy this link:<br>
       <a href="${params.verifyUrl}" style="color: #d4af37; word-break: break-all;">${params.verifyUrl}</a>
     </p>
     <p style="color: #94a3b8; font-size: 13px;">This link expires in 24 hours.</p>
-    <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;">
-    <p style="color: #94a3b8; font-size: 12px;">
-      If you did not create this account, you can safely ignore this email.
-    </p>
+    <p style="color: #94a3b8; font-size: 12px;">If you did not create this account, you can safely ignore this email.</p>
     `
   );
 
-  return sendEmail(env, {
-    to: params.to,
-    subject: 'BMI University — Verify Your Email Address',
-    html: emailTemplate
-  });
+  const senders = [
+    env.RESEND_FROM_EMAIL || 'BMI University <admissions@hkmministries.org>',
+    'onboarding@resend.dev',
+  ];
+
+  for (const from of senders) {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ from, to: params.to, subject: 'BMI University — Verify Your Email Address', html }),
+    });
+
+    if (res.ok) {
+      console.info(`[email] Delivered via sender: ${from}`);
+      return { ok: true };
+    }
+
+    const errorBody = await res.text();
+    console.warn(`[email] Sender ${from} rejected (${res.status}): ${errorBody}`);
+
+    if (res.status !== 403 && res.status !== 422) {
+      // Non-domain error (e.g. 429 rate limit, 500 server) — no point retrying with fallback
+      return { ok: false, status: res.status, errorBody };
+    }
+  }
+
+  return { ok: false, status: 422, errorBody: 'All senders rejected' };
 }
 
 export async function handleVerifyEmail(request: Request, env: Env): Promise<Response> {
