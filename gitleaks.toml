@@ -49,4 +49,5 @@ paths = [
 # This entry suppresses the immutable historical finding.
 commits = [
   "f33b41aa4274123f75e4ea2aba6a0e2adb5484a1",
+  "5599d7e43e32ac37e9d8b01514edfee6048a5d6a",
 ]

@@ -1,8 +1,13 @@
 import { neon } from '@neondatabase/serverless';
 import { hashPassword } from '../../../packages/api-middleware/src/jwt.ts';
 
-const NEON_URL = process.env.DATABASE_URL_CORE || "postgresql://neondb_owner:npg_Sq4liYUJj6Lk@ep-delicate-term-aws0vuty-pooler.c-12.us-east-1.aws.neon.tech/neondb?sslmode=require";
-const PEPPER = process.env.PASSWORD_PEPPER || "quTCeS7M1pb8/3i3uhwOk+M5bMn6zmfBTDKFfu8Ax4RorUMOMRIMDbPbA2T6PgXK";
+const NEON_URL = process.env.DATABASE_URL_CORE;
+const PEPPER = process.env.PASSWORD_PEPPER;
+
+if (!NEON_URL || !PEPPER) {
+  console.error('❌ DATABASE_URL_CORE and PASSWORD_PEPPER environment variables are required.');
+  process.exit(1);
+}
 
 const sql = neon(NEON_URL);
 
