@@ -1,13 +1,24 @@
 # Skip type-check if env var SKIP_CI=true (pre-commit runs before commit exists,
 # so commit-message check is handled in pre-push instead)
 if [ "$SKIP_CI" = "true" ]; then
-  echo "⏩ Skipping type-check (SKIP_CI=true)"
+  echo "? Skipping type-check (SKIP_CI=true)"
 else
   npx turbo run lint type-check --concurrency=100%
 fi
 
-# Basic Secret Scanning
-if git diff --cached | grep -iE "(API_KEY|SECRET|PASSWORD|TOKEN).{0,5}=" > /dev/null; then
-  echo "🚨 ERROR: Potential secrets found in staged files. Remove them before committing."
-  exit 1
+# ─── Secret Scanning (gitleaks preferred, grep fallback) ─────────────────────
+if [ -x "$(command -v gitleaks 2>/dev/null)" ]; then
+  if ! gitleaks protect --staged --redact >/dev/null 2>&1; then
+    echo "?? ERROR: gitleaks detected secrets in staged changes. Remove them before committing."
+    exit 1
+  fi
+else
+  # Lightweight fallback — high-signal tokens only (gitleaks.toml is the scanner
+  # config and intentionally references blocklisted strings, so exclude it).
+  if git diff --cached -- . ':(exclude)gitleaks.toml' \
+    | grep -qiE "npg_[A-Za-z0-9_]{9,}|gh[pousr]_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|***REMOVED***|***REMOVED***"; then
+    echo "?? ERROR: Potential secrets found in staged files. Remove them before committing."
+    echo "    Tip: install gitleaks (scoop install gitleaks) for the precise scanner."
+    exit 1
+  fi
 fi

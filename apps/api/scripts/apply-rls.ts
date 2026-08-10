@@ -7,7 +7,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 async function main() {
-  const connectionString = 'postgresql://neondb_owner:***REMOVED***@***REMOVED***.c-12.us-east-1.aws.neon.tech/neondb?sslmode=require';
+  const connectionString = process.env.DATABASE_URL_CORE;
+  if (!connectionString) {
+    console.error('❌ DATABASE_URL_CORE is not set. Provide it in the environment (e.g. from apps/api/.dev.vars).');
+    process.exit(1);
+  }
   console.log('🔗 Connecting to Neon Database via Client...');
   const client = new Client(connectionString);
   await client.connect();

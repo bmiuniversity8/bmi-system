@@ -575,7 +575,7 @@ export async function handleAdminCreateApplication(
   const db = env.PLATFORM_CONTEXT!.db;
 
   // Find-or-create the applicant user
-  let user = await db.prepare(
+  const user = await db.prepare(
     `SELECT id FROM users WHERE email = ?`
   ).bind(normalizedEmail).first<{ id: string }>();
 

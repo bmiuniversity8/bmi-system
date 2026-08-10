@@ -323,6 +323,7 @@ export async function handleLogin(request: Request, env: Env): Promise<Response>
   } as unknown as Parameters<typeof executeWithMonitoring>[0], 'session_create');
 
   const response = ok({
+    token,
     csrf_token: csrfToken,
     expires_at: expiresAt,
     user: { id: user.id, email: user.email, first_name: user.first_name, last_name: user.last_name, role: user.role, mfa_enabled: user.mfa_enabled === 1 },

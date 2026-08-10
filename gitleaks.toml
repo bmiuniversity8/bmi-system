@@ -1,0 +1,38 @@
+title = "BMI System gitleaks config"
+
+# Extend gitleaks defaults with project-specific blocks.
+# These exact leaked secrets must never reappear — not even as fragments.
+
+[extend]
+useDefault = true
+
+[[rules]]
+description = "BMI leaked Neon connection string (password: ***REMOVED***)"
+regex = '''***REMOVED***|***REMOVED***'''
+tags = ["leak", "neon", "postgres"]
+
+[[rules]]
+description = "BMI leaked PASSWORD_PEPPER"
+regex = '''***REMOVED***'''
+tags = ["leak", "pepper"]
+
+[[rules]]
+description = "Generic Neon connection string"
+regex = '''postgres(?:ql)?://[A-Za-z0-9_]+:[^@\s:]+@ep-[a-z0-9-]+\.c-[a-z0-9-]+\.(?:aws|us-|ap-)[a-z0-9-]*\.(?:neon\.tech|neonbuild\.io)'''
+tags = ["neon", "postgres"]
+
+[[rules]]
+description = "Generic GitHub token"
+regex = '''gh[pousr]_[A-Za-z0-9]{20,}'''
+tags = ["github", "token"]
+
+[allowlist]
+description = "Legit local examples / docs placeholders / scanner's own config"
+regexes = [
+  '''user:pass@host''',
+  '''bmi_user:bmi_password@localhost''',
+  '''example\.com''',
+]
+paths = [
+  '''gitleaks\.toml''',
+]
