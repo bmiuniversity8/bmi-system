@@ -43,3 +43,10 @@ paths = [
   '''gitleaks\.toml''',
   '''\.dev\.vars\.example''',
 ]
+# Commit f33b41aa introduced a hardcoded credential in the initial
+# reset-admin-password.ts script. The credential has been rotated and the
+# current version of the file reads exclusively from process.env.
+# This entry suppresses the immutable historical finding.
+commits = [
+  "f33b41aa4274123f75e4ea2aba6a0e2adb5484a1",
+]
