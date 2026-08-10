@@ -33,7 +33,7 @@ export async function sendEmail(env: Env, payload: EmailPayload): Promise<boolea
     if (!sent) {
       try {
         const fromAddr = env.RESEND_FROM_EMAIL || FROM_ADDRESS;
-        let res = await fetch('https://api.resend.com/emails', {
+        const res = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${env.RESEND_API_KEY}`,

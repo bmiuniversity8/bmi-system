@@ -57,6 +57,8 @@ export interface Env {
   PBKDF2_ITERATIONS?: string;
   /** Email address for critical ops alerts via Resend. */
   OPS_ALERT_EMAIL?: string;
+  /** Optional override for Resend sender email address. */
+  RESEND_FROM_EMAIL?: string;
   /** Email domain for provisioned student emails (e.g., student.bmi.edu) */
   STUDENT_EMAIL_DOMAIN?: string;
   /** WriteQueue Durable Object — serializes D1 writes to prevent concurrency exhaustion */
