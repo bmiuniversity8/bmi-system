@@ -244,6 +244,11 @@ async function generateAndUpdateApplicationNumber(db: IDatabase, appId: string):
         .bind(applicationNumber, appId),
       'background_set_application_number'
     );
+    const noteMsg = `Application Reference Number assigned: ${applicationNumber}`;
+    await db.prepare(
+      `INSERT INTO application_status_logs (id, application_id, changed_by, old_status, new_status, notes, changed_at)
+       VALUES (?, ?, 'system', NULL, 'application_number_generated', ?, datetime('now'))`
+    ).bind(crypto.randomUUID(), appId, noteMsg).run().catch(() => {});
   } catch (e) {
     console.error('[app_number] Background generation failed for', appId, ':', e);
     throw e;
@@ -258,7 +263,6 @@ async function sendApplicationNotificationsOptimized(
   appId: string, 
   applicationNumber?: string | null
 ): Promise<void> {
-  if (!env.RESEND_API_KEY) return;
 
   // Get user data with single query — must use .first(), not executeWithMonitoring,
   // because executeWithMonitoring calls .run() which discards row data in the D1 adapter.
@@ -473,15 +477,13 @@ export async function handleUpdateStatus(
   }
 
   // Send notification email
-  if (env.RESEND_API_KEY) {
-    ctx.waitUntil(
-      sendEmail(env, {
-        to: app.email,
-        subject: `BMI University — Application Update`,
-        html: statusUpdateEmail(app.first_name, status, app.program, sanitizedNotes || undefined, admissionCode),
-      })
-    );
-  }
+  ctx.waitUntil(
+    sendEmail(env, {
+      to: app.email,
+      subject: `BMI University — Application Update: ${status.replace('_', ' ').toUpperCase()}`,
+      html: statusUpdateEmail(app.first_name, status, app.program, sanitizedNotes || undefined, admissionCode),
+    })
+  );
 
   // Fire outbound webhook — non-blocking, errors handled internally
   ctx.waitUntil(

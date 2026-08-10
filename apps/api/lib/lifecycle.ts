@@ -99,6 +99,18 @@ export async function appendLifecycleEvent(
     params.notes ?? null,
     params.errorDetail ?? null,
   ).run();
+
+  if (params.applicationId && params.status === 'completed') {
+    try {
+      const stageNote = params.notes || `Stage completed: ${params.stage.replace(/_/g, ' ')}`;
+      await db.prepare(
+        `INSERT INTO application_status_logs (id, application_id, changed_by, old_status, new_status, notes, changed_at)
+         VALUES (?, ?, ?, NULL, ?, ?, datetime('now'))`
+      ).bind(crypto.randomUUID(), params.applicationId, params.actorId || 'system', params.stage, stageNote).run();
+    } catch {
+      // Best-effort sync to status logs
+    }
+  }
 }
 
 /**

@@ -13,27 +13,62 @@ export interface EmailPayload {
 }
 
 export async function sendEmail(env: Env, payload: EmailPayload): Promise<boolean> {
-  if (!env.RESEND_API_KEY) return false;
-  
   const logId = crypto.randomUUID();
-  const queuedPayload = { ...payload, logId };
+  let sent = false;
 
-  try {
-    await env.PLATFORM_CONTEXT!.queue.send(queuedPayload);
-  } catch (err) {
-    console.error('Failed to enqueue email:', err);
-    return false;
+  if (env.RESEND_API_KEY) {
+    const queuedPayload = { ...payload, logId };
+
+    // 1. Try Cloudflare Queue if bound
+    if (env.PLATFORM_CONTEXT?.queue) {
+      try {
+        await env.PLATFORM_CONTEXT.queue.send(queuedPayload);
+        sent = true;
+      } catch (err) {
+        console.warn('[email] Queue.send failed, falling back to direct Resend API fetch:', err);
+      }
+    }
+
+    // 2. Direct Resend HTTP API fetch fallback
+    if (!sent) {
+      try {
+        const res = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: FROM_ADDRESS,
+            to: payload.to,
+            subject: payload.subject,
+            html: payload.html,
+          }),
+        });
+        if (res.ok) {
+          sent = true;
+        } else {
+          console.error('[email] Direct Resend delivery failed status:', res.status, await res.text());
+        }
+      } catch (err) {
+        console.error('[email] Direct Resend fetch exception:', err);
+      }
+    }
+  } else {
+    console.warn('[email] RESEND_API_KEY is not configured. Email logged but skipped:', payload.subject);
   }
 
   try {
-    await env.PLATFORM_CONTEXT!.db.prepare(
-      `INSERT INTO email_logs (id, to_address, subject, status) VALUES (?, ?, ?, 'queued')`
-    ).bind(logId, payload.to, payload.subject).run();
+    if (env.PLATFORM_CONTEXT?.db) {
+      await env.PLATFORM_CONTEXT.db.prepare(
+        `INSERT INTO email_logs (id, to_address, subject, status) VALUES (?, ?, ?, ?)`
+      ).bind(logId, payload.to, payload.subject, sent ? 'sent' : 'failed').run();
+    }
   } catch (err) {
-    console.error('Failed to write email_log (email was queued):', err);
+    console.error('Failed to write email_log:', err);
   }
 
-  return true;
+  return sent;
 }
 
 import type { PlatformContext } from '@bmi/bootstrap';

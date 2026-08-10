@@ -155,7 +155,18 @@ const ROUTES: Route[] = [
   { method: 'GET', path: /^\/api\/v1\/admin\/applications\/([^/]+)$/, roles: ['staff', 'admin'], handler: async (req, env) =>handleGetApplication(req, env) },
   { method: ['PUT', 'PATCH'], path: /^\/api\/(?:v1\/)?(?:admin\/)?applications\/([^/]+)$/, roles: ['staff', 'admin'], handler: async (req, env, p, auth, ctx) =>handleUpdateStatus(req, env, p[1], auth!.user.sub, ctx) },
   { method: ['PUT', 'PATCH'], path: /^\/api\/v1\/admin\/applications\/([^/]+)\/status$/, roles: ['staff', 'admin'], handler: async (req, env, p, auth, ctx) =>handleUpdateStatus(req, env, p[1], auth!.user.sub, ctx) },
-  { method: 'POST', path: /^\/api\/(?:v1\/)?applications\/([^/]+)\/convert$/, roles: ['staff', 'admin'], handler: async (req, env, p, auth, ctx) =>handleUpdateStatus(req, env, p[1], auth!.user.sub, ctx) },
+  { method: 'POST', path: /^\/api\/(?:v1\/)?applications\/([^/]+)\/convert$/, roles: ['staff', 'admin'], handler: async (req, env, p, auth, ctx) => {
+    let body: any = {};
+    try { body = await req.json(); } catch {}
+    const status = body.status || 'accepted';
+    const notes = body.notes || 'Converted to student via UMS';
+    const convertReq = new Request(req.url, {
+      method: 'PUT',
+      headers: req.headers,
+      body: JSON.stringify({ status, notes }),
+    });
+    return handleUpdateStatus(convertReq, env, p[1], auth!.user.sub, ctx);
+  } },
   { method: 'GET', path: /^\/api\/admin\/documents$/, roles: ['admin', 'staff'], handler: async (req, env) =>handleListDocuments(req, env) },
   { method: 'DELETE', path: /^\/api\/admin\/documents\/([^/]+)$/, roles: ['admin'], handler: async (req, env, p, auth) =>handleDeleteDocument(req, env, p[1], auth!.user.sub) },
   // v1 alias for document download

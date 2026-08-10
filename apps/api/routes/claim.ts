@@ -54,33 +54,44 @@ export async function handleClaimAccount(req: Request, env: Env, ctx: ExecutionC
       })
       .where(eq(users.id, user.id));
 
-    if (env.RESEND_API_KEY) {
-      ctx.waitUntil(sendEmail(env, {
-        to: user.email,
-        subject: 'Welcome to BMI University — Complete Your Onboarding',
-        html: buildEmailLayout('Account Activated', `
-          <h2 style="color: #0f172a;">Welcome, ${user.first_name}!</h2>
-          <p style="color: #475569; line-height: 1.6;">
-            Your account has been successfully claimed. You now have access to the BMI University Student Portal.
-          </p>
-          <div style="margin: 24px 0; padding: 20px 24px; background: #f8fafc; border-left: 4px solid #d4af37; border-radius: 4px;">
-            <p style="margin: 0 0 8px; color: #0f172a; font-weight: 700; font-size: 15px;">Your Registration Steps:</p>
-            <ol style="color: #475569; line-height: 1.8; margin: 0; padding-left: 20px;">
-              <li><strong>Upload ID Photo</strong> — Upload your student ID photo for verification</li>
-              <li><strong>Complete Orientation</strong> — Complete the online orientation module</li>
-              <li><strong>Course Registration</strong> — Auto-enroll in mandatory courses and select your electives</li>
-              <li><strong>Pay Tuition</strong> — Pay your program tuition fee to complete registration</li>
-            </ol>
-          </div>
-          <p style="color: #475569; line-height: 1.6;">
-            Log in now at the student portal to begin your onboarding.
-          </p>
-          <p style="color: #475569; line-height: 1.6;">
-            If you have any questions, contact our admissions office at bmiuniversity8@gmail.com or call 704-607-5540.
-          </p>
-        `),
-      }).catch(e => console.error('[claim] Welcome email failed:', e)));
-    }
+    ctx.waitUntil(sendEmail(env, {
+      to: user.email,
+      subject: 'Welcome to BMI University — Complete Your Onboarding',
+      html: buildEmailLayout('Account Activated', `
+        <h2 style="color: #0f172a;">Welcome, ${user.first_name}!</h2>
+        <p style="color: #475569; line-height: 1.6;">
+          Your account has been successfully claimed. You now have access to the BMI University Student Portal.
+        </p>
+        <div style="margin: 24px 0; padding: 20px 24px; background: #f8fafc; border-left: 4px solid #d4af37; border-radius: 4px;">
+          <p style="margin: 0 0 8px; color: #0f172a; font-weight: 700; font-size: 15px;">Your Registration Steps:</p>
+          <ol style="color: #475569; line-height: 1.8; margin: 0; padding-left: 20px;">
+            <li><strong>Upload ID Photo</strong> — Upload your student ID photo for verification</li>
+            <li><strong>Complete Orientation</strong> — Complete the online orientation module</li>
+            <li><strong>Course Registration</strong> — Auto-enroll in mandatory courses and select your electives</li>
+            <li><strong>Pay Tuition</strong> — Pay your program tuition fee to complete registration</li>
+          </ol>
+        </div>
+        <p style="color: #475569; line-height: 1.6;">
+          Log in now at the student portal to begin your onboarding.
+        </p>
+        <p style="color: #475569; line-height: 1.6;">
+          If you have any questions, contact our admissions office at bmiuniversity8@gmail.com or call 704-607-5540.
+        </p>
+      `),
+    }).catch(e => console.error('[claim] Welcome email failed:', e)));
+
+    try {
+      if (env.PLATFORM_CONTEXT?.db) {
+        const appRow = await env.PLATFORM_CONTEXT.db.prepare('SELECT id FROM applications WHERE user_id = ? ORDER BY created_at DESC LIMIT 1')
+          .bind(user.id).first<{ id: string }>();
+        if (appRow) {
+          await env.PLATFORM_CONTEXT.db.prepare(
+            `INSERT INTO application_status_logs (id, application_id, changed_by, old_status, new_status, notes, changed_at)
+             VALUES (?, ?, ?, NULL, 'account_claimed', 'Student account claimed and activated successfully.', datetime('now'))`
+          ).bind(crypto.randomUUID(), appRow.id, user.id).run();
+        }
+      }
+    } catch {}
 
     return ok({ message: 'Account claimed successfully.' });
   } catch (e: unknown) {

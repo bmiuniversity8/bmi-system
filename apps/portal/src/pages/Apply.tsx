@@ -162,6 +162,13 @@ export default function Apply() {
         degree_level: form.degree_level,
         personal_statement: form.personal_statement,
         prior_education: form.prior_education,
+        date_of_birth: form.date_of_birth || undefined,
+        nationality: form.nationality || undefined,
+        address: form.address || undefined,
+        gender: form.gender || undefined,
+        high_school: form.high_school || undefined,
+        graduation_year: form.graduation_year ? Number(form.graduation_year) : undefined,
+        gpa: form.gpa ? Number(form.gpa) : undefined,
       });
       // Clear saved form on success
       localStorage.removeItem(STORAGE_KEY);

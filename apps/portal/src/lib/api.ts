@@ -1,9 +1,15 @@
 import { API_WORKER_URL } from '@bmi/shared';
 
-const isDev = (import.meta as any).env?.DEV;
-const BASE = (isDev 
-  ? ((import.meta as any).env?.VITE_API_URL || '') 
-  : ((import.meta as any).env?.VITE_API_URL || API_WORKER_URL)) + '/api';
+const _viteApiUrl = (import.meta as any).env?.VITE_API_URL as string | undefined;
+const _isDev = (import.meta as any).env?.DEV as boolean | undefined;
+
+// In production builds VITE_API_URL is '' (not set), so always fall back to the
+// canonical deployed worker URL — never resolve to an empty-string that browsers
+// interpret as the current origin (which is Pages, not the API worker).
+const BASE = (_viteApiUrl && _viteApiUrl.trim() !== ''
+  ? _viteApiUrl
+  : (_isDev ? 'http://127.0.0.1:8787' : API_WORKER_URL)
+) + '/api';
 // Store CSRF token in memory only (not localStorage) for security
 let _memoryToken: string | null = null;
 
@@ -120,7 +126,19 @@ export const api = {
     saveDraft: (body: { current_step: number; application_data: any }) =>
       request<{ message: string; throttled: boolean }>('/applications/draft', { method: 'PATCH', body: JSON.stringify(body) }),
 
-    submit: (body: { program: string; degree_level: string; personal_statement?: string; prior_education?: string }) =>
+    submit: (body: {
+      program: string;
+      degree_level: string;
+      personal_statement?: string;
+      prior_education?: string;
+      date_of_birth?: string;
+      nationality?: string;
+      address?: string;
+      gender?: string;
+      high_school?: string;
+      graduation_year?: number;
+      gpa?: number;
+    }) =>
       request<{ application_id: string; status: string }>('/applications', { method: 'POST', body: JSON.stringify(body) }),
 
     getMyApplication: () =>

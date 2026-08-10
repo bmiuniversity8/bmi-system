@@ -132,7 +132,12 @@ export default function Status() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
                 <div>
                   <h2 style={{ marginBottom: '0.25rem' }}>{app.program}</h2>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textTransform: 'capitalize' }}>{app.degree_level} Program</p>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textTransform: 'capitalize', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <span>{app.degree_level} Program</span>
+                    <span style={{ fontWeight: 700, color: 'var(--navy)', background: 'var(--slate-light)', padding: '2px 8px', borderRadius: 4, fontSize: '0.8rem', fontFamily: 'monospace' }}>
+                      Ref: {app.application_number || app.id.slice(0, 8).toUpperCase()}
+                    </span>
+                  </p>
                 </div>
                 <div>
                   <span className={`badge badge-${app.status}`} style={{ fontSize: '0.85rem' }}>
@@ -140,6 +145,14 @@ export default function Status() {
                   </span>
                 </div>
               </div>
+
+              {app.reviewer_notes && (
+                <div className="alert alert-info" style={{ marginBottom: '1.5rem', background: '#eff6ff', borderLeft: '4px solid #3b82f6', padding: '1rem' }}>
+                  <strong style={{ color: '#1e40af', display: 'block', marginBottom: '0.25rem' }}>💬 Admissions Officer Message:</strong>
+                  <p style={{ margin: 0, color: '#1e3a8a', fontSize: '0.9rem' }}>{app.reviewer_notes}</p>
+                </div>
+              )}
+
               <div style={{ marginBottom: '0.5rem' }}>
                 <div style={{ background: 'var(--border)', borderRadius: 999, height: 8, overflow: 'hidden' }}>
                   <div style={{ width: `${statusInfo?.pct ?? 0}%`, background: app.status === 'accepted' ? 'var(--success)' : app.status === 'rejected' ? 'var(--danger)' : 'var(--gold)', height: '100%', borderRadius: 999, transition: 'width 0.8s ease' }} />
@@ -152,27 +165,32 @@ export default function Status() {
               </div>
             </div>
 
-            {logs.length > 0 && (
-              <div className="card">
-                <h3 style={{ marginBottom: '1rem' }}>Activity Timeline</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  {logs.map((log, i) => (
-                    <div key={i} style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
-                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--gold)', marginTop: '0.5rem', flexShrink: 0 }} />
-                      <div>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--slate)' }}>
-                          {new Date(log.changed_at + 'Z').toLocaleString()}
-                        </div>
-                        <div style={{ fontSize: '0.9rem', fontWeight: 600, textTransform: 'capitalize' }}>
-                          {log.old_status ? `${log.old_status.replace('_', ' ')} → ` : ''}{log.new_status.replace('_', ' ')}
-                        </div>
-                        {log.notes && <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{log.notes}</div>}
+            <div className="card">
+              <h3 style={{ marginBottom: '1rem' }}>Activity Timeline & Messages</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {(logs.length > 0 ? logs : [
+                  {
+                    old_status: null,
+                    new_status: app.status || 'submitted',
+                    notes: 'Application submitted successfully. Currently under review by admissions.',
+                    changed_at: app.submitted_at || app.created_at || new Date().toISOString(),
+                  }
+                ]).map((log: any, i: number) => (
+                  <div key={i} style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--gold)', marginTop: '0.5rem', flexShrink: 0 }} />
+                    <div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--slate)' }}>
+                        {new Date((log.changed_at || new Date().toISOString()) + (log.changed_at?.endsWith('Z') ? '' : 'Z')).toLocaleString()}
                       </div>
+                      <div style={{ fontSize: '0.9rem', fontWeight: 600, textTransform: 'capitalize' }}>
+                        {log.old_status ? `${log.old_status.replace('_', ' ')} → ` : ''}{(log.new_status || 'submitted').replace('_', ' ')}
+                      </div>
+                      {log.notes && <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{log.notes}</div>}
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))}
               </div>
-            )}
+            </div>
 
             <div className="card">
               <h3 style={{ marginBottom: '0.25rem' }}>Letters of Recommendation</h3>

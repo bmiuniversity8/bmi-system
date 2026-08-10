@@ -16,6 +16,7 @@ import {
   GraduationCap
 } from "lucide-react";
 import { admissionsService, Application, StatusLogEntry } from "../services/admissionsService";
+import { PROGRAMS } from "@bmi/shared";
 
 const STATUS_COLORS: Record<string, string> = {
   draft: "bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700",
@@ -59,8 +60,8 @@ export default function Admissions() {
     last_name: "",
     email: "",
     phone: "",
-    program: "BSc Computer Science & AI",
-    degree_level: "undergraduate",
+    program: PROGRAMS[0]?.label || "BA in Biblical Studies",
+    degree_level: PROGRAMS[0]?.level || "undergraduate",
     high_school: "",
     gpa: "3.8",
     address: "",
@@ -158,8 +159,8 @@ export default function Admissions() {
         last_name: "",
         email: "",
         phone: "",
-        program: "BSc Computer Science & AI",
-        degree_level: "undergraduate",
+        program: PROGRAMS[0]?.label || "BA in Biblical Studies",
+        degree_level: PROGRAMS[0]?.level || "undergraduate",
         high_school: "",
         gpa: "3.8",
         address: "",
@@ -167,8 +168,8 @@ export default function Admissions() {
       });
       loadApplications();
       setTimeout(() => setSuccess(""), 4000);
-    } catch {
-      setError("Failed to create new applicant");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to create new applicant");
     } finally {
       setUpdating(false);
     }
@@ -798,15 +799,21 @@ export default function Admissions() {
                   <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">Target Program</label>
                   <select
                     value={newFormData.program}
-                    onChange={(e) => setNewFormData({ ...newFormData, program: e.target.value })}
+                    onChange={(e) => {
+                      const selectedProg = PROGRAMS.find(p => p.label === e.target.value);
+                      setNewFormData({
+                        ...newFormData,
+                        program: e.target.value,
+                        degree_level: selectedProg?.level || newFormData.degree_level
+                      });
+                    }}
                     className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg p-2 font-medium focus:ring-2 focus:ring-[#FFD700] outline-none"
                   >
-                    <option value="BSc Computer Science & AI">BSc Computer Science & AI</option>
-                    <option value="MSc Business Analytics & FinTech">MSc Business Analytics & FinTech</option>
-                    <option value="BA English Literature & Digital Humanities">BA English Literature</option>
-                    <option value="MBA International Management">MBA International Management</option>
-                    <option value="PhD Cybersecurity & Quantum Systems">PhD Cybersecurity</option>
-                    <option value="BSc Law & Criminal Justice">BSc Law & Criminal Justice</option>
+                    {PROGRAMS.map((p) => (
+                      <option key={p.label} value={p.label}>
+                        {p.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>
