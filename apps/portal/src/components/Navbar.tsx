@@ -23,8 +23,12 @@ export default function Navbar() {
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Hide top Navbar on student workspace pages (they use StudentLayout with StudentSidebar & StudentHeader)
+  if (location.pathname.startsWith('/student/')) {
+    return null;
+  }
 
   return (
     <nav className="navbar">

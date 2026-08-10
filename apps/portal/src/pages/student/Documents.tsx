@@ -11,7 +11,7 @@ export default function Documents() {
     if (!file) return;
 
     if (file.size > 10 * 1024 * 1024) {
-      setError('File must be less than 10MB');
+      setError('File size must be under 10MB');
       return;
     }
 
@@ -21,8 +21,7 @@ export default function Documents() {
 
     try {
       await api.student.uploadDocument(docType, file);
-      setSuccess(`Successfully uploaded ${docType.replace('_', ' ')}`);
-      // Reload page to update layout state or dashboard checklist state
+      setSuccess(`Successfully uploaded ${docType.replace('_', ' ')}! Your record has been updated.`);
       setTimeout(() => window.location.href = '/student/dashboard', 1500);
     } catch (err: any) {
       console.error(err);
@@ -34,47 +33,124 @@ export default function Documents() {
   };
 
   return (
-    <div className="page" style={{ padding: '5rem 1.5rem 3rem', background: 'var(--bg)' }}>
-      <div style={{ maxWidth: 800, margin: '0 auto' }}>
-        <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: '2.5rem', marginBottom: '1rem' }}>My Documents</h1>
-        <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>
-          Manage your student profile documents.
+    <div style={{ maxWidth: 1140, margin: '0 auto' }}>
+      
+      {/* ─── Page Title Header ─── */}
+      <div style={{ marginBottom: '1.75rem' }}>
+        <h1 style={{ fontSize: '2rem', color: 'var(--navy)', marginBottom: '0.25rem', fontWeight: 900 }}>
+          📁 Student Document Hub & Verification
+        </h1>
+        <p style={{ color: 'var(--slate)', fontSize: '0.95rem' }}>
+          Upload identity credentials, request official transcripts, and download admission letters.
         </p>
+      </div>
 
-        {error && (
-          <div style={{ padding: '1rem', background: 'var(--danger-light, #fee2e2)', color: 'var(--danger)', borderRadius: '6px', marginBottom: '1.5rem', border: '1px solid var(--danger)' }}>
-            {error}
+      {error && (
+        <div className="alert alert-danger" style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>{error}</span>
+          <button onClick={() => setError(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem' }}>✕</button>
+        </div>
+      )}
+
+      {success && (
+        <div className="alert alert-success" style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>{success}</span>
+          <button onClick={() => setSuccess(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem' }}>✕</button>
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)', gap: '1.5rem' }}>
+        
+        {/* Upload Cards */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          
+          <div className="card">
+            <h2 style={{ fontSize: '1.2rem', color: 'var(--navy)', marginBottom: '0.5rem' }}>🪪 Student ID Card Photograph</h2>
+            <p style={{ color: 'var(--slate)', fontSize: '0.9rem', marginBottom: '1.25rem', lineHeight: 1.5 }}>
+              Upload a clear, passport-style photograph for your official digital and physical Student ID card.
+            </p>
+
+            <div className="upload-zone" style={{ padding: '2rem 1.5rem' }}>
+              <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>📷</div>
+              <div style={{ fontWeight: 700, color: 'var(--navy)', marginBottom: '0.25rem' }}>Drag & Drop your ID photo here</div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--slate)', marginBottom: '1rem' }}>JPEG, PNG, or WebP up to 10MB</div>
+
+              <label className="btn btn-gold btn-sm" style={{ cursor: loading ? 'not-allowed' : 'pointer', display: 'inline-flex' }}>
+                {loading ? 'Uploading...' : 'Browse Local Files'}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  style={{ display: 'none' }}
+                  disabled={loading}
+                  onChange={(e) => handleUpload(e, 'id_document')}
+                />
+              </label>
+            </div>
           </div>
-        )}
 
-        {success && (
-          <div style={{ padding: '1rem', background: 'var(--success-light, #dcfce7)', color: 'var(--success)', borderRadius: '6px', marginBottom: '1.5rem', border: '1px solid var(--success)' }}>
-            {success}
+          <div className="card">
+            <h2 style={{ fontSize: '1.2rem', color: 'var(--navy)', marginBottom: '0.5rem' }}>📄 Official Prior Transcripts & Diplomas</h2>
+            <p style={{ color: 'var(--slate)', fontSize: '0.9rem', marginBottom: '1.25rem' }}>
+              Upload official high school or university transcripts for transfer credit evaluation.
+            </p>
+
+            <div className="upload-zone" style={{ padding: '2rem 1.5rem' }}>
+              <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>📜</div>
+              <div style={{ fontWeight: 700, color: 'var(--navy)', marginBottom: '0.25rem' }}>Upload PDF Transcript File</div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--slate)', marginBottom: '1rem' }}>Official PDF documents max 10MB</div>
+
+              <label className="btn btn-outline btn-sm" style={{ cursor: loading ? 'not-allowed' : 'pointer', display: 'inline-flex' }}>
+                {loading ? 'Uploading...' : 'Select PDF File'}
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  style={{ display: 'none' }}
+                  disabled={loading}
+                  onChange={(e) => handleUpload(e, 'transcript_document')}
+                />
+              </label>
+            </div>
           </div>
-        )}
 
-        <div className="card" style={{ marginBottom: '1.5rem' }}>
-          <h2 style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>Student ID Photo</h2>
-          <p style={{ color: 'var(--slate)', marginBottom: '1.5rem', fontSize: '0.95rem' }}>
-            Please upload a clear, recent photo of yourself for your Student ID card. This must be a passport-style photo with a plain background.
-          </p>
+        </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <label className="btn btn-primary" style={{ cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1 }}>
-              {loading ? 'Uploading...' : 'Choose File'}
-              <input 
-                type="file" 
-                accept="image/jpeg,image/png,image/webp" 
-                style={{ display: 'none' }}
-                disabled={loading}
-                onChange={(e) => handleUpload(e, 'id_document')}
-              />
-            </label>
-            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>JPEG, PNG, or WebP. Max 10MB.</span>
+        {/* Downloads & Credential Verification Sidebar */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          
+          <div className="card" style={{ borderTop: '4px solid var(--gold)' }}>
+            <h2 style={{ fontSize: '1.15rem', color: 'var(--navy)', marginBottom: '1rem', paddingBottom: '0.5rem', borderBottom: '1px solid var(--border)' }}>
+              Download Credentials
+            </h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <div style={{ padding: '0.85rem', background: 'var(--bg)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--navy)' }}>Admission Letter</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--slate)' }}>Official PDF • Verified</div>
+                </div>
+                <button className="btn btn-navy btn-sm">Download</button>
+              </div>
+
+              <div style={{ padding: '0.85rem', background: 'var(--bg)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--navy)' }}>Verification Letter</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--slate)' }}>Enrollment Proof</div>
+                </div>
+                <button className="btn btn-navy btn-sm">Download</button>
+              </div>
+            </div>
           </div>
+
+          <div className="card">
+            <h3 style={{ fontSize: '1.05rem', color: 'var(--navy)', marginBottom: '0.5rem' }}>Document Processing Time</h3>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+              Uploaded documents are reviewed by the Registrar within 1–2 business days. Status updates will appear on your dashboard.
+            </p>
+          </div>
+
         </div>
 
       </div>
+
     </div>
   );
 }

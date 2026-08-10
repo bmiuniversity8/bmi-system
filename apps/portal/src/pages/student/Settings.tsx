@@ -6,7 +6,7 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [alert, setAlert] = useState({ type: '', msg: '' });
-  
+
   const [settings, setSettings] = useState({
     directory_release: true,
     communications_opt_in: true,
@@ -34,7 +34,7 @@ export default function Settings() {
     setAlert({ type: '', msg: '' });
     try {
       await api.student.updateSettings(settings);
-      setAlert({ type: 'success', msg: 'Settings updated successfully.' });
+      setAlert({ type: 'success', msg: 'FERPA privacy & communication preferences updated successfully.' });
     } catch (e: any) {
       setAlert({ type: 'danger', msg: e.message || 'Failed to update settings' });
     } finally {
@@ -49,87 +49,107 @@ export default function Settings() {
       setAlert({ type: 'success', msg: 'Profile photo updated successfully.' });
     } catch (e: any) {
       setAlert({ type: 'danger', msg: e.message || 'Failed to update photo.' });
-      throw e; // so ProfilePhotoUpload stops loading
+      throw e;
     }
   };
 
   if (loading) {
     return (
-      <div className="page" style={{ padding: '5rem 1.5rem', textAlign: 'center' }}>
+      <div style={{ textAlign: 'center', padding: '4rem' }}>
         <div className="spinner" style={{ width: 40, height: 40 }}></div>
       </div>
     );
   }
 
   return (
-    <div className="page" style={{ padding: '5rem 1.5rem 3rem', background: 'var(--bg)' }}>
-      <div style={{ maxWidth: 800, margin: '0 auto' }}>
-        <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: '2.5rem', marginBottom: '0.5rem' }}>Privacy Settings</h1>
-        <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>Manage your FERPA preferences and communication settings.</p>
-
-        {alert.msg && (
-          <div className={`alert alert-${alert.type}`} style={{ marginBottom: '1.5rem' }} role="alert" aria-live="assertive">
-            {alert.msg}
-            <button onClick={() => setAlert({ type: '', msg: '' })} style={{ float: 'right', background: 'none', border: 'none', cursor: 'pointer' }} aria-label="Close alert">✕</button>
-          </div>
-        )}
-
-        <div className="card" style={{ marginBottom: '1.5rem' }}>
-          <h2 style={{ fontSize: '1.25rem', marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>Profile Photo</h2>
-          <ProfilePhotoUpload 
-            currentPhoto={settings.photo} 
-            onUpload={handlePhotoUpload} 
-            buttonClass="btn btn-outline btn-sm"
-          />
-        </div>
-
-        <div className="card">
-          <form onSubmit={handleSave}>
-            <div style={{ marginBottom: '2rem' }}>
-              <h2 style={{ fontSize: '1.25rem', marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>FERPA Directory Information</h2>
-              <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
-                The Family Educational Rights and Privacy Act (FERPA) allows the university to release "Directory Information" without your prior consent unless you explicitly opt out. Directory information includes your name, major, dates of attendance, and degrees received.
-              </p>
-              
-              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', cursor: 'pointer' }}>
-                <input 
-                  type="checkbox" 
-                  checked={settings.directory_release}
-                  onChange={e => setSettings(s => ({ ...s, directory_release: e.target.checked }))}
-                  style={{ marginTop: '0.25rem' }}
-                />
-                <div>
-                  <div style={{ fontWeight: 600 }}>Allow release of Directory Information</div>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>If unchecked, the university will not release your information to third parties, including prospective employers, without your written consent.</div>
-                </div>
-              </label>
-            </div>
-
-            <div style={{ marginBottom: '2rem' }}>
-              <h2 style={{ fontSize: '1.25rem', marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>Communications</h2>
-              
-              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', cursor: 'pointer' }}>
-                <input 
-                  type="checkbox" 
-                  checked={settings.communications_opt_in}
-                  onChange={e => setSettings(s => ({ ...s, communications_opt_in: e.target.checked }))}
-                  style={{ marginTop: '0.25rem' }}
-                />
-                <div>
-                  <div style={{ fontWeight: 600 }}>Receive non-essential communications</div>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Opt in to receive campus newsletters, event invitations, and promotional materials.</div>
-                </div>
-              </label>
-            </div>
-
-            <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1.5rem', textAlign: 'right' }}>
-              <button type="submit" className="btn btn-navy" disabled={saving}>
-                {saving ? 'Saving...' : 'Save Settings'}
-              </button>
-            </div>
-          </form>
-        </div>
+    <div style={{ maxWidth: 900, margin: '0 auto' }}>
+      
+      {/* ─── Header Section ─── */}
+      <div style={{ marginBottom: '1.75rem' }}>
+        <h1 style={{ fontSize: '2rem', color: 'var(--navy)', marginBottom: '0.25rem', fontWeight: 900 }}>
+          ⚙️ Student Account & Privacy Settings
+        </h1>
+        <p style={{ color: 'var(--slate)', fontSize: '0.95rem' }}>
+          Manage FERPA privacy preferences, profile photo, and notification options.
+        </p>
       </div>
+
+      {alert.msg && (
+        <div className={`alert alert-${alert.type}`} style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>{alert.msg}</span>
+          <button onClick={() => setAlert({ type: '', msg: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem' }}>✕</button>
+        </div>
+      )}
+
+      {/* ─── Profile Photo Card ─── */}
+      <div className="card" style={{ marginBottom: '1.5rem' }}>
+        <h2 style={{ fontSize: '1.2rem', color: 'var(--navy)', marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
+          Official Profile Photo
+        </h2>
+        <ProfilePhotoUpload
+          currentPhoto={settings.photo}
+          onUpload={handlePhotoUpload}
+          buttonClass="btn btn-outline btn-sm"
+        />
+      </div>
+
+      {/* ─── FERPA & Preferences Card ─── */}
+      <div className="card">
+        <form onSubmit={handleSave}>
+          <div style={{ marginBottom: '2rem' }}>
+            <h2 style={{ fontSize: '1.2rem', color: 'var(--navy)', marginBottom: '0.75rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
+              FERPA Directory Information Release
+            </h2>
+            <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '1.25rem', lineHeight: 1.5 }}>
+              The Family Educational Rights and Privacy Act (FERPA) allows the university to release "Directory Information" (name, program, dates of attendance) without prior consent unless you explicitly opt out.
+            </p>
+
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.85rem', cursor: 'pointer', background: 'var(--bg)', padding: '1rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+              <input
+                type="checkbox"
+                checked={settings.directory_release}
+                onChange={e => setSettings(s => ({ ...s, directory_release: e.target.checked }))}
+                style={{ marginTop: '0.25rem', width: 18, height: 18 }}
+              />
+              <div>
+                <strong style={{ color: 'var(--navy)', fontSize: '0.95rem', display: 'block', marginBottom: '0.15rem' }}>
+                  Authorize Directory Information Release
+                </strong>
+                <span style={{ fontSize: '0.85rem', color: 'var(--slate)' }}>
+                  Allow BMI University to include your name and graduation standing in campus honors directories.
+                </span>
+              </div>
+            </label>
+          </div>
+
+          <div style={{ marginBottom: '2rem' }}>
+            <h2 style={{ fontSize: '1.2rem', color: 'var(--navy)', marginBottom: '0.75rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
+              Campus Communications
+            </h2>
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.85rem', cursor: 'pointer', background: 'var(--bg)', padding: '1rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+              <input
+                type="checkbox"
+                checked={settings.communications_opt_in}
+                onChange={e => setSettings(s => ({ ...s, communications_opt_in: e.target.checked }))}
+                style={{ marginTop: '0.25rem', width: 18, height: 18 }}
+              />
+              <div>
+                <strong style={{ color: 'var(--navy)', fontSize: '0.95rem', display: 'block', marginBottom: '0.15rem' }}>
+                  Receive Academic Announcements & Alerts via Email
+                </strong>
+                <span style={{ fontSize: '0.85rem', color: 'var(--slate)' }}>
+                  Receive important notifications regarding class schedules, grade releases, and billing statements.
+                </span>
+              </div>
+            </label>
+          </div>
+
+          <button type="submit" className="btn btn-gold" disabled={saving}>
+            {saving ? 'Saving...' : 'Save Settings'}
+          </button>
+        </form>
+      </div>
+
     </div>
   );
 }

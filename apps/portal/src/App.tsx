@@ -28,7 +28,14 @@ import AlumniDashboard from './pages/alumni/AlumniDashboard';
 
 import { SessionWarning } from './components/SessionWarning';
 
-import { ErrorBoundary } from './components/ErrorBoundary';
+import { useAuth } from './hooks/useAuth';
+import { StudentLayout } from './components/StudentLayout';
+
+function StudentRouteWrapper({ children }: { children: React.ReactNode }) {
+  const { user, logout } = useAuth();
+  return <StudentLayout user={user} onLogout={logout}>{children}</StudentLayout>;
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
@@ -88,7 +95,7 @@ export default function App() {
             path="/student/dashboard"
             element={
               <ProtectedRoute roles={['student']}>
-                <Dashboard />
+                <StudentRouteWrapper><Dashboard /></StudentRouteWrapper>
               </ProtectedRoute>
             }
           />
@@ -96,7 +103,7 @@ export default function App() {
             path="/student/documents"
             element={
               <ProtectedRoute roles={['student']}>
-                <Documents />
+                <StudentRouteWrapper><Documents /></StudentRouteWrapper>
               </ProtectedRoute>
             }
           />
@@ -104,7 +111,7 @@ export default function App() {
             path="/student/academics"
             element={
               <ProtectedRoute roles={['student']}>
-                <Academics />
+                <StudentRouteWrapper><Academics /></StudentRouteWrapper>
               </ProtectedRoute>
             }
           />
@@ -112,7 +119,7 @@ export default function App() {
             path="/student/finances"
             element={
               <ProtectedRoute roles={['student']}>
-                <Finances />
+                <StudentRouteWrapper><Finances /></StudentRouteWrapper>
               </ProtectedRoute>
             }
           />
@@ -120,7 +127,7 @@ export default function App() {
             path="/student/support"
             element={
               <ProtectedRoute roles={['student']}>
-                <Support />
+                <StudentRouteWrapper><Support /></StudentRouteWrapper>
               </ProtectedRoute>
             }
           />
@@ -128,7 +135,7 @@ export default function App() {
             path="/student/settings"
             element={
               <ProtectedRoute roles={['student']}>
-                <StudentSettings />
+                <StudentRouteWrapper><StudentSettings /></StudentRouteWrapper>
               </ProtectedRoute>
             }
           />
