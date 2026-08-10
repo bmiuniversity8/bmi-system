@@ -17,14 +17,15 @@ export class ResendEmailAdapter implements IEmailProvider {
   }
 
   async sendEmail(message: EmailMessage): Promise<void> {
-    const response = await fetch('https://api.resend.com/emails', {
+    const fromAddr = message.from || 'BMI University <noreply@hkmministries.org>';
+    let response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${this.apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: message.from || 'BMI University <noreply@hkmministries.org>',
+        from: fromAddr,
         to: message.to,
         subject: message.subject,
         html: message.html,
@@ -36,8 +37,37 @@ export class ResendEmailAdapter implements IEmailProvider {
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Failed to send email: ${response.status} ${error}`);
+      const errorText = await response.text();
+      console.warn(`[ResendEmailAdapter] Initial send failed (${response.status}): ${errorText}`);
+      
+      // Fallback to onboarding@resend.dev if custom sender domain is rejected
+      if (!fromAddr.includes('onboarding@resend.dev')) {
+        console.warn(`[ResendEmailAdapter] Retrying with onboarding@resend.dev...`);
+        const fallbackResponse = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: 'onboarding@resend.dev',
+            to: message.to,
+            subject: message.subject,
+            html: message.html,
+            text: message.text,
+            reply_to: message.replyTo,
+            cc: message.cc,
+            bcc: message.bcc,
+          }),
+        });
+
+        if (!fallbackResponse.ok) {
+          const fallbackError = await fallbackResponse.text();
+          throw new Error(`Failed to send email via fallback: ${fallbackResponse.status} ${fallbackError}`);
+        }
+        return;
+      }
+      throw new Error(`Failed to send email: ${response.status} ${errorText}`);
     }
   }
 
