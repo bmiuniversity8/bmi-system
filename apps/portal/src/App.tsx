@@ -27,6 +27,7 @@ import DocumentRequest from './pages/documents/DocumentRequest';
 import AlumniDashboard from './pages/alumni/AlumniDashboard';
 
 import { SessionWarning } from './components/SessionWarning';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 import { useAuth } from './hooks/useAuth';
 import { StudentLayout } from './components/StudentLayout';
