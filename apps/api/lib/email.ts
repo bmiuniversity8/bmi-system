@@ -32,14 +32,15 @@ export async function sendEmail(env: Env, payload: EmailPayload): Promise<boolea
     // 2. Direct Resend HTTP API fetch fallback
     if (!sent) {
       try {
-        const res = await fetch('https://api.resend.com/emails', {
+        const fromAddr = env.RESEND_FROM_EMAIL || FROM_ADDRESS;
+        let res = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${env.RESEND_API_KEY}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            from: FROM_ADDRESS,
+            from: fromAddr,
             to: payload.to,
             subject: payload.subject,
             html: payload.html,
@@ -48,7 +49,30 @@ export async function sendEmail(env: Env, payload: EmailPayload): Promise<boolea
         if (res.ok) {
           sent = true;
         } else {
-          console.error('[email] Direct Resend delivery failed status:', res.status, await res.text());
+          const errText = await res.text();
+          console.error('[email] Direct Resend delivery failed status:', res.status, errText);
+          // If custom domain is not verified, retry with onboarding@resend.dev fallback
+          if (fromAddr !== 'onboarding@resend.dev') {
+            console.warn('[email] Retrying with onboarding@resend.dev default sender...');
+            const fallbackRes = await fetch('https://api.resend.com/emails', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                from: 'onboarding@resend.dev',
+                to: payload.to,
+                subject: payload.subject,
+                html: payload.html,
+              }),
+            });
+            if (fallbackRes.ok) {
+              sent = true;
+            } else {
+              console.error('[email] Fallback Resend delivery failed:', fallbackRes.status, await fallbackRes.text());
+            }
+          }
         }
       } catch (err) {
         console.error('[email] Direct Resend fetch exception:', err);
