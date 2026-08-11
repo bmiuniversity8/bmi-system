@@ -82,7 +82,6 @@ interface DataState {
     students: number;
     admissions: number;
     tuition: number;
-    events: number;
   };
 }
 
@@ -113,7 +112,7 @@ export const useDataStore = create<DataState>((set, get) => ({
       } else {
         set({ students: [], isLoadingStudents: false, error: result.error });
       }
-    } catch (error: unknown) { 
+    } catch (error: unknown) {
       set({
         students: [],
         isLoadingStudents: false,
@@ -131,7 +130,7 @@ export const useDataStore = create<DataState>((set, get) => ({
       } else {
         set({ isLoadingStaff: false });
       }
-    } catch (error: unknown) { 
+    } catch (error: unknown) {
       set({ isLoadingStaff: false });
     }
   },
@@ -264,7 +263,6 @@ export const useDataStore = create<DataState>((set, get) => ({
       tuition: state.transactions
         .filter((t) => t.status === "Paid")
         .reduce((acc, curr) => acc + curr.amt, 0),
-      events: 0, // Placeholder — events module not yet implemented
     };
   },
 }));

@@ -16,6 +16,7 @@ import {
   Award,
   ChevronRight,
   Zap,
+  Loader2,
 } from "lucide-react";
 import {
   AreaChart,
@@ -34,7 +35,6 @@ import { useDataStore } from "../stores/dataStore";
 import { useUIStore } from "../stores/uiStore";
 import { useStudentsQuery, useTransactionsQuery } from "../hooks/useEntityQueries";
 
-/** Short month names for chart labels */
 const MONTHS = [
   "Jan",
   "Feb",
@@ -50,18 +50,11 @@ const MONTHS = [
   "Dec",
 ];
 
-const UPCOMING_DEADLINES = [
-  { title: "End of Term II Examinations", date: "Aug 15, 2026", type: "Exams", tag: "Urgent", color: "text-amber-500 bg-amber-500/10 border-amber-500/20" },
-  { title: "Postgraduate Thesis Submissions", date: "Aug 20, 2026", type: "Academic", tag: "Scheduled", color: "text-purple-500 bg-purple-500/10 border-purple-500/20" },
-  { title: "Faculty Senate Board Meeting", date: "Aug 28, 2026", type: "Administrative", tag: "Info", color: "text-blue-500 bg-blue-500/10 border-blue-500/20" },
-];
-
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const openAIModal = useUIStore((s) => s.openAIModal);
 
-  // Fetch data using TanStack Query
   const { data: studentsRes } = useStudentsQuery({ page: 1, perPage: 1000 });
   const { data: transactionsRes } = useTransactionsQuery({ page: 1, perPage: 1000 });
 
@@ -70,48 +63,122 @@ const Dashboard: React.FC = () => {
 
   const addStudent = useDataStore((s) => s.addStudent);
 
-  // Compute stats locally from stable store references.
   const stats = useMemo(
     () => ({
-      students: students.length || 1420,
-      admissions: students.filter((s) => s.status === "Applicant").length || 38,
+      students: students.length || 0,
+      admissions: students.filter((s) => s.status === "Applicant").length || 0,
       tuition: transactions
         .filter((t) => t.status === "Paid")
-        .reduce((acc, t) => acc + t.amt, 0) || 845000,
-      events: 4,
+        .reduce((acc, t) => acc + t.amt, 0) || 0,
+      events: 0,
     }),
     [students, transactions],
   );
 
-  // ── Fetch revenue trend from backend API (falls back to local compute) ──
   const [apiRevenueTrend, setApiRevenueTrend] = useState<
     { month: string; revenue: number }[] | null
   >(null);
+  const [dashboardStats, setDashboardStats] = useState<{
+    pending_leaves: number;
+    overdue_books: number;
+    unpaid_fines: number;
+    upcoming_events: number;
+  } | null>(null);
+  const [upcomingDeadlines, setUpcomingDeadlines] = useState<
+    Array<{ title: string; date: string; type: string; tag: string; color: string }>
+  >([]);
+  const [financeStats, setFinanceStats] = useState<{
+    totalInvoices: number;
+    totalRevenue: number;
+    outstanding: number;
+    paid: number;
+    unpaid: number;
+  } | null>(null);
+  const [loadingStats, setLoadingStats] = useState(true);
+  const [loadingDeadlines, setLoadingDeadlines] = useState(true);
+  const [loadingRevenue, setLoadingRevenue] = useState(true);
+  const [_loadingFinance, setLoadingFinance] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
-    import("../services/authService").then(({ authFetch }) => {
-      import("../services/config").then(({ API_URL }) => {
-        authFetch(`${API_URL}/dashboard/revenue-trend?months=6`)
-          .then((r) => r.json())
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .then((d: any) => {
-            if (!cancelled && d.success && Array.isArray(d.data)) {
-              setApiRevenueTrend(d.data);
-            }
-          })
-          .catch((_error) => {
-            // eslint-disable-next-line no-console
-            console.error("Failed to load statistics:", _error);
-          });
-      });
+    Promise.all([
+      import("../services/authService"),
+      import("../services/config"),
+    ]).then(([authMod, configMod]) => {
+      const { authFetch } = authMod;
+      const { API_URL } = configMod;
+
+      authFetch(`${API_URL}/dashboard/revenue-trend?months=6`)
+        .then((r) => r.json())
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .then((d: any) => {
+          if (!cancelled && d.success && Array.isArray(d.data)) {
+            setApiRevenueTrend(d.data);
+          }
+        })
+        .catch((_error) => {
+          console.error("Failed to load revenue trend:", _error);
+        })
+        .finally(() => {
+          if (!cancelled) setLoadingRevenue(false);
+        });
+
+      authFetch(`${API_URL}/dashboard/stats`)
+        .then((r) => r.json())
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .then((d: any) => {
+          if (!cancelled && d.success && d.data) {
+            const { pending_leaves, overdue_books, unpaid_fines, upcoming_events } = d.data;
+            setDashboardStats({
+              pending_leaves: pending_leaves ?? 0,
+              overdue_books: overdue_books ?? 0,
+              unpaid_fines: unpaid_fines ?? 0,
+              upcoming_events: upcoming_events ?? 0,
+            });
+          }
+        })
+        .catch((_error) => {
+          console.error("Failed to load dashboard stats:", _error);
+        })
+        .finally(() => {
+          if (!cancelled) setLoadingStats(false);
+        });
+
+      authFetch(`${API_URL}/dashboard/upcoming-deadlines`)
+        .then((r) => r.json())
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .then((d: any) => {
+          if (!cancelled && d.success && Array.isArray(d.data)) {
+            setUpcomingDeadlines(d.data);
+          }
+        })
+        .catch((_error) => {
+          console.error("Failed to load upcoming deadlines:", _error);
+        })
+        .finally(() => {
+          if (!cancelled) setLoadingDeadlines(false);
+        });
+
+      authFetch(`${API_URL}/finance/stats`)
+        .then((r) => r.json())
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .then((d: any) => {
+          if (!cancelled && d.success && d.data) {
+            setFinanceStats(d.data);
+          }
+        })
+        .catch((_error) => {
+          console.error("Failed to load finance stats:", _error);
+        })
+        .finally(() => {
+          if (!cancelled) setLoadingFinance(false);
+        });
     });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  /** Derive recent-activity items from real data */
   const recentActivity = useMemo(() => {
     type ActivityItem = {
       action: string;
@@ -122,7 +189,6 @@ const Dashboard: React.FC = () => {
     };
     const items: ActivityItem[] = [];
 
-    // Last 2 student registrations
     const recentStudents = [...students]
       .sort(
         (a, b) =>
@@ -140,7 +206,6 @@ const Dashboard: React.FC = () => {
       });
     }
 
-    // Last 2 paid transactions
     const recentTx = [...transactions]
       .filter((t) => t.status === "Paid")
       .sort((a, b) => new Date(b.date || Date.now()).getTime() - new Date(a.date || Date.now()).getTime())
@@ -155,22 +220,6 @@ const Dashboard: React.FC = () => {
       });
     }
 
-    if (items.length === 0) {
-      items.push({
-        action: "Transcript Audit Completed for 2026 Cohort",
-        time: "Just now",
-        user: "Academic Affairs",
-        icon: FileText,
-        color: "text-purple-500",
-      });
-      items.push({
-        action: "Course Timetable Published for Semester II",
-        time: "2 hours ago",
-        user: "Dean's Office",
-        icon: BookOpen,
-        color: "text-amber-500",
-      });
-    }
     return items.slice(0, 4);
   }, [students, transactions]);
 
@@ -188,11 +237,11 @@ const Dashboard: React.FC = () => {
           return td.getMonth() === d.getMonth() && td.getFullYear() === year;
         })
         .reduce((sum, t) => sum + (t.amt ?? 0), 0);
-      return { month, revenue: revenue || (120000 + i * 25000) };
+      return { month, revenue: revenue || 0 };
     });
   }, [transactions, apiRevenueTrend]);
 
-  const userName = user?.name || "Dr. Alexander Vance";
+  const userName = user?.name || "";
   const currentDate = new Date().toLocaleDateString("en-US", {
     weekday: "long",
     year: "numeric",
@@ -214,9 +263,23 @@ const Dashboard: React.FC = () => {
     setIsStudentRegistrationOpen(false);
   };
 
+  const kpiPendingLeaves = dashboardStats?.pending_leaves ?? 0;
+  const kpiOverdueBooks = dashboardStats?.overdue_books ?? 0;
+  const kpiUnpaidFines = dashboardStats?.unpaid_fines ?? 0;
+  const kpiUpcomingEvents = dashboardStats?.upcoming_events ?? stats.events;
+
+  const formatGHS = (amount: number) => {
+    return `GHS ${amount.toLocaleString()}`;
+  };
+
+  const renderKpiSkeleton = () => (
+    <div className="flex items-center justify-center h-10">
+      <Loader2 size={20} className="animate-spin text-gray-400" />
+    </div>
+  );
+
   return (
     <div className="space-y-6 pb-6 animate-fade-in font-sans">
-      {/* Welcome Banner */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#2d004d] via-[#4B0082] to-[#6b21a8] p-6 md:p-8 text-white shadow-xl border border-purple-500/20">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2 max-w-2xl">
@@ -227,10 +290,10 @@ const Dashboard: React.FC = () => {
               <span className="text-purple-200 text-xs font-medium">{currentDate}</span>
             </div>
             <h1 className="text-2xl md:text-3xl font-black tracking-tight text-white">
-              Welcome back, {userName}
+              Welcome back{userName ? `, ${userName}` : ""}
             </h1>
             <p className="text-purple-200/90 text-xs md:text-sm leading-relaxed font-medium">
-              System health is optimal. Active term enrollment is up by 12% with 100% verified student transcript records.
+              System health is optimal. Active term enrollment is steady with verified student transcript records.
             </p>
           </div>
 
@@ -252,13 +315,11 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Decorative background visual */}
         <div className="absolute -right-8 -bottom-12 opacity-10 pointer-events-none">
           <GraduationCap size={220} />
         </div>
       </div>
 
-      {/* KPI Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         <div className="bg-white dark:bg-[#1a1a1a] p-4 md:p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 relative overflow-hidden group hover:shadow-md transition-all">
           <div className="flex justify-between items-start">
@@ -266,7 +327,9 @@ const Dashboard: React.FC = () => {
               <p className="text-[10px] md:text-xs font-black uppercase tracking-wider text-gray-500 mb-1">
                 Pending Leaves
               </p>
-              <h3 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-white">12</h3>
+              <h3 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-white">
+                {loadingStats ? renderKpiSkeleton() : kpiPendingLeaves}
+              </h3>
             </div>
             <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-orange-50 dark:bg-orange-900/20 text-orange-600 flex items-center justify-center">
               <Users size={20} />
@@ -279,7 +342,9 @@ const Dashboard: React.FC = () => {
               <p className="text-[10px] md:text-xs font-black uppercase tracking-wider text-gray-500 mb-1">
                 Overdue Books
               </p>
-              <h3 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-white">45</h3>
+              <h3 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-white">
+                {loadingStats ? renderKpiSkeleton() : kpiOverdueBooks}
+              </h3>
             </div>
             <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 flex items-center justify-center">
               <BookOpen size={20} />
@@ -292,7 +357,9 @@ const Dashboard: React.FC = () => {
               <p className="text-[10px] md:text-xs font-black uppercase tracking-wider text-gray-500 mb-1">
                 Unpaid Fines
               </p>
-              <h3 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-white">GHS 2500</h3>
+              <h3 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-white">
+                {loadingStats ? renderKpiSkeleton() : formatGHS(kpiUnpaidFines)}
+              </h3>
             </div>
             <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 flex items-center justify-center">
               <DollarSign size={20} />
@@ -302,15 +369,15 @@ const Dashboard: React.FC = () => {
         <StatCard
           title="Total Students"
           value={stats.students.toLocaleString()}
-          subText="+12% from last term"
+          subText="Current enrollment"
           color="purple"
           icon={<Users size={22} className="text-white" />}
           onClick={() => navigate('/students')}
         />
         <StatCard
           title="YTD Revenue"
-          value={`$${stats.tuition.toLocaleString()}`}
-          subText="+8.4% fiscal growth"
+          value={`$${(financeStats?.totalRevenue ?? stats.tuition).toLocaleString()}`}
+          subText="Fiscal performance"
           color="amber"
           icon={<DollarSign size={22} className="text-[#4B0082]" />}
           onClick={() => navigate('/finance')}
@@ -325,15 +392,14 @@ const Dashboard: React.FC = () => {
         />
         <StatCard
           title="Upcoming Deadlines"
-          value={stats.events.toString()}
-          subText="Next 7 days"
+          value={loadingStats ? "..." : kpiUpcomingEvents.toString()}
+          subText="Next 30 days"
           color="blue"
           icon={<Calendar size={22} className="text-blue-600" />}
           onClick={() => navigate('/exams')}
         />
       </div>
 
-      {/* Quick Action Hub Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <button
           onClick={() => navigate('/admissions')}
@@ -392,9 +458,7 @@ const Dashboard: React.FC = () => {
         </button>
       </div>
 
-      {/* Main Content Split: Chart + Feed */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Financial Chart */}
         <div className="lg:col-span-2 bg-white dark:bg-gray-800/90 p-6 rounded-2xl border border-gray-200/80 dark:border-gray-700/80 shadow-sm flex flex-col h-[380px]">
           <div className="flex items-center justify-between mb-6">
             <div>
@@ -413,36 +477,40 @@ const Dashboard: React.FC = () => {
           </div>
 
           <div className="flex-1 min-h-0 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={revenueTrend}>
-                <defs>
-                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#7C3AED" stopOpacity={0.25} />
-                    <stop offset="95%" stopColor="#7C3AED" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: 700, fill: "#94a3b8" }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: 700, fill: "#94a3b8" }} tickFormatter={(v) => `$${v / 1000}k`} />
-                <Tooltip
-                  contentStyle={{
-                    borderRadius: "12px",
-                    border: "1px solid #e2e8f0",
-                    boxShadow: "0 10px 25px rgba(0,0,0,0.1)",
-                    fontWeight: "bold",
-                    fontSize: "12px",
-                  }}
-                  cursor={{ stroke: "#7C3AED", strokeWidth: 1.5 }}
-                />
-                <Area type="monotone" dataKey="revenue" stroke="#7C3AED" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" isAnimationActive={false} />
-              </AreaChart>
-            </ResponsiveContainer>
+            {loadingRevenue && !apiRevenueTrend ? (
+              <div className="flex items-center justify-center h-full">
+                <Loader2 size={32} className="animate-spin text-[#7C3AED]" />
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={revenueTrend}>
+                  <defs>
+                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#7C3AED" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="#7C3AED" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                  <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: 700, fill: "#94a3b8" }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: 700, fill: "#94a3b8" }} tickFormatter={(v) => `$${v / 1000}k`} />
+                  <Tooltip
+                    contentStyle={{
+                      borderRadius: "12px",
+                      border: "1px solid #e2e8f0",
+                      boxShadow: "0 10px 25px rgba(0,0,0,0.1)",
+                      fontWeight: "bold",
+                      fontSize: "12px",
+                    }}
+                    cursor={{ stroke: "#7C3AED", strokeWidth: 1.5 }}
+                  />
+                  <Area type="monotone" dataKey="revenue" stroke="#7C3AED" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" isAnimationActive={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
-        {/* Right Side Stack: Academic Calendar & Activity */}
         <div className="space-y-6">
-          {/* Upcoming Academic Deadlines */}
           <div className="bg-white dark:bg-gray-800/90 p-5 rounded-2xl border border-gray-200/80 dark:border-gray-700/80 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-extrabold text-xs uppercase tracking-wider text-gray-900 dark:text-white flex items-center gap-2">
@@ -452,50 +520,63 @@ const Dashboard: React.FC = () => {
             </div>
 
             <div className="space-y-3">
-              {UPCOMING_DEADLINES.map((dl, i) => (
-                <div key={i} className="p-3 rounded-xl bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800 flex items-center justify-between gap-2">
-                  <div className="space-y-0.5">
-                    <p className="text-xs font-bold text-gray-900 dark:text-white">{dl.title}</p>
-                    <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">{dl.date}</p>
-                  </div>
-                  <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full border ${dl.color}`}>
-                    {dl.tag}
-                  </span>
+              {loadingDeadlines ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 size={24} className="animate-spin text-[#7C3AED]" />
                 </div>
-              ))}
+              ) : upcomingDeadlines.length === 0 ? (
+                <div className="py-6 text-center">
+                  <p className="text-[11px] text-gray-400 font-medium">No upcoming deadlines</p>
+                </div>
+              ) : (
+                upcomingDeadlines.map((dl, i) => (
+                  <div key={i} className="p-3 rounded-xl bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800 flex items-center justify-between gap-2">
+                    <div className="space-y-0.5">
+                      <p className="text-xs font-bold text-gray-900 dark:text-white">{dl.title}</p>
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">{dl.date}</p>
+                    </div>
+                    <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full border ${dl.color}`}>
+                      {dl.tag}
+                    </span>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
-          {/* Live Activity Feed */}
           <div className="bg-white dark:bg-gray-800/90 p-5 rounded-2xl border border-gray-200/80 dark:border-gray-700/80 shadow-sm">
             <h3 className="font-extrabold text-xs uppercase tracking-wider text-gray-900 dark:text-white mb-4 flex items-center gap-2">
               <Zap size={16} className="text-amber-500" /> Real-Time Audit Feed
             </h3>
             <div className="space-y-4">
-              {recentActivity.map((item, idx) => (
-                <div key={idx} className="flex items-start gap-3 text-xs">
-                  <div className={`mt-0.5 ${item.color}`}>
-                    <item.icon size={15} />
-                  </div>
-                  <div>
-                    <p className="font-bold text-gray-800 dark:text-gray-200">{item.action}</p>
-                    <p className="text-[10px] text-gray-400 font-medium mt-0.5">{item.user} • {item.time}</p>
-                  </div>
+              {recentActivity.length === 0 ? (
+                <div className="py-6 text-center">
+                  <p className="text-[11px] text-gray-400 font-medium">No recent activity</p>
                 </div>
-              ))}
+              ) : (
+                recentActivity.map((item, idx) => (
+                  <div key={idx} className="flex items-start gap-3 text-xs">
+                    <div className={`mt-0.5 ${item.color}`}>
+                      <item.icon size={15} />
+                    </div>
+                    <div>
+                      <p className="font-bold text-gray-800 dark:text-gray-200">{item.action}</p>
+                      <p className="text-[10px] text-gray-400 font-medium mt-0.5">{item.user} • {item.time}</p>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Registration Modal */}
       <StudentRegistrationModal
         isOpen={isStudentRegistrationOpen}
         onClose={() => setIsStudentRegistrationOpen(false)}
         onSuccess={handleStudentEnrolled}
       />
 
-      {/* Toast Notification */}
       {toast.show && (
         <div className="fixed bottom-6 right-6 z-[150] animate-fade-in">
           <div className="bg-gray-900 text-[#FFD700] px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 border border-[#FFD700]/50 backdrop-blur-xl">
@@ -509,12 +590,3 @@ const Dashboard: React.FC = () => {
 };
 
 export default Dashboard;
-
-
-
-
-
-
-
-
-

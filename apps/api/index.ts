@@ -27,7 +27,7 @@ import { handleListUmsCourses, handleCreateCourse, handleUpdateCourse, handleDel
 import { handleListStaff, handleGetStaff, handleCreateStaff, handleUpdateStaff, handleProvisionControlledAccount } from './routes/ums-staff';
 import { handleGetStudentPrograms, handleProgramTransfer } from './routes/programs';
 import { handleListTransactions } from './routes/ums-finance';
-import { handleGetRevenueTrend } from './routes/ums-dashboard';
+import { handleGetRevenueTrend, handleGetDashboardStats, handleGetUpcomingDeadlines } from './routes/ums-dashboard';
 import {
   handleListStudyCenters, handleGetStudyCenter, handleGetStudyCenterStats,
   handleCreateStudyCenter, handleUpdateStudyCenter,
@@ -43,7 +43,7 @@ import {
 import {
   handleCatalogFaculties, handleCatalogDepartments, handleCatalogPrograms, handleCatalogTerms,
   handleStudentStatsOverview, handleStaffStatsOverview, handleCourseStatsOverview, handleFinanceStats,
-  handleVerifyCertificate, handleCertificateVerificationStats,
+  handleVerifyCertificate, handleCertificateVerificationStats, handleEnrollmentByFaculty
 } from './routes/ums-stats';
 import { handleClaimAccount } from './routes/claim';
 import { handleGetOnboardingStatus, handleUploadStudentDocument } from './routes/onboarding';
@@ -239,6 +239,9 @@ const ROUTES: Route[] = [
   { method: ['PUT', 'PATCH'], path: /^\/api\/v1\/staff\/([^/]+)$/, roles: ['admin'], handler: async (req, env, p) =>handleUpdateStaff(req, env, p[1]) },
   { method: 'GET', path: /^\/api\/v1\/finance\/transactions$/, roles: ['admin', 'staff'], handler: async (req, env) =>handleListTransactions(req, env) },
   { method: 'GET', path: /^\/api\/v1\/dashboard\/revenue-trend$/, roles: ['admin'], handler: async (req, env) =>handleGetRevenueTrend(req, env) },
+  { method: 'GET', path: /^\/api\/v1\/dashboard\/stats$/, roles: ['admin', 'staff'], handler: async (req, env) =>handleGetDashboardStats(req, env) },
+  { method: 'GET', path: /^\/api\/v1\/dashboard\/deadlines$/, roles: ['admin', 'staff', 'student'], handler: async (req, env) =>handleGetUpcomingDeadlines(req, env) },
+  { method: 'GET', path: /^\/api\/v1\/stats\/enrollment-by-faculty$/, roles: ['admin', 'staff'], handler: async (req, env) =>handleEnrollmentByFaculty(req, env) },
   { method: 'GET', path: /^\/api\/v1\/study-centers\/all$/, roles: ['admin', 'staff'], handler: async (req, env) =>handleListStudyCenters(req, env) },
   { method: 'GET', path: /^\/api\/v1\/study-centers$/, roles: ['admin', 'staff'], handler: async (req, env) =>handleListStudyCenters(req, env) },
   { method: 'POST', path: /^\/api\/v1\/study-centers$/, roles: ['admin'], handler: async (req, env) =>handleCreateStudyCenter(req, env) },

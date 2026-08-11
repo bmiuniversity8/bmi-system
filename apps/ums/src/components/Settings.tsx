@@ -27,6 +27,7 @@ const Settings: React.FC = () => {
   const onUpdateTheme = useUIStore((s) => s.setTheme);
   const [activeTab, setActiveTab] = useState("general");
   const [isLoading, setIsLoading] = useState(false);
+  const [_isFetching, setIsFetching] = useState(true);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState(
     "Settings saved successfully",
@@ -45,59 +46,98 @@ const Settings: React.FC = () => {
     setLogoPreview(currentLogo);
   }, [currentLogo]);
 
-  // General Settings State
-  const [general, setGeneral] = useState(() => {
-    const saved = localStorage.getItem("bmi_settings_general");
-    return saved
-      ? JSON.parse(saved)
-      : {
-          uniName: "BMI University",
-          email: "admin@bmi.edu",
-          phone: "+1 (555) 123-4567",
-          address: "123 University Ave, Education City",
-          theme: "light",
-        };
-  });
+  // General Settings State - initialize empty, hydrate from API then localStorage
+  const [general, setGeneral] = useState<Record<string, any>>({});
 
   // Sync local theme state with prop to ensure form consistency
   useEffect(() => {
-    setGeneral((prev: any) => ({ ...prev, theme: currentTheme }));
+    setGeneral((prev) => ({ ...prev, theme: currentTheme }));
   }, [currentTheme]);
 
-  // Notifications State
-  const [notifications, setNotifications] = useState(() => {
-    const saved = localStorage.getItem("bmi_settings_notifications");
-    return saved
-      ? JSON.parse(saved)
-      : {
-          emailAlerts: true,
-          smsAlerts: false,
-          newsletters: true,
-          weeklyReports: true,
-        };
-  });
+  // Notifications State - initialize empty
+  const [notifications, setNotifications] = useState<Record<string, any>>({});
 
-  // Security State
-  const [security, setSecurity] = useState(() => {
-    const saved = localStorage.getItem("bmi_settings_security");
-    return saved
-      ? JSON.parse(saved)
-      : {
-          twoFactor: true,
-          sessionTimeout: "30m",
-        };
-  });
+  // Security State - initialize empty
+  const [security, setSecurity] = useState<Record<string, any>>({});
+
+  // Fetch settings on mount with dynamic import pattern (like Dashboard.tsx)
+  useEffect(() => {
+    let cancelled = false;
+    setIsFetching(true);
+
+    const applyOfflineFallback = () => {
+      if (cancelled) return;
+      try {
+        const savedGeneral = localStorage.getItem("bmi_settings_general");
+        if (savedGeneral) setGeneral(JSON.parse(savedGeneral));
+
+        const savedNotif = localStorage.getItem("bmi_settings_notifications");
+        if (savedNotif) setNotifications(JSON.parse(savedNotif));
+
+        const savedSec = localStorage.getItem("bmi_settings_security");
+        if (savedSec) setSecurity(JSON.parse(savedSec));
+      } catch {
+        // Ignore corrupted localStorage
+      }
+    };
+
+    import("../services/authService").then(({ authFetch }) => {
+      import("../services/config").then(({ API_URL }) => {
+        authFetch(`${API_URL}/api/v1/settings/admin`)
+          .then(async (r) => {
+            const data = await r.json();
+            if (cancelled) return;
+            if (data && data.success && data.data) {
+              const settings = data.data as Record<string, any>;
+              const generalData: Record<string, any> = {};
+              const notifData: Record<string, any> = {};
+              const secData: Record<string, any> = {};
+
+              for (const [key, value] of Object.entries(settings)) {
+                if (key.startsWith("notifications_")) {
+                  notifData[key.replace("notifications_", "")] = value;
+                } else if (key.startsWith("security_")) {
+                  secData[key.replace("security_", "")] = value;
+                } else {
+                  generalData[key] = value;
+                }
+              }
+
+              if (Object.keys(generalData).length > 0) setGeneral(generalData);
+              else applyOfflineFallback();
+
+              if (Object.keys(notifData).length > 0) setNotifications(notifData);
+              if (Object.keys(secData).length > 0) setSecurity(secData);
+            } else {
+              applyOfflineFallback();
+            }
+          })
+          .catch(() => {
+            applyOfflineFallback();
+          })
+          .finally(() => {
+            if (!cancelled) {
+              setIsFetching(false);
+            }
+          });
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
 
   // ── Controlled Account Provisioning State ──────────────────────────────
   const CONTROLLED_DESIGNATIONS = [
-    { label: 'Academic Registrar',  value: 'Academic Registrar',  scope: 'Programs, Grades, Transcripts' },
-    { label: 'Finance Bursar',      value: 'Finance Bursar',      scope: 'Student Ledger & Payroll' },
-    { label: 'Faculty Chair',       value: 'Faculty Chair',       scope: 'Classes, Grading & Attendance' },
-    { label: 'HR Director',         value: 'HR Director',         scope: 'Staff Directory & Payroll' },
-    { label: 'Admissions Officer',  value: 'Admissions Officer',  scope: 'Applications & Enrollment' },
-    { label: 'IT Administrator',    value: 'IT Administrator',    scope: 'System Health & Integrations' },
-    { label: 'Library Manager',     value: 'Library Manager',     scope: 'Library & Media Resources' },
+    { label: 'Academic Registrar', value: 'Academic Registrar', scope: 'Programs, Grades, Transcripts' },
+    { label: 'Finance Bursar', value: 'Finance Bursar', scope: 'Student Ledger & Payroll' },
+    { label: 'Faculty Chair', value: 'Faculty Chair', scope: 'Classes, Grading & Attendance' },
+    { label: 'HR Director', value: 'HR Director', scope: 'Staff Directory & Payroll' },
+    { label: 'Admissions Officer', value: 'Admissions Officer', scope: 'Applications & Enrollment' },
+    { label: 'IT Administrator', value: 'IT Administrator', scope: 'System Health & Integrations' },
+    { label: 'Library Manager', value: 'Library Manager', scope: 'Library & Media Resources' },
     { label: 'System Administrator', value: 'System Administrator', scope: 'Full System Access & Configuration' },
   ];
 
@@ -147,10 +187,10 @@ const Settings: React.FC = () => {
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setIsLoading(true);
 
-    // Save all settings to localStorage
+    // Always save to localStorage first as offline fallback
     localStorage.setItem("bmi_settings_general", JSON.stringify(general));
     localStorage.setItem(
       "bmi_settings_notifications",
@@ -158,12 +198,50 @@ const Settings: React.FC = () => {
     );
     localStorage.setItem("bmi_settings_security", JSON.stringify(security));
 
-    setTimeout(() => {
-      setIsLoading(false);
-      setToastMessage("Configuration Committed Successfully");
-      setShowToast(true);
-      setTimeout(() => setShowToast(false), 3000);
-    }, 1000);
+    // Build namespaced payload for API
+    const payload: Record<string, any> = {};
+
+    // General settings (no prefix)
+    for (const [key, value] of Object.entries(general)) {
+      if (value !== undefined && value !== null) {
+        payload[key] = value;
+      }
+    }
+
+    // Notifications settings (notifications_ prefix)
+    for (const [key, value] of Object.entries(notifications)) {
+      if (value !== undefined && value !== null) {
+        payload[`notifications_${key}`] = value;
+      }
+    }
+
+    // Security settings (security_ prefix)
+    for (const [key, value] of Object.entries(security)) {
+      if (value !== undefined && value !== null) {
+        payload[`security_${key}`] = value;
+      }
+    }
+
+    try {
+      const { authFetch } = await import("../services/authService");
+      const { API_URL } = await import("../services/config");
+      const res = await authFetch(`${API_URL}/api/v1/settings/admin`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!data || !data.success) {
+        console.warn("[Settings] API save returned non-success; localStorage used as fallback");
+      }
+    } catch {
+      // API failed — localStorage already saved, so user data is safe
+    }
+
+    setIsLoading(false);
+    setToastMessage("Configuration Committed Successfully");
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 3000);
   };
 
   const handlePasswordUpdate = async () => {
@@ -278,11 +356,10 @@ const Settings: React.FC = () => {
   const TabButton = ({ id, label, icon: Icon }: { id: string; label: string; icon: React.ComponentType<{ size?: number }> }) => (
     <button
       onClick={() => setActiveTab(id)}
-      className={`flex items-center gap-3 px-8 py-4 text-xs font-black uppercase tracking-widest transition-all rounded-none ${
-        activeTab === id
+      className={`flex items-center gap-3 px-8 py-4 text-xs font-black uppercase tracking-widest transition-all rounded-none ${activeTab === id
           ? "bg-white dark:bg-gray-800 text-[#4B0082] dark:text-[#FFD700] border-t-4 border-[#4B0082] dark:border-[#FFD700] shadow-sm"
           : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
-      }`}
+        }`}
     >
       <Icon size={16} />
       {label}
@@ -668,11 +745,10 @@ const Settings: React.FC = () => {
 
               {/* Result Banner */}
               {provisionResult && (
-                <div className={`flex items-start gap-3 p-4 border rounded-none text-xs ${
-                  provisionResult.type === 'success'
+                <div className={`flex items-start gap-3 p-4 border rounded-none text-xs ${provisionResult.type === 'success'
                     ? 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800 text-green-800 dark:text-green-300'
                     : 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800 text-red-800 dark:text-red-300'
-                }`}>
+                  }`}>
                   {provisionResult.type === 'success'
                     ? <Check size={16} className="mt-0.5 flex-shrink-0" />
                     : <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />}

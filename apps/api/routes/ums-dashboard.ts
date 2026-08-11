@@ -45,3 +45,103 @@ export async function handleGetRevenueTrend(request: Request, env: Env): Promise
   // Dashboard checks Array.isArray(d.data) so data must be the array itself
   return ok(result);
 }
+
+export async function handleGetDashboardStats(_request: Request, env: Env): Promise<Response> {
+  const db = env.PLATFORM_CONTEXT!.db;
+
+  let pending_leaves = 0;
+  try {
+    const row = await db.prepare(`SELECT COUNT(*) as c FROM hr_leave_requests WHERE status='pending'`).first<{ c: number }>();
+    pending_leaves = row?.c || 0;
+  } catch (e) {
+    pending_leaves = 0;
+  }
+
+  let overdue_books = 0;
+  try {
+    const row = await db.prepare(`SELECT COUNT(*) as c FROM library_borrowings WHERE due_date < date('now') AND status='borrowed'`).first<{ c: number }>();
+    overdue_books = row?.c || 0;
+  } catch (e) {
+    overdue_books = 0;
+  }
+
+  let unpaid_fines = 0;
+  try {
+    const row = await db.prepare(`SELECT COALESCE(SUM(amount), 0) as s FROM library_fines WHERE paid=0`).first<{ s: number }>();
+    unpaid_fines = row?.s || 0;
+  } catch (e) {
+    unpaid_fines = 0;
+  }
+
+  let upcoming_events = 0;
+  try {
+    const row = await db.prepare(`SELECT COUNT(*) as c FROM academic_terms WHERE start_date >= date('now') AND start_date <= date('now', '+30 days')`).first<{ c: number }>();
+    upcoming_events = row?.c || 0;
+  } catch (e) {
+    upcoming_events = 0;
+  }
+
+  return ok({ pending_leaves, overdue_books, unpaid_fines, upcoming_events });
+}
+
+export async function handleGetUpcomingDeadlines(_request: Request, env: Env): Promise<Response> {
+  const db = env.PLATFORM_CONTEXT!.db;
+  const deadlines: Array<{ title: string; date: string; type: string; tag: string; color: string }> = [];
+
+  try {
+    const { results } = await db.prepare(`
+      SELECT name, start_date, end_date, status
+      FROM academic_terms
+      WHERE (start_date >= date('now') AND start_date <= date('now', '+60 days'))
+         OR (end_date >= date('now') AND end_date <= date('now', '+60 days'))
+    `).all<{ name: string; start_date: string; end_date: string; status: string }>();
+
+    const now = new Date();
+    const nowStr = now.toISOString().split('T')[0];
+
+    for (const row of results) {
+      const dates: Array<{ date: string; label: string }> = [];
+
+      if (row.start_date >= nowStr) {
+        dates.push({ date: row.start_date, label: `${row.name} - Start` });
+      }
+      if (row.end_date >= nowStr && row.end_date !== row.start_date) {
+        dates.push({ date: row.end_date, label: `${row.name} - End` });
+      }
+
+      for (const d of dates) {
+        const targetDate = new Date(d.date);
+        const diffMs = targetDate.getTime() - now.getTime();
+        const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+        let type = 'Administrative';
+        const s = (row.status || '').toLowerCase();
+        if (s === 'exam') {
+          type = 'Exams';
+        } else if (s === 'active' || s === 'registration') {
+          type = 'Academic';
+        }
+
+        const isUrgent = diffDays < 10;
+        const tag = isUrgent ? 'Urgent' : 'Scheduled';
+        const color = isUrgent
+          ? 'text-amber-500 bg-amber-500/10 border-amber-500/20'
+          : 'text-blue-500 bg-blue-500/10 border-blue-500/20';
+
+        deadlines.push({
+          title: d.label,
+          date: d.date,
+          type,
+          tag,
+          color,
+        });
+      }
+    }
+  } catch (e) {
+    // missing table or error – return empty
+  }
+
+  deadlines.sort((a, b) => a.date.localeCompare(b.date));
+
+  return ok(deadlines);
+}

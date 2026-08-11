@@ -27,12 +27,23 @@ const GradeAppealReview: React.FC<GradeAppealReviewProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [filter, setFilter] = useState<AppealStatus | 'ALL'>('ALL');
 
-  // Mock data - replace with actual API call
+  // Fetch grade appeals from database API
   useEffect(() => {
     if (isOpen) {
-      // Load appeals from API
-      // API not yet implemented - show empty state instead of mock data
-      setAppeals([]);
+      import('../../services/authService').then(({ authFetch }) => {
+        import('../../services/config').then(({ API_URL }) => {
+          authFetch(`${API_URL}/grades/appeals`)
+            .then(res => res.json())
+            .then(data => {
+              if (data.success && Array.isArray(data.data)) {
+                setAppeals(data.data);
+              } else {
+                setAppeals([]);
+              }
+            })
+            .catch(() => setAppeals([]));
+        });
+      });
     }
   }, [isOpen]);
 

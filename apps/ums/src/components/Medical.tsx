@@ -24,6 +24,7 @@ import { useApiDataStore } from "../stores/apiDataStore";
 
 export const Medical: React.FC = () => {
   const students = useDataStore((s) => s.students);
+  const staff = useDataStore((s) => s.staff);
   const {
     medicalVisits: records,
     fetchMedicalVisits,
@@ -40,7 +41,7 @@ export const Medical: React.FC = () => {
     condition: "",
     bloodType: "O+",
     status: "Normal",
-    attendingStaff: "Sr. Mary",
+    attendingStaff: "",
     vitals: { temp: "", bp: "", pulse: "" },
     notes: "",
   });
@@ -48,6 +49,21 @@ export const Medical: React.FC = () => {
   useEffect(() => {
     fetchMedicalVisits();
   }, []);
+
+  const medicalStaff = useMemo(() => {
+    const keywords = ["Nurse", "Doctor", "Medical", "Health", "Clinical", "Physician", "Surgeon", "Pediatrician", "Cardiologist"];
+    return (staff || []).filter((s) => {
+      const roleMatch = keywords.some((k) =>
+        (s.role || "").toLowerCase().includes(k.toLowerCase())
+      );
+      const deptMatch = (s.department || "")
+        .toLowerCase()
+        .includes("medical");
+      return roleMatch || deptMatch;
+    });
+  }, [staff]);
+
+  const activeStaff = useMemo(() => medicalStaff.length || 0, [medicalStaff]);
 
   const filteredRecords = useMemo(() => {
     return (records || [])
@@ -66,7 +82,7 @@ export const Medical: React.FC = () => {
   const stats = {
     total: records.length,
     urgent: records.filter((r) => r.status === "Urgent").length,
-    activeStaff: 4,
+    activeStaff,
   };
 
   const handleAddVisit = async (e: React.FormEvent) => {
@@ -80,7 +96,7 @@ export const Medical: React.FC = () => {
       condition: newVisit.condition || "General Observation",
       bloodType: newVisit.bloodType || "O+",
       date: new Date().toISOString().split("T")[0],
-      attendingStaff: newVisit.attendingStaff || "Sr. Mary",
+      attendingStaff: newVisit.attendingStaff || "",
       status: newVisit.status as "Normal" | "Urgent" | "Follow-up",
       vitals: {
         temp: newVisit.vitals?.temp || "36.5",
@@ -97,7 +113,7 @@ export const Medical: React.FC = () => {
         condition: "",
         bloodType: "O+",
         status: "Normal",
-        attendingStaff: "Sr. Mary",
+        attendingStaff: "",
         vitals: { temp: "", bp: "", pulse: "" },
         notes: "",
       });
@@ -157,11 +173,10 @@ export const Medical: React.FC = () => {
           <button
             key={status}
             onClick={() => setStatusFilter(status)}
-            className={`px-5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
-              statusFilter === status
-                ? "bg-[#4B0082] text-white shadow-lg shadow-purple-500/20 scale-105 border border-purple-500/50"
-                : "bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-[#4B0082]"
-            }`}
+            className={`px-5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${statusFilter === status
+              ? "bg-[#4B0082] text-white shadow-lg shadow-purple-500/20 scale-105 border border-purple-500/50"
+              : "bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-[#4B0082]"
+              }`}
           >
             {status}
           </button>
@@ -296,13 +311,12 @@ export const Medical: React.FC = () => {
                     </td>
                     <td className="px-6 py-5 text-center">
                       <span
-                        className={`px-3 py-1 text-[9px] font-black uppercase tracking-widest border ${
-                          rec.status === "Urgent"
-                            ? "bg-red-50 text-red-700 border-red-200 animate-pulse"
-                            : rec.status === "Follow-up"
-                              ? "bg-amber-50 text-amber-700 border-amber-200"
-                              : "bg-emerald-50 text-emerald-700 border-emerald-200"
-                        }`}
+                        className={`px-3 py-1 text-[9px] font-black uppercase tracking-widest border ${rec.status === "Urgent"
+                          ? "bg-red-50 text-red-700 border-red-200 animate-pulse"
+                          : rec.status === "Follow-up"
+                            ? "bg-amber-50 text-amber-700 border-amber-200"
+                            : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          }`}
                       >
                         {rec.status}
                       </span>
@@ -451,6 +465,42 @@ export const Medical: React.FC = () => {
                       <option value="Normal">Normal Observation</option>
                       <option value="Urgent">Urgent Intervention</option>
                       <option value="Follow-up">Required Follow-up</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-gray-500 tracking-[0.2em]">
+                    Attending Medical Staff
+                  </label>
+                  <div className="relative">
+                    <User
+                      size={18}
+                      className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
+                    />
+                    <select
+                      required
+                      value={newVisit.attendingStaff}
+                      onChange={(e) =>
+                        setNewVisit({ ...newVisit, attendingStaff: e.target.value })
+                      }
+                      className="w-full pl-12 pr-5 py-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-none outline-none font-bold text-sm focus:ring-1 focus:ring-[#4B0082] appearance-none cursor-pointer"
+                    >
+                      <option value="">--- Select Attending Staff ---</option>
+                      {medicalStaff
+                        .sort((a, b) =>
+                          (a.first_name || "").localeCompare(b.first_name || ""),
+                        )
+                        .map((s) => (
+                          <option
+                            key={s.id}
+                            value={`${s.first_name || ""} ${s.last_name || ""}`.trim()}
+                          >
+                            {(s as any).staff_no ? `${(s as any).staff_no} | ` : ""}
+                            {s.first_name || ""} {s.last_name || ""}
+                            {s.role ? ` — ${s.role}` : ""}
+                          </option>
+                        ))}
                     </select>
                   </div>
                 </div>

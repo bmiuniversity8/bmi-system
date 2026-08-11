@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   
   
@@ -9,15 +9,11 @@ import {
   
   
   
-  
-  
   PieChart as 
-  
   
   Zap, 
   Bot, 
   Loader2, 
-  
   
   
   Sparkles,
@@ -46,36 +42,78 @@ const Reports: React.FC = () => {
   const [aiReport, setAiReport] = useState('');
   const [activeRange, setActiveRange] = useState('Fiscal Year 2024');
 
-  const enrollmentData = [
-    { name: 'Theology', val: 450, growth: 12, faculty: 15 },
-    { name: 'ICT', val: 890, growth: 28, faculty: 22 },
-    { name: 'Business', val: 1200, growth: 5, faculty: 30 },
-    { name: 'Education', val: 1007, growth: 18, faculty: 25 },
-  ];
+  const [apiEnrollment, setApiEnrollment] = useState<any[]>([]);
+  const [apiFinancialTrend, setApiFinancialTrend] = useState<any[]>([]);
+  const [apiDepartmentalAllocation, setApiDepartmentalAllocation] = useState<any[]>([]);
 
-  const financialTrend = [
-    { month: 'Jan', revenue: 120000, expenses: 95000 },
-    { month: 'Feb', revenue: 145000, expenses: 102000 },
-    { month: 'Mar', revenue: 210000, expenses: 140000 },
-    { month: 'Apr', revenue: 190000, expenses: 135000 },
-    { month: 'May', revenue: 250000, expenses: 180000 },
-    { month: 'Jun', revenue: 389000, expenses: 210000 },
-  ];
+  useEffect(() => {
+    let cancelled = false;
+    import("../services/authService").then(({ authFetch }) => {
+      import("../services/config").then(({ API_URL }) => {
+        authFetch(`${API_URL}/stats/enrollment-by-faculty`)
+          .then((r) => r.json())
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .then((d: any) => {
+            if (!cancelled && d.success && d.data) {
+              if (Array.isArray(d.data.enrollment)) {
+                setApiEnrollment(d.data.enrollment);
+              }
+              if (Array.isArray(d.data.financialTrend)) {
+                setApiFinancialTrend(d.data.financialTrend);
+              }
+              if (Array.isArray(d.data.departmentalAllocation)) {
+                setApiDepartmentalAllocation(d.data.departmentalAllocation);
+              }
+            }
+          })
+          .catch((_error) => {
+            // eslint-disable-next-line no-console
+            console.error("Failed to load statistics:", _error);
+          });
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const departmentalAllocation = [
-    { name: 'Academic Faculty', value: 45, color: '#4B0082' },
-    { name: 'Infrastructure', value: 25, color: '#FFD700' },
-    { name: 'Research', value: 20, color: '#10B981' },
-    { name: 'Admin', value: 10, color: '#EF4444' },
-  ];
+  const enrollmentData = useMemo(() => {
+    if (apiEnrollment.length > 0) return apiEnrollment;
+    return [];
+  }, [apiEnrollment]);
+
+  const financialTrend = useMemo(() => {
+    if (apiFinancialTrend.length > 0) return apiFinancialTrend;
+    return [];
+  }, [apiFinancialTrend]);
+
+  const departmentalAllocation = useMemo(() => {
+    if (apiDepartmentalAllocation.length > 0) return apiDepartmentalAllocation;
+    return [];
+  }, [apiDepartmentalAllocation]);
 
   const handleGenerateReport = async () => {
     setIsGeneratingAiReport(true);
+    
+    const enrollmentSummary = enrollmentData.length > 0
+      ? enrollmentData.map((e: any) => `${e.name || e.faculty || 'Faculty'} (${e.val || e.value || e.count || 0})`).join(', ')
+      : 'Data pending';
+
+    const firstMonth = financialTrend.length > 0 ? financialTrend[0] : null;
+    const lastMonth = financialTrend.length > 0 ? financialTrend[financialTrend.length - 1] : null;
+    const financialSummary = (firstMonth && lastMonth)
+      ? `Trend from ${firstMonth.month || 'Period Start'} ($${(firstMonth.revenue || firstMonth.income || 0).toLocaleString()}) to ${lastMonth.month || 'Period End'} ($${(lastMonth.revenue || lastMonth.income || 0).toLocaleString()})`
+      : 'Financial data pending';
+
+    const allocationSummary = departmentalAllocation.length > 0
+      ? departmentalAllocation.slice(0, 2).map((d: any) => `${d.value || d.percent || 0}% ${d.name || d.department || 'Dept'}`).join(', ')
+      : 'Allocation data pending';
+
     const prompt = `Generate a brief executive summary of the university's performance for ${activeRange}.
     Data:
-    - Enrollment: Theology (450), ICT (890), Business (1200), Education (1007).
-    - Financials: Steady growth from Jan ($120k) to Jun ($389k).
-    - Resource Allocation: 45% Academic, 25% Infrastructure.
+    - Enrollment: ${enrollmentSummary}.
+    - Financials: ${financialSummary}.
+    - Resource Allocation: ${allocationSummary}.
     Highlight key growth areas and suggest one strategic improvement.`;
     
     try {
@@ -95,7 +133,7 @@ const Reports: React.FC = () => {
             <div className="w-1 h-5 bg-[#FFD700] rounded-none"></div>
             <div>
                <h2 className="text-base md:text-lg font-bold text-[#2E004F] dark:text-white uppercase leading-none">Institutional Analytics</h2>
-               <p className="text-[8px] md:text-[9px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest">Performance & Fiscal Intelligence</p>
+               <p className="text-[8px] md:text-[9px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest">Performance &amp; Fiscal Intelligence</p>
             </div>
          </div>
       </div>
@@ -245,9 +283,6 @@ const Reports: React.FC = () => {
 };
 
 export default Reports;
-
-
-
 
 
 
