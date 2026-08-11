@@ -1,6 +1,13 @@
 import { Env, ok, error, typedJson } from '../lib/types';
 import { ExecutionContext } from '@cloudflare/workers-types';
-import { sendEmail, buildEmailLayout, isValidEmail, documentReadyEmail } from '../lib/email';
+import {
+  safeDispatchEmail,
+  isValidEmail,
+  documentReadyEmail,
+  registrationCompleteEmail,
+  courseEnrollmentConfirmationEmail,
+  registrationProgressEmail,
+} from '../lib/email';
 import { runUnifiedProvisioning } from '../lib/unified-provisioner';
 import { dispatchPendingJobs } from '../lib/provisioning';
 import { getPortalUrl } from '../lib/config';
@@ -109,9 +116,49 @@ export async function handleSaveRegistrationStep(req: Request, env: Env, userId:
       `INSERT INTO metadata (id, key, value) VALUES (?, 'registration_data', ?) ON CONFLICT(id, key) DO UPDATE SET value=excluded.value`
     ).bind(userId, JSON.stringify(currentData)).run();
 
+    const completedSteps = STEP_ORDER.filter(s => currentData[s] !== undefined);
+    const completedCount = completedSteps.length;
+    const totalSteps = STEP_ORDER.length;
+    const nextStep = STEP_ORDER.find(s => currentData[s] === undefined);
+
+    // Milestone progress emails: send only at halfway (3/6) and almost done (5/6)
+    const STEP_LABELS: Record<string, string> = {
+      personal_details: 'Personal Details',
+      address: 'Address & Emergency Contact',
+      program: 'Programme Selection',
+      modules: 'Module Selection',
+      fees: 'Fee Acceptance',
+      confirm: 'Confirmation & Signature',
+    };
+
+    const isMilestone = completedCount === Math.ceil(totalSteps / 2) || completedCount === totalSteps - 1;
+    if (isMilestone && nextStep && env.RESEND_API_KEY) {
+      const userRow = await env.PLATFORM_CONTEXT!.db.prepare(
+        'SELECT email, first_name FROM users WHERE id = ?'
+      ).bind(userId).first<{ email: string; first_name: string }>();
+
+      if (userRow?.email && isValidEmail(userRow.email)) {
+        // Fire-and-forget: don't block the step save response
+        safeDispatchEmail(env, undefined, {
+          to: userRow.email,
+          subject: completedCount === totalSteps - 1
+            ? 'BMI University — Almost Done with Registration!'
+            : 'BMI University — Registration Halfway There!',
+          html: registrationProgressEmail(
+            userRow.first_name,
+            completedCount,
+            totalSteps,
+            STEP_LABELS[nextStep] || nextStep
+          ),
+          templateName: 'registration_progress',
+          context: { action: 'registration_progress', user_id: userId, completed: completedCount, total: totalSteps },
+        }).catch(e => console.error('[registration] Progress email failed:', e));
+      }
+    }
+
     return ok({
       message: `Step ${step} saved successfully`,
-      completed_steps: Object.keys(currentData).filter(k => STEP_ORDER.includes(k as RegStep)),
+      completed_steps: completedSteps,
       all_completed: STEP_ORDER.every(s => currentData[s] !== undefined),
     });
   } catch {
@@ -211,65 +258,43 @@ export async function handleCompleteRegistration(_req: Request, env: Env, userId
 
       if (userRow.email && isValidEmail(userRow.email)) {
         tasks.push(
-          sendEmail(env, {
+          safeDispatchEmail(env, ctx, {
             to: userRow.email,
             subject: 'BMI University — Registration Complete',
-            html: buildEmailLayout('Registration Complete', `
-              <h2 style="color: #0f172a;">Congratulations, ${userRow.first_name}!</h2>
-              <p style="color: #475569; line-height: 1.6;">
-                Your registration at BMI University has been successfully completed.
-              </p>
-              <div style="background:#f8fafc;border-left:4px solid #d4af37;padding:16px;margin:20px 0;border-radius:4px;">
-                <p><strong>Registration Number:</strong> ${finalRegNo || 'Pending'}</p>
-                <p><strong>Programme:</strong> ${programName || 'N/A'}</p>
-              </div>
-              <p style="color: #475569; line-height: 1.6;">
-                Our systems are currently provisioning your student email, ID card, and enrolling you into the LMS. You will receive separate emails as these become available.
-              </p>
-              <p style="color: #475569; line-height: 1.6;">
-                You can now access your courses, view your timetable, and begin your academic journey.
-              </p>
-            `),
-          }).catch(e => console.error('[registration] Welcome email failed:', e))
+            html: registrationCompleteEmail(userRow.first_name, finalRegNo || 'Pending', programName),
+            templateName: 'registration_complete',
+            context: { action: 'registration_complete', user_id: userId, reg_no: finalRegNo },
+          })
         );
 
         if (result.documentsGenerated) {
           tasks.push(
-            sendEmail(env, {
+            safeDispatchEmail(env, ctx, {
               to: userRow.email,
               subject: 'BMI University — Your Admission Letter',
               html: documentReadyEmail(userRow.first_name, 'admission_letter'),
-            }).catch(e => console.error('[registration] Admission letter email failed:', e)),
-            sendEmail(env, {
+              templateName: 'document_ready_admission',
+              context: { action: 'document_ready', user_id: userId, doc_type: 'admission_letter' },
+            }),
+            safeDispatchEmail(env, ctx, {
               to: userRow.email,
               subject: 'BMI University — Your Student ID Card',
               html: documentReadyEmail(userRow.first_name, 'id_card'),
-            }).catch(e => console.error('[registration] ID card email failed:', e))
+              templateName: 'document_ready_id_card',
+              context: { action: 'document_ready', user_id: userId, doc_type: 'id_card' },
+            })
           );
         }
 
         if (courses.length > 0) {
           tasks.push(
-            sendEmail(env, {
+            safeDispatchEmail(env, ctx, {
               to: userRow.email,
               subject: 'BMI University — Course Enrollment Confirmation',
-              html: buildEmailLayout('Enrollment Confirmed', `
-                <h2 style="color: #0f172a;">Hi ${userRow.first_name},</h2>
-                <p style="color: #475569; line-height: 1.6;">
-                  You have been enrolled in <strong>${courses.length} course${courses.length === 1 ? '' : 's'}</strong> for your ${programName || 'programme'}.
-                </p>
-                <div style="background:#f0fdf4;border-left:4px solid #22c55e;padding:16px;margin:20px 0;border-radius:4px;">
-                  <p style="margin:0;color:#15803d;"><strong>Courses enrolled:</strong> ${courses.length} module${courses.length === 1 ? '' : 's'}</p>
-                </div>
-                <p style="color: #475569; line-height: 1.6;">
-                  Log in to the student portal to view your timetable, access learning materials, and track your progress.
-                </p>
-                <a href="${getPortalUrl(env)}/student/academics"
-                   style="display: inline-block; background: #22c55e; color: #fff; padding: 12px 28px; border-radius: 6px; text-decoration: none; font-weight: bold; margin-top: 12px;">
-                  View My Courses
-                </a>
-              `),
-            }).catch(e => console.error('[registration] Enrollment confirm email failed:', e))
+              html: courseEnrollmentConfirmationEmail(userRow.first_name, courses.length, programName, getPortalUrl(env)),
+              templateName: 'course_enrollment_confirmation',
+              context: { action: 'enrollment_confirmation', user_id: userId, course_count: courses.length },
+            })
           );
         }
       }

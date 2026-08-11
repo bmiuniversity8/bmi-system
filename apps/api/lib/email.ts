@@ -753,6 +753,55 @@ export function documentReadyEmail(firstName: string, docType: string): string {
   return buildEmailLayout(`${label} Ready`, content);
 }
 
+export function registrationCompleteEmail(
+  firstName: string,
+  regNo: string,
+  programName: string
+): string {
+  const content = `
+    <h2 style="color: #0f172a;">Congratulations, ${firstName}!</h2>
+    <p style="color: #475569; line-height: 1.6;">
+      Your registration at BMI University has been successfully completed.
+    </p>
+    <div style="background:#f8fafc;border-left:4px solid #d4af37;padding:16px;margin:20px 0;border-radius:4px;">
+      <p style="margin:0 0 8px;"><strong>Registration Number:</strong> ${regNo || 'Pending'}</p>
+      <p style="margin:0;"><strong>Programme:</strong> ${programName || 'N/A'}</p>
+    </div>
+    <p style="color: #475569; line-height: 1.6;">
+      Our systems are currently provisioning your student email, ID card, and enrolling you into the LMS. You will receive separate emails as these become available.
+    </p>
+    <p style="color: #475569; line-height: 1.6;">
+      You can now access your courses, view your timetable, and begin your academic journey.
+    </p>
+  `;
+  return buildEmailLayout('Registration Complete', content);
+}
+
+export function courseEnrollmentConfirmationEmail(
+  firstName: string,
+  courseCount: number,
+  programName: string,
+  portalUrl: string = PORTAL_URL
+): string {
+  const content = `
+    <h2 style="color: #0f172a;">Hi ${firstName},</h2>
+    <p style="color: #475569; line-height: 1.6;">
+      You have been enrolled in <strong>${courseCount} course${courseCount === 1 ? '' : 's'}</strong> for your ${programName || 'programme'}.
+    </p>
+    <div style="background:#f0fdf4;border-left:4px solid #22c55e;padding:16px;margin:20px 0;border-radius:4px;">
+      <p style="margin:0;color:#15803d;"><strong>Courses enrolled:</strong> ${courseCount} module${courseCount === 1 ? '' : 's'}</p>
+    </div>
+    <p style="color: #475569; line-height: 1.6;">
+      Log in to the student portal to view your timetable, access learning materials, and track your progress.
+    </p>
+    <a href="${portalUrl}/student/academics"
+       style="display: inline-block; background: #22c55e; color: #fff; padding: 12px 28px; border-radius: 6px; text-decoration: none; font-weight: bold; margin-top: 12px;">
+      View My Courses
+    </a>
+  `;
+  return buildEmailLayout('Enrollment Confirmed', content);
+}
+
 export function staffWelcomeEmail(
   firstName: string,
   designation: string,
@@ -881,6 +930,142 @@ export function onboardingStepCompletedEmail(
   `;
   return buildEmailLayout(`Onboarding: ${stepTitle}`, content);
 }
+
+export function registrationProgressEmail(
+  firstName: string,
+  completedSteps: number,
+  totalSteps: number,
+  nextStepLabel: string,
+  portalUrl: string = PORTAL_URL
+): string {
+  const progress = Math.round((completedSteps / totalSteps) * 100);
+  const isMidway = completedSteps === Math.ceil(totalSteps / 2);
+  const isAlmostDone = completedSteps === totalSteps - 1;
+
+  const headline = isAlmostDone
+    ? `Almost there, ${firstName}!`
+    : isMidway
+      ? `Halfway there, ${firstName}!`
+      : `Great progress, ${firstName}!`;
+
+  const content = `
+    <h2 style="color: #0f172a;">${headline}</h2>
+    <p style="color: #475569; line-height: 1.6;">
+      You've completed <strong>${completedSteps} of ${totalSteps}</strong> registration steps.
+    </p>
+    <div style="margin: 24px 0;">
+      <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+        <span style="color: #64748b; font-size: 13px; font-weight: 600;">Registration Progress</span>
+        <span style="color: #0f172a; font-size: 13px; font-weight: 700;">${progress}%</span>
+      </div>
+      <div style="background: #e2e8f0; border-radius: 9999px; height: 14px; overflow: hidden;">
+        <div style="background: linear-gradient(90deg, #d4af37, #22c55e); height: 100%; width: ${progress}%; border-radius: 9999px;"></div>
+      </div>
+    </div>
+    ${isAlmostDone ? `
+    <div style="background: #f0fdf4; border-left: 4px solid #22c55e; padding: 16px; margin: 20px 0; border-radius: 4px;">
+      <p style="margin: 0; color: #15803d; font-weight: bold;">🎉 Just one more step to go!</p>
+      <p style="margin: 8px 0 0; color: #15803d;">Complete <strong>${nextStepLabel}</strong> to finish your registration.</p>
+    </div>` : `
+    <p style="color: #475569; line-height: 1.6;">
+      Your next step is: <strong>${nextStepLabel}</strong>. Log in to continue where you left off.
+    </p>`}
+    <a href="${portalUrl}/registration"
+       style="display: inline-block; background: #d4af37; color: #0f172a; padding: 12px 28px; border-radius: 6px; text-decoration: none; font-weight: bold; margin-top: 12px;">
+      Continue Registration →
+    </a>
+  `;
+  return buildEmailLayout('Registration Progress', content);
+}
+
+export function accountClaimedWelcomeEmail(
+  firstName: string,
+  portalUrl: string = PORTAL_URL
+): string {
+  const content = `
+    <h2 style="color: #0f172a;">Welcome, ${firstName}!</h2>
+    <p style="color: #475569; line-height: 1.6;">
+      Your account has been successfully claimed. You now have access to the BMI University Student Portal.
+    </p>
+    <div style="margin: 24px 0; padding: 20px 24px; background: #f8fafc; border-left: 4px solid #d4af37; border-radius: 4px;">
+      <p style="margin: 0 0 8px; color: #0f172a; font-weight: 700; font-size: 15px;">Your Registration Steps:</p>
+      <ol style="color: #475569; line-height: 1.8; margin: 0; padding-left: 20px;">
+        <li><strong>Upload ID Photo</strong> — Upload your student ID photo for verification</li>
+        <li><strong>Complete Orientation</strong> — Complete the online orientation module</li>
+        <li><strong>Course Registration</strong> — Auto-enroll in mandatory courses and select your electives</li>
+        <li><strong>Pay Tuition</strong> — Pay your programme tuition fee to complete registration</li>
+      </ol>
+    </div>
+    <p style="color: #475569; line-height: 1.6;">
+      Log in now at the student portal to begin your onboarding.
+    </p>
+    <a href="${portalUrl}/dashboard"
+       style="display: inline-block; background: #d4af37; color: #0f172a; padding: 12px 28px; border-radius: 6px; text-decoration: none; font-weight: bold; margin-top: 12px;">
+      Go to Student Portal →
+    </a>
+    <p style="color: #64748b; font-size: 13px; margin-top: 24px;">
+      If you have any questions, contact our admissions office at bmiuniversity8@gmail.com or call 704-607-5540.
+    </p>
+  `;
+  return buildEmailLayout('Account Activated', content);
+}
+
+export function studentEmailProvisionedEmail(
+  firstName: string,
+  studentEmail: string,
+  mailboxCreated: boolean,
+  tempPassword?: string
+): string {
+  const content = `
+    <h2 style="color: #0f172a;">Dear ${firstName},</h2>
+    <p style="color: #475569; line-height: 1.6;">
+      Your BMI University student email address has been provisioned${!mailboxCreated ? ' (note: mailbox provider not configured; provisioning pending IT setup)' : ''}.
+    </p>
+    <div style="background: #f8fafc; border-left: 4px solid #d4af37; padding: 16px; margin: 20px 0; border-radius: 4px;">
+      <p style="margin: 0 0 8px;"><strong>Email:</strong> ${studentEmail}</p>
+      ${mailboxCreated && tempPassword
+        ? `<p style="margin: 0;"><strong>Temporary Password:</strong> ${tempPassword}</p>`
+        : `<p style="margin: 0; color: #92400e;"><em>Your mailbox is being finalized by IT support — you will receive login credentials shortly.</em></p>`
+      }
+    </div>
+    <p style="color: #475569; line-height: 1.6;">
+      This email account will be used for all official university communications and services.
+    </p>
+    ${mailboxCreated ? `
+    <div style="background: #fffbeb; padding: 14px; border-radius: 6px; margin: 16px 0;">
+      <p style="margin: 0; color: #92400e; font-size: 13px; line-height: 1.5;">
+        🔐 <strong>Important:</strong> Please change your temporary password immediately after your first login.
+      </p>
+    </div>` : ''}
+  `;
+  return buildEmailLayout('Student Email Account', content);
+}
+
+export function adminNewApplicationNoticeEmail(
+  applicantName: string,
+  applicantEmail: string,
+  program: string,
+  appId: string,
+  createdBy: string
+): string {
+  const content = `
+    <h2 style="color: #0f172a;">New Application Created</h2>
+    <p style="color: #475569; line-height: 1.6;">
+      An application has been created on behalf of a student by <strong>${createdBy}</strong>.
+    </p>
+    <div style="background: #f8fafc; border-left: 4px solid #d4af37; padding: 16px; margin: 20px 0; border-radius: 4px;">
+      <p style="margin: 0 0 8px;"><strong>Applicant:</strong> ${applicantName} (${applicantEmail})</p>
+      <p style="margin: 0 0 8px;"><strong>Programme:</strong> ${program}</p>
+      <p style="margin: 0;"><strong>Application ID:</strong> ${appId.substring(0, 8).toUpperCase()}...</p>
+    </div>
+    <p style="color: #475569; line-height: 1.6;">
+      The applicant will receive a notification email with instructions to complete their application.
+    </p>
+    <p style="color: #64748b; font-size: 13px;">Review full application details in the UMS admin dashboard.</p>
+  `;
+  return buildEmailLayout('Admin: Application Created', content);
+}
+
 
 export async function safeDispatchEmail(
   env: Env,

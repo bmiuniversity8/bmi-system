@@ -4,7 +4,7 @@ import type { ExecutionContext } from '@cloudflare/workers-types';
 import { createCoreDb, isNeon, setRequestContext } from '../lib/db';
 import { documents, applications, invoices, users } from '../schema/core';
 import { enrollments, studentHolds } from '../schema/academic';
-import { sendEmail, buildEmailLayout, onboardingStepCompletedEmail, isValidEmail } from '../lib/email';
+import { safeDispatchEmail, buildEmailLayout, onboardingStepCompletedEmail, isValidEmail } from '../lib/email';
 import { eq, and } from 'drizzle-orm';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -176,7 +176,7 @@ export async function handleUploadStudentDocument(request: Request, env: Env, us
 
     if (user && user.email && isValidEmail(user.email)) {
       const runNotify = async () => {
-        await sendEmail(env, {
+        await safeDispatchEmail(env, ctx, {
           to: user.email,
           subject: holdJustCleared
             ? 'BMI University — Document Hold Cleared'
@@ -188,16 +188,13 @@ export async function handleUploadStudentDocument(request: Request, env: Env, us
                 <p style="color: #475569; line-height: 1.6;">
                   We've received your ID document upload (<strong>${safeFileName}</strong>).
                 </p>
-                ${holdJustCleared ? `
-                <div style="background:#f0fdf4;border-left:4px solid #22c55e;padding:16px;margin:20px 0;border-radius:4px;">
-                  <p style="margin:0;color:#15803d;font-weight:bold;">Good news! Your document hold has been cleared.</p>
-                  <p style="margin:8px 0 0;color:#15803d;">You can now proceed with course registration.</p>
-                </div>` : ''}
                 <p style="color: #475569; line-height: 1.6;">
                   Log in to the student portal to continue your onboarding process.
                 </p>
               `),
-        }).catch(e => console.error('[onboarding] ID doc upload email failed:', e));
+          templateName: holdJustCleared ? 'document_hold_cleared' : 'id_document_received',
+          context: { action: holdJustCleared ? 'document_hold_cleared' : 'id_document_received', user_id: userId, doc_type: docType },
+        });
       };
       if (ctx) {
         ctx.waitUntil(runNotify());

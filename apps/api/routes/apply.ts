@@ -1,7 +1,6 @@
 import type { IDatabase } from '@bmi/ports';
 import { ok, error, logAdminAction } from '../lib/types';
 import {
-  sendEmail,
   applicationSubmittedEmail,
   statusUpdateEmail,
   accountSetupPromptEmail,
@@ -290,10 +289,12 @@ async function sendApplicationNotificationsOptimized(
 
   // 1. Applicant confirmation
   try {
-    await sendEmail(env, {
+    await safeDispatchEmail(env, undefined, {
       to: user.email,
       subject: 'BMI University — Application Received',
       html: applicationSubmittedEmail(user.first_name, program, refNumber),
+      templateName: 'application_submitted',
+      context: { action: 'application_submitted', user_id: userId, application_id: appId },
     });
   } catch (e) {
     console.error('[email:apply] Applicant notification failed for', user.email, ':', e);
@@ -302,14 +303,19 @@ async function sendApplicationNotificationsOptimized(
   // 2. Admin notification
   if (env.ADMIN_EMAIL && isValidEmail(env.ADMIN_EMAIL)) {
     try {
-      await sendEmail(env, {
+      const { adminNewApplicationNoticeEmail } = await import('../lib/email');
+      await safeDispatchEmail(env, undefined, {
         to: env.ADMIN_EMAIL,
         subject: `New Application — ${user.first_name} for ${program}`,
-        html: `<p>A new application has been submitted.</p>
-               <p><b>Applicant:</b> ${user.first_name} (${user.email})</p>
-               <p><b>Program:</b> ${program}</p>
-               <p><b>Application Number:</b> ${applicationNumber ?? 'PENDING'}</p>
-               <p><b>Application ID:</b> ${appId}</p>`,
+        html: adminNewApplicationNoticeEmail(
+          user.first_name,
+          user.email,
+          program,
+          appId,
+          'Self-submitted'
+        ),
+        templateName: 'admin_new_application_notice',
+        context: { action: 'admin_new_application', application_id: appId },
       });
     } catch (e) {
       console.error('[email:apply] Admin notification failed:', e);
@@ -775,6 +781,39 @@ export async function handleAdminCreateApplication(
     program,
     degree_level,
   }, request);
+
+  // Notify the applicant about their new application
+  if (env.RESEND_API_KEY && isValidEmail(normalizedEmail)) {
+    await safeDispatchEmail(env, undefined, {
+      to: normalizedEmail,
+      subject: 'BMI University — Application Submitted on Your Behalf',
+      html: applicationSubmittedEmail(
+        String(first_name),
+        String(program),
+        appId
+      ),
+      templateName: 'admin_created_application_applicant',
+      context: { action: 'admin_create_application', application_id: appId, created_by: adminId },
+    });
+  }
+
+  // Notify admin email if configured
+  if (env.ADMIN_EMAIL && isValidEmail(env.ADMIN_EMAIL)) {
+    const { adminNewApplicationNoticeEmail } = await import('../lib/email');
+    await safeDispatchEmail(env, undefined, {
+      to: env.ADMIN_EMAIL,
+      subject: `[Admin] Application Created for ${first_name} ${last_name}`,
+      html: adminNewApplicationNoticeEmail(
+        `${first_name} ${last_name}`,
+        normalizedEmail,
+        String(program),
+        appId,
+        adminId.substring(0, 8) + '...'
+      ),
+      templateName: 'admin_created_application_admin_notice',
+      context: { action: 'admin_create_application_notice', application_id: appId },
+    });
+  }
 
   return ok({ application_id: appId, user_id: userId, status: 'submitted' });
 }

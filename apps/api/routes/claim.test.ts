@@ -18,12 +18,7 @@ vi.mock('../lib/email', () => ({
   accountActivationConfirmationEmail: vi.fn().mockReturnValue('<html></html>'),
   registrationRejectionEmail: vi.fn().mockReturnValue('<html></html>'),
   accountSetupPromptEmail: vi.fn().mockReturnValue('<html></html>'),
-  applicationSubmittedEmail: vi.fn().mockReturnValue('<html></html>'),
-  statusUpdateEmail: vi.fn().mockReturnValue('<html></html>'),
-  invoiceCreatedEmail: vi.fn().mockReturnValue('<html></html>'),
-  lmsEnrollmentEmail: vi.fn().mockReturnValue('<html></html>'),
-  documentReadyEmail: vi.fn().mockReturnValue('<html></html>'),
-  onboardingStepCompletedEmail: vi.fn().mockReturnValue('<html></html>'),
+  accountClaimedWelcomeEmail: vi.fn().mockReturnValue('<html></html>'),
   safeDispatchEmail: vi.fn().mockResolvedValue(undefined),
   isValidEmail: vi.fn().mockReturnValue(true),
   generateTraceId: vi.fn().mockReturnValue('test-trace-id'),
@@ -126,8 +121,8 @@ describe('Claim routes — handleClaimAccount', () => {
     });
     await handleClaimAccount(req, env, mockCtx as any);
 
-    const { sendEmail } = await import('../lib/email');
-    expect(sendEmail).toHaveBeenCalled();
+    const { safeDispatchEmail } = await import('../lib/email');
+    expect(safeDispatchEmail).toHaveBeenCalled();
     expect(mockCtx.waitUntil).toHaveBeenCalled();
   });
 

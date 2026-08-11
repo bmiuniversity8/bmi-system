@@ -5,7 +5,7 @@ import type { IDatabase } from '@bmi/ports';
 
 import type { Env } from './types';
 
-import { sendEmail, buildEmailLayout, invoiceCreatedEmail, lmsEnrollmentEmail, isValidEmail } from './email';
+import { safeDispatchEmail, buildEmailLayout, invoiceCreatedEmail, lmsEnrollmentEmail, studentEmailProvisionedEmail, isValidEmail } from './email';
 
 export type ProvisioningJobType = 'finance' | 'library' | 'lms' | 'portal' | 'email' | 'id_card';
 
@@ -38,22 +38,22 @@ async function deadLetterJob(env: Env, job: ProvisioningJob, lastError: string):
   ).bind(lastError, job.id).run();
 
   if (env.OPS_ALERT_EMAIL && env.RESEND_API_KEY) {
-    await sendEmail(env, {
+    await safeDispatchEmail(env, undefined, {
       to: env.OPS_ALERT_EMAIL,
       subject: `[BMI Portal] Provisioning Dead-Letter: ${job.job_type}`,
-      html: `
-        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
-          <h2 style="color:#dc2626;">⚠ Provisioning Dead-Letter Alert</h2>
-          <p><strong>Job Type:</strong> ${job.job_type}</p>
-          <p><strong>UID:</strong> ${job.uid}</p>
-          <p><strong>Job ID:</strong> ${job.id}</p>
-          <p><strong>Last Error:</strong> ${lastError}</p>
-          <p><strong>Time:</strong> ${new Date().toISOString()}</p>
-          <hr/>
-          <p style="color:#64748b;font-size:13px;">
-            Review and retry at: Admin → Infrastructure → Provisioning
-          </p>
-        </div>`
+      html: buildEmailLayout('Provisioning Dead-Letter Alert', `
+        <h2 style="color:#dc2626;">⚠ Provisioning Dead-Letter Alert</h2>
+        <div style="background:#fef2f2;border-left:4px solid #dc2626;padding:16px;margin:20px 0;border-radius:4px;">
+          <p style="margin:0 0 8px;"><strong>Job Type:</strong> ${job.job_type}</p>
+          <p style="margin:0 0 8px;"><strong>UID:</strong> ${job.uid}</p>
+          <p style="margin:0 0 8px;"><strong>Job ID:</strong> ${job.id}</p>
+          <p style="margin:0 0 8px;"><strong>Last Error:</strong> ${lastError}</p>
+          <p style="margin:0;"><strong>Time:</strong> ${new Date().toISOString()}</p>
+        </div>
+        <p style="color:#64748b;font-size:13px;">Review and retry at: Admin → Infrastructure → Provisioning</p>
+      `),
+      templateName: 'ops_dead_letter_alert',
+      context: { action: 'dead_letter', job_type: job.job_type, uid: job.uid },
     }).catch(() => { });
   }
 }
@@ -85,11 +85,9 @@ async function executeJob(env: Env, job: ProvisioningJob): Promise<void> {
 
       // RC-6: ctx.email may be unimplemented or absent — guard before calling createMailbox
       let mailboxCreated = true;
-      let mailboxNote = '';
       if (!ctx.email || typeof ctx.email.createMailbox !== 'function') {
         console.info('[provisioning:email] No email mailbox provider available — persisting student_email only');
         mailboxCreated = false;
-        mailboxNote = ` (note: mailbox provider not configured; provisioning pending IT setup)`;
       } else {
         try {
           await ctx.email.createMailbox(uid, studentEmail, tempPassword);
@@ -99,7 +97,6 @@ async function executeJob(env: Env, job: ProvisioningJob): Promise<void> {
           if (unsupported) {
             console.info('[provisioning:email] Mailbox provider does not support createMailbox; persisting student_email anyway. Reason:', msg);
             mailboxCreated = false;
-            mailboxNote = ` (note: mailbox creation not supported by provider; provisioning pending IT setup)`;
           } else {
             console.error('[provisioning:email] createMailbox failed:', mbErr);
             throw mbErr;
@@ -120,19 +117,13 @@ async function executeJob(env: Env, job: ProvisioningJob): Promise<void> {
       });
 
       if (env.RESEND_API_KEY && user.email && isValidEmail(user.email)) {
-        await sendEmail(env, {
+        await safeDispatchEmail(env, undefined, {
           to: user.email,
           subject: 'BMI University — Your Student Email Account',
-          html: buildEmailLayout('Student Email Account', `
-            <h2 style="color:#0f172a;">Dear ${user.first_name},</h2>
-            <p style="color:#475569;line-height:1.6;">Your BMI University student email address has been provisioned${mailboxNote}.</p>
-            <div style="background:#f8fafc;border-left:4px solid #d4af37;padding:16px;margin:20px 0;border-radius:4px;">
-              <p><strong>Email:</strong> ${studentEmail}</p>
-              ${mailboxCreated ? `<p><strong>Temporary Password:</strong> ${tempPassword}</p>` : `<p style="color:#92400e;"><em>Your mailbox is being finalized by IT support — you will receive login credentials shortly.</em></p>`}
-            </div>
-            <p style="color:#475569;line-height:1.6;">This email account will be used for all official university communications and services.</p>
-          `),
-        }).catch(e => console.error('[provisioning:email] student-email notification failed:', e));
+          html: studentEmailProvisionedEmail(user.first_name, studentEmail, mailboxCreated, mailboxCreated ? tempPassword : undefined),
+          templateName: 'student_email_provisioned',
+          context: { action: 'student_email_provisioned', uid, student_email: studentEmail },
+        });
       }
       break;
     }
@@ -192,11 +183,13 @@ async function executeJob(env: Env, job: ProvisioningJob): Promise<void> {
           `SELECT u.first_name, u.email FROM users u WHERE u.id = ?`
         ).bind(student.user_id).first<{ first_name: string; email: string }>();
         if (userRec && userRec.email && isValidEmail(userRec.email)) {
-          await sendEmail(env, {
+          await safeDispatchEmail(env, undefined, {
             to: userRec.email,
             subject: 'BMI University — LMS Enrollment Complete',
             html: lmsEnrollmentEmail(userRec.first_name, enrolled.length, student.program),
-          }).catch(e => console.error('[provisioning:lms] LMS notification failed:', e));
+            templateName: 'lms_enrollment_complete',
+            context: { action: 'lms_enrollment', uid, course_count: enrolled.length },
+          });
         }
       }
       break;
@@ -234,7 +227,7 @@ async function executeJob(env: Env, job: ProvisioningJob): Promise<void> {
           `SELECT u.first_name, u.email FROM users u WHERE u.id = ?`
         ).bind(studentRow.user_id).first<{ first_name: string; email: string }>();
         if (userRec && userRec.email && isValidEmail(userRec.email)) {
-          await sendEmail(env, {
+          await safeDispatchEmail(env, undefined, {
             to: userRec.email,
             subject: 'BMI University — Invoice Ready',
             html: invoiceCreatedEmail(userRec.first_name, {
@@ -243,7 +236,9 @@ async function executeJob(env: Env, job: ProvisioningJob): Promise<void> {
               description: invoiceDesc,
               due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
             }),
-          }).catch(e => console.error('[provisioning:finance] Invoice notification failed:', e));
+            templateName: 'invoice_created',
+            context: { action: 'invoice_created', uid, invoice_id: invoiceId },
+          });
         }
       }
       break;

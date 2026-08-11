@@ -27,6 +27,7 @@ vi.mock('../lib/email', () => ({
   lmsEnrollmentEmail: vi.fn().mockReturnValue('<html></html>'),
   documentReadyEmail: vi.fn().mockReturnValue('<html></html>'),
   onboardingStepCompletedEmail: vi.fn().mockReturnValue('<html></html>'),
+  adminNewApplicationNoticeEmail: vi.fn().mockReturnValue('<html></html>'),
   safeDispatchEmail: vi.fn().mockResolvedValue(undefined),
   isValidEmail: vi.fn().mockReturnValue(true),
   generateTraceId: vi.fn().mockReturnValue('test-trace-id'),
