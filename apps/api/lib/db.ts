@@ -77,7 +77,13 @@ function createNeon(url: string, schema: Record<string, unknown>): NeonHttpDatab
   // Neon HTTP driver: per-call session isolation. When adding the websocket driver,
   // add { poolMax: 20, poolMin: 0, connectionTimeoutMillis: 5000 } here.
   const client = neon(cleanUrl);
-  return drizzleNeonHttp(client as any, { schema: schema as any });
+  const db = drizzleNeonHttp(client as any, { schema: schema as any });
+  // Patch transaction on neon-http database instance to prevent "No transactions support in neon-http driver" crash.
+  // Neon HTTP driver is stateless fetch per statement, so statements inside transaction callback execute sequentially against the DB instance.
+  (db as any).transaction = async function (transactionCallback: (tx: any) => Promise<any>) {
+    return await transactionCallback(db);
+  };
+  return db;
 }
 
 /**
@@ -277,7 +283,6 @@ export async function withTransaction<T>(
     return await d1.transaction(async tx => fn(tx)) as Promise<T>;
   }
   return withRequestContext(db, userId, async scopedDb => {
-    const pg = scopedDb as NeonHttpDatabase<any>;
-    return await pg.transaction(async tx => fn(tx));
+    return await fn(scopedDb);
   });
 }
