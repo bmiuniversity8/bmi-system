@@ -371,8 +371,9 @@ export async function verifySession(): Promise<boolean> {
   }
 
   try {
-    // Use a shorter timeout for the initial session check
-    const response = await authFetch(`${API_URL.replace('/v1', '')}/auth/me`, {}, 3000);
+    // Use a forgiving timeout for the initial session check so a cold-
+    // starting worker (first request after deploy) doesn't bounce the user out.
+    const response = await authFetch(`${API_URL.replace('/v1', '')}/auth/me`, {}, 10000);
     const data = await response.json();
 
     if (data.success && data.data) {

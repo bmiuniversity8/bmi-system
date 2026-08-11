@@ -75,6 +75,22 @@ describe('hashPassword / verifyPassword', () => {
   });
 });
 
+describe('pepper fallback agreement (registration ↔ login)', () => {
+  it('hash and verify agree when PASSWORD_PEPPER is unset', async () => {
+    // Registration falls back to DEFAULT_PASSWORD_PEPPER when the env secret is
+    // missing; login must verify against the same default or every login 401s.
+    const hash = await hashPassword('SecurePass1!', '');
+    const valid = await verifyPassword('SecurePass1!', hash, '');
+    expect(valid).toBe(true);
+  });
+
+  it('default pep other than the fallback must not verify a fallback hash', async () => {
+    const hash = await hashPassword('SecurePass1!', '');
+    const valid = await verifyPassword('SecurePass1!', hash, 'different-pepper');
+    expect(valid).toBe(false);
+  });
+});
+
 describe('validatePasswordStrength', () => {
   it('accepts a strong password', () => {
     const result = validatePasswordStrength('StrongP@ss1');

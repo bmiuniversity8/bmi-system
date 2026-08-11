@@ -41,9 +41,11 @@ export const useAuthStore = create<AuthState>((set) => ({
   token: null,
 
   checkSession: async () => {
-    // Guard against the session check taking too long (e.g. server offline)
+    // Guard against the session check taking too long (e.g. server cold start
+    // after a fresh deploy). 12s is generous enough for a worker cold boot
+    // while still returning promptly when the server is truly offline.
     const timeoutPromise = new Promise<boolean>((resolve) =>
-      setTimeout(() => resolve(false), 4000),
+      setTimeout(() => resolve(false), 12000),
     );
 
     try {

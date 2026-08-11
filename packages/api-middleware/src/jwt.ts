@@ -57,6 +57,17 @@ export async function verifyJWT(token: string, secret: string): Promise<Record<s
 
 const DEFAULT_PBKDF2_ITERATIONS = 40000;
 
+/**
+ * Fallback pepper used when PASSWORD_PEPPER is unset, so registration and login
+ * always agree on the pepper. Must match the value previously used in
+ * apps/api/routes/auth.ts so existing accounts keep verifying.
+ */
+export const DEFAULT_PASSWORD_PEPPER = 'bmi-default-pepper-2026';
+
+function resolvePepper(pepper?: string): string {
+  return pepper && pepper.trim() !== '' ? pepper : DEFAULT_PASSWORD_PEPPER;
+}
+
 function resolveIterations(iterations?: number | string): number {
   if (iterations === undefined || iterations === '') return DEFAULT_PBKDF2_ITERATIONS;
   if (typeof iterations === 'string') {
@@ -71,7 +82,7 @@ function resolveIterations(iterations?: number | string): number {
 export async function hashPassword(password: string, pepper: string, iterations?: number | string): Promise<string> {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   
-  const pepperKey = await crypto.subtle.importKey('raw', new TextEncoder().encode(pepper), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const pepperKey = await crypto.subtle.importKey('raw', new TextEncoder().encode(resolvePepper(pepper)), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   const pepperedPassword = await crypto.subtle.sign('HMAC', pepperKey, new TextEncoder().encode(password));
 
   const keyMaterial = await crypto.subtle.importKey(
@@ -111,7 +122,7 @@ export async function verifyPassword(password: string, stored: string, pepper: s
 
     const salt = new Uint8Array(saltHex.match(/.{2}/g)!.map(h => parseInt(h, 16)));
     
-    const pepperKey = await crypto.subtle.importKey('raw', new TextEncoder().encode(pepper), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    const pepperKey = await crypto.subtle.importKey('raw', new TextEncoder().encode(resolvePepper(pepper)), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
     const pepperedPassword = await crypto.subtle.sign('HMAC', pepperKey, new TextEncoder().encode(password));
 
     const keyMaterial = await crypto.subtle.importKey(
