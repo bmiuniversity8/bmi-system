@@ -9,7 +9,7 @@ import {
 
 describe('@bmi/shared — domains', () => {
   it('PORTAL_URL is the expected production URL', () => {
-    expect(PORTAL_URL).toBe('https://portal.bmiuniversities.org');
+    expect(PORTAL_URL).toBe('https://bmi-portal-b0i.pages.dev');
   });
 
   it('MARKETING_URL is the expected production URL', () => {

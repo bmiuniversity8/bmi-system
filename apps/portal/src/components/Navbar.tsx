@@ -25,108 +25,158 @@ export default function Navbar() {
     document.addEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Close mobile menu on route change
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [location.pathname]);
+
   // Hide top Navbar on student workspace pages (they use StudentLayout with StudentSidebar & StudentHeader)
   if (location.pathname.startsWith('/student/')) {
     return null;
   }
 
   return (
-    <nav className="navbar">
-      <Link to="/" className="navbar-brand" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-        <img src="/bmi-logo.png" alt="BMI University Logo" style={{ height: '36px' }} /> 
-        <span style={{ fontSize: '1.1rem', color: 'var(--navy-light)' }}>Student Portal</span>
-      </Link>
-      <div className="navbar-links">
-        {!user ? (
-          <>
-            <Link to="/login" className={`navbar-link${location.pathname === '/login' ? ' active' : ''}`}>Login</Link>
-            <Link to="/claim" className={`navbar-link${location.pathname === '/claim' ? ' active' : ''}`}>Claim Account</Link>
-            <Link to="/register" className="btn btn-gold btn-sm">Apply Now</Link>
-          </>
-        ) : (
-          <>
-            {user.role === 'student' ? (
-              <>
-                <Link to="/student/dashboard" className={`navbar-link${location.pathname === '/student/dashboard' ? ' active' : ''}`}>Dashboard</Link>
-                <Link to="/student/academics" className={`navbar-link${location.pathname === '/student/academics' ? ' active' : ''}`}>Academics</Link>
-                <Link to="/student/finances" className={`navbar-link${location.pathname === '/student/finances' ? ' active' : ''}`}>Finances</Link>
-                <Link to="/registration" className={`navbar-link${location.pathname === '/registration' ? ' active' : ''}`}>Registration</Link>
-                <Link to="/student/documents" className={`navbar-link${location.pathname === '/student/documents' ? ' active' : ''}`}>Documents</Link>
+    <>
+      <nav className="navbar">
+        <Link to="/" className="navbar-brand" style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+          <img src="/bmi-logo.png" alt="BMI University Logo" style={{ height: '34px', width: 'auto' }} /> 
+          <span className="navbar-brand-title" style={{ fontSize: '1.05rem', color: 'var(--navy)', fontWeight: 800 }}>Student Portal</span>
+        </Link>
+
+        {/* Desktop Navigation Links */}
+        <div className="navbar-links desktop-only">
+          {!user ? (
+            <>
+              <Link to="/login" className={`navbar-link${location.pathname === '/login' ? ' active' : ''}`}>Login</Link>
+              <Link to="/claim" className={`navbar-link${location.pathname === '/claim' ? ' active' : ''}`}>Claim Account</Link>
+              <Link to="/register" className="btn btn-gold btn-sm">Apply Now</Link>
+            </>
+          ) : (
+            <>
+              {user.role === 'student' ? (
+                <>
+                  <Link to="/student/dashboard" className={`navbar-link${location.pathname === '/student/dashboard' ? ' active' : ''}`}>Dashboard</Link>
+                  <Link to="/student/academics" className={`navbar-link${location.pathname === '/student/academics' ? ' active' : ''}`}>Academics</Link>
+                  <Link to="/student/finances" className={`navbar-link${location.pathname === '/student/finances' ? ' active' : ''}`}>Finances</Link>
+                  <Link to="/registration" className={`navbar-link${location.pathname === '/registration' ? ' active' : ''}`}>Registration</Link>
+                  <Link to="/student/documents" className={`navbar-link${location.pathname === '/student/documents' ? ' active' : ''}`}>Documents</Link>
+                  <Link to="/status" className={`navbar-link${location.pathname === '/status' ? ' active' : ''}`}>My Application</Link>
+                </>
+              ) : user.role === 'alumni' ? (
+                <>
+                  <Link to="/alumni" className={`navbar-link${location.pathname === '/alumni' ? ' active' : ''}`}>Alumni</Link>
+                  <Link to="/documents" className={`navbar-link${location.pathname === '/documents' ? ' active' : ''}`}>Documents</Link>
+                </>
+              ) : (
                 <Link to="/status" className={`navbar-link${location.pathname === '/status' ? ' active' : ''}`}>My Application</Link>
-              </>
-            ) : user.role === 'alumni' ? (
-              <>
-                <Link to="/alumni" className={`navbar-link${location.pathname === '/alumni' ? ' active' : ''}`}>Alumni</Link>
-                <Link to="/documents" className={`navbar-link${location.pathname === '/documents' ? ' active' : ''}`}>Documents</Link>
-              </>
-            ) : (
-              <Link to="/status" className={`navbar-link${location.pathname === '/status' ? ' active' : ''}`}>My Application</Link>
-            )}
-            
-            <div className="dropdown" ref={dropdownRef} style={{ position: 'relative' }}>
-              <button 
-                className="navbar-link btn" 
-                style={{ 
-                  padding: '0.5rem 1rem', 
-                  background: 'transparent', 
-                  border: 'none', 
-                  cursor: 'pointer', 
-                  color: 'var(--navy-light)', 
-                  fontWeight: 500, 
-                  fontSize: '0.9rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem'
-                }}
-                onClick={() => setDropdownOpen(!dropdownOpen)}
-                aria-haspopup="true"
-                aria-expanded={dropdownOpen}
-              >
-                <div style={{
-                  width: '28px',
-                  height: '28px',
-                  borderRadius: '50%',
-                  background: 'var(--navy)',
-                  color: 'white',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '0.8rem',
-                  fontWeight: 600
-                }}>
-                  {user.first_name?.[0]?.toUpperCase()}
-                </div>
-                <span>{user.first_name}</span>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="6 9 12 15 18 9"></polyline>
-                </svg>
-              </button>
-              {dropdownOpen && (
-                <div 
-                  className="dropdown-menu" 
-                  role="menu"
-                >
-                  <Link 
-                    to="/settings" 
-                    className="dropdown-item" 
-                    onClick={() => setDropdownOpen(false)}
-                    role="menuitem"
-                  >
-                    Settings
-                  </Link>
-                  <button 
-                    onClick={() => { handleLogout(); setDropdownOpen(false); }}
-                    className="dropdown-item" 
-                    role="menuitem"
-                  >
-                    Sign Out
-                  </button>
-                </div>
               )}
-            </div>
-          </>
-        )}
+              
+              <div className="dropdown" ref={dropdownRef} style={{ position: 'relative' }}>
+                <button 
+                  className="navbar-link btn" 
+                  style={{ 
+                    padding: '0.5rem 1rem', 
+                    background: 'transparent', 
+                    border: 'none', 
+                    cursor: 'pointer', 
+                    color: 'var(--navy-light)', 
+                    fontWeight: 500, 
+                    fontSize: '0.9rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem'
+                  }}
+                  onClick={() => setDropdownOpen(!dropdownOpen)}
+                  aria-haspopup="true"
+                  aria-expanded={dropdownOpen}
+                >
+                  <div style={{
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '50%',
+                    background: 'var(--navy)',
+                    color: 'white',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '0.8rem',
+                    fontWeight: 600
+                  }}>
+                    {user.first_name?.[0]?.toUpperCase()}
+                  </div>
+                  <span>{user.first_name}</span>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </button>
+                {dropdownOpen && (
+                  <div className="dropdown-menu" role="menu">
+                    <Link to="/settings" className="dropdown-item" onClick={() => setDropdownOpen(false)}>Settings</Link>
+                    <button onClick={() => { handleLogout(); setDropdownOpen(false); }} className="dropdown-item">Sign Out</button>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Mobile Hamburger Menu Toggle Button */}
+        <button 
+          className="mobile-hamburger-btn"
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          aria-label="Toggle Navigation Menu"
+        >
+          {mobileMenuOpen ? '✕' : '☰'}
+        </button>
+      </nav>
+
+      {/* Mobile Drawer Overlay Backdrop */}
+      {mobileMenuOpen && (
+        <div className="mobile-nav-backdrop" onClick={() => setMobileMenuOpen(false)} />
+      )}
+
+      {/* Mobile Off-Canvas Navigation Drawer */}
+      <div className={`mobile-nav-drawer ${mobileMenuOpen ? 'open' : ''}`}>
+        <div className="mobile-drawer-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <img src="/bmi-logo.png" alt="BMI Logo" style={{ height: 28 }} />
+            <span style={{ fontWeight: 800, color: 'var(--navy)', fontSize: '1rem' }}>BMI Portal</span>
+          </div>
+          <button className="mobile-drawer-close" onClick={() => setMobileMenuOpen(false)}>✕</button>
+        </div>
+
+        <div className="mobile-drawer-links">
+          {!user ? (
+            <>
+              <Link to="/login" className={`mobile-drawer-link${location.pathname === '/login' ? ' active' : ''}`}>🔑 Login</Link>
+              <Link to="/claim" className={`mobile-drawer-link${location.pathname === '/claim' ? ' active' : ''}`}>📋 Claim Account</Link>
+              <Link to="/register" className="btn btn-gold btn-block" style={{ marginTop: '1rem', justifyContent: 'center' }}>🎓 Apply Now</Link>
+            </>
+          ) : (
+            <>
+              <div style={{ padding: '0.75rem 1rem', background: 'var(--bg)', borderRadius: '8px', marginBottom: '0.75rem' }}>
+                <div style={{ fontWeight: 700, color: 'var(--navy)', fontSize: '0.95rem' }}>{user.first_name} {user.last_name}</div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--slate)' }}>{user.email}</div>
+              </div>
+              {user.role === 'student' && (
+                <>
+                  <Link to="/student/dashboard" className="mobile-drawer-link">🏠 Student Dashboard</Link>
+                  <Link to="/student/academics" className="mobile-drawer-link">📚 Academics & Grades</Link>
+                  <Link to="/student/finances" className="mobile-drawer-link">💳 Finances & Tuition</Link>
+                  <Link to="/registration" className="mobile-drawer-link">📝 Class Registration</Link>
+                  <Link to="/student/documents" className="mobile-drawer-link">📁 Documents & ID</Link>
+                </>
+              )}
+              <Link to="/status" className="mobile-drawer-link">📄 Application Status</Link>
+              <button onClick={handleLogout} className="mobile-drawer-link" style={{ color: 'var(--danger)', width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer' }}>
+                🚪 Sign Out
+              </button>
+            </>
+          )}
+        </div>
       </div>
-    </nav>
+    </>
   );
 }

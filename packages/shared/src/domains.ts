@@ -6,10 +6,10 @@
  */
 
 /** The public URL of the admissions / student portal. */
-export const PORTAL_URL = 'https://portal.bmiuniversities.org' as const;
+export const PORTAL_URL = 'https://bmi-portal-b0i.pages.dev' as const;
 
 /** The public URL of the University Management System (internal staff & students). */
-export const UMS_URL = 'https://ums.bmiuniversities.org' as const;
+export const UMS_URL = 'https://bmi-ums-88m.pages.dev' as const;
 
 /** The public URL of the marketing / university website. */
 export const MARKETING_URL = 'https://bmiuniversities.org' as const;

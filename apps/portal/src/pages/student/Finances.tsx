@@ -35,14 +35,11 @@ export default function Finances() {
     }
   };
 
-  const mockInvoices = data?.invoices?.length > 0 ? data.invoices : [
-    { id: 'inv-001', created_at: '2026-08-01', due_date: '2026-09-01', status: 'unpaid', amount: 1250 },
-    { id: 'inv-000', created_at: '2026-01-15', due_date: '2026-02-15', status: 'paid', amount: 1250 },
-  ];
+  const invoices = data?.invoices || [];
 
-  const totalOutstanding = mockInvoices
-    .filter((inv: any) => inv.status === 'unpaid')
-    .reduce((acc: number, curr: any) => acc + (curr.amount || 0), 0);
+  const totalOutstanding = invoices
+    .filter((inv: any) => inv.status === 'unpaid' || inv.status === 'pending')
+    .reduce((acc: number, curr: any) => acc + (Number(curr.amount) || 0), 0);
 
   return (
     <div style={{ maxWidth: 1140, margin: '0 auto' }}>
@@ -54,10 +51,10 @@ export default function Finances() {
             <h1 style={{ fontSize: '2rem', color: 'var(--navy)', margin: 0, fontWeight: 900 }}>
               💳 Tuition & Student Financial Services
             </h1>
-            <span className="badge badge-accepted" style={{ fontSize: '0.75rem' }}>Secure Sandbox</span>
+            <span className="badge badge-accepted" style={{ fontSize: '0.75rem' }}>Official Student Ledger</span>
           </div>
           <p style={{ color: 'var(--slate)', fontSize: '0.95rem', marginTop: '0.25rem' }}>
-            Manage invoices, tuition payments, financial aid statements, and payment receipts.
+            Manage invoices, tuition payments, financial statements, and payment receipts.
           </p>
         </div>
       </div>
@@ -82,6 +79,11 @@ export default function Finances() {
             <div style={{ textAlign: 'center', padding: '3rem' }}>
               <div className="spinner" style={{ width: 40, height: 40 }}></div>
             </div>
+          ) : invoices.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--slate)' }}>
+              <p style={{ fontSize: '1rem', fontWeight: 600, margin: 0 }}>No active invoices or tuition statements found.</p>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Your student account is currently in good standing.</p>
+            </div>
           ) : (
             <div className="table-wrap">
               <table className="data-table">
@@ -95,18 +97,18 @@ export default function Finances() {
                   </tr>
                 </thead>
                 <tbody>
-                  {mockInvoices.map((inv: any) => (
+                  {invoices.map((inv: any) => (
                     <tr key={inv.id}>
-                      <td>{new Date(inv.created_at).toLocaleDateString()}</td>
-                      <td>{new Date(inv.due_date).toLocaleDateString()}</td>
+                      <td>{inv.created_at ? new Date(inv.created_at).toLocaleDateString() : 'N/A'}</td>
+                      <td>{inv.due_date ? new Date(inv.due_date).toLocaleDateString() : 'Immediate'}</td>
                       <td>
                         <span className={`badge badge-${inv.status === 'paid' ? 'accepted' : 'rejected'}`}>
                           {inv.status === 'paid' ? 'Paid In Full' : 'Unpaid'}
                         </span>
                       </td>
-                      <td><strong>${inv.amount.toLocaleString()}</strong></td>
+                      <td><strong>${Number(inv.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong></td>
                       <td>
-                        {inv.status === 'unpaid' ? (
+                        {inv.status === 'unpaid' || inv.status === 'pending' ? (
                           <button
                             className="btn btn-gold btn-sm"
                             onClick={() => handlePay(inv.id)}
@@ -136,7 +138,7 @@ export default function Finances() {
             <div style={{ marginBottom: '1rem' }}>
               <div style={{ fontSize: '0.8rem', color: 'var(--slate)', fontWeight: 600 }}>TOTAL AMOUNT DUE</div>
               <div style={{ fontSize: '2.25rem', fontWeight: 900, color: totalOutstanding > 0 ? 'var(--danger)' : 'var(--navy)' }}>
-                ${totalOutstanding.toLocaleString()}
+                ${totalOutstanding.toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </div>
             </div>
             <div style={{ padding: '0.85rem', background: 'var(--bg)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', fontSize: '0.85rem', color: 'var(--text-muted)' }}>

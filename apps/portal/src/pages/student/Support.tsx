@@ -151,21 +151,21 @@ export default function Support() {
           
           <div className="card" style={{ borderTop: '4px solid var(--navy)' }}>
             <h2 style={{ fontSize: '1.15rem', color: 'var(--navy)', marginBottom: '1rem', paddingBottom: '0.5rem', borderBottom: '1px solid var(--border)' }}>
-              Assigned Academic Advisor
+              Academic Advisory & Registrar
             </h2>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', marginBottom: '1rem' }}>
               <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--gold)', color: 'var(--navy)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '1.1rem' }}>
-                SV
+                BMI
               </div>
               <div>
-                <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--navy)' }}>Dr. Samuel Vance, Ph.D.</div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--slate)' }}>Department Chair • Theology</div>
+                <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--navy)' }}>Office of the Registrar</div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--slate)' }}>Department of Academic Affairs</div>
               </div>
             </div>
             <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-              📧 svance@bmiuniversities.org<br />
-              📞 (704) 607-5540 Ext. 104<br />
-              🏢 Academic Building, Room 204
+              📧 registrar@bmiuniversities.org<br />
+              📞 704-607-5540<br />
+              🏢 Academic Administration Office
             </div>
           </div>
 

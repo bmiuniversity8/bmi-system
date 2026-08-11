@@ -85,7 +85,7 @@ export default function Academics() {
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: '0.75rem', color: 'var(--slate)', fontWeight: 600 }}>CUMULATIVE GPA</div>
             <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--navy)' }}>
-              {transcriptData?.gpa || '3.85'} / 4.00
+              {transcriptData?.gpa !== undefined && transcriptData?.gpa !== null ? `${Number(transcriptData.gpa).toFixed(2)} / 4.00` : 'N/A'}
             </div>
           </div>
         </div>
@@ -262,7 +262,7 @@ export default function Academics() {
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ fontSize: '0.75rem', color: 'var(--slate)', fontWeight: 600 }}>CUMULATIVE GPA</div>
                   <div style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--gold-dark)' }}>
-                    {transcriptData?.gpa || '3.85'}
+                    {transcriptData?.gpa !== undefined && transcriptData?.gpa !== null ? Number(transcriptData.gpa).toFixed(2) : 'N/A'}
                   </div>
                 </div>
               </div>
@@ -279,20 +279,23 @@ export default function Academics() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(transcriptData?.classes || [
-                      { term: 'Spring 2026', code: 'BIB-101', title: 'Old Testament Survey', credits: 3, grade: 'A' },
-                      { term: 'Spring 2026', code: 'THE-201', title: 'Systematic Theology I', credits: 3, grade: 'A-' },
-                      { term: 'Fall 2025', code: 'HIS-101', title: 'Early Church History', credits: 3, grade: 'A' },
-                      { term: 'Fall 2025', code: 'ENG-101', title: 'Academic Writing & Research', credits: 3, grade: 'B+' },
-                    ]).map((row: any, i: number) => (
-                      <tr key={i}>
-                        <td><span className="badge badge-submitted">{row.term || 'Fall 2026'}</span></td>
-                        <td><strong>{row.code}</strong></td>
-                        <td>{row.title || row.name}</td>
-                        <td>{row.credits}</td>
-                        <td><strong style={{ color: 'var(--navy)' }}>{row.grade || 'A'}</strong></td>
+                    {(!transcriptData?.classes || transcriptData.classes.length === 0) ? (
+                      <tr>
+                        <td colSpan={5} style={{ textAlign: 'center', color: 'var(--slate)', padding: '2rem' }}>
+                          No official transcript records found. Complete active courses to record grades.
+                        </td>
                       </tr>
-                    ))}
+                    ) : (
+                      transcriptData.classes.map((row: any, i: number) => (
+                        <tr key={i}>
+                          <td><span className="badge badge-submitted">{row.term || 'Active Term'}</span></td>
+                          <td><strong>{row.code || row.course_code}</strong></td>
+                          <td>{row.title || row.name || row.course_name}</td>
+                          <td>{row.credits || 3}</td>
+                          <td><strong style={{ color: 'var(--navy)' }}>{row.grade || 'Enrolled'}</strong></td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>

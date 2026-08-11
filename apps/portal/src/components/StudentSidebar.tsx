@@ -19,15 +19,12 @@ export function StudentSidebar({ user }: StudentSidebarProps) {
 
   return (
     <aside className="student-sidebar">
-      <div className="student-sidebar-brand">
-        <div style={{ width: 36, height: 36, borderRadius: '8px', background: 'var(--gold)', color: 'var(--navy)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: '1.1rem' }}>
-          BMI
+      <div className="student-sidebar-brand" style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', padding: '1.25rem 1.5rem', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
+        <div style={{ background: 'white', padding: '5px 10px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <img src="/bmi-logo.png" alt="BMI University Logo" style={{ height: 32, width: 'auto', objectFit: 'contain' }} />
         </div>
         <div>
-          <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: '1rem', color: 'white', lineHeight: 1.1 }}>
-            BMI UNIVERSITY
-          </div>
-          <div style={{ fontSize: '0.72rem', color: 'var(--gold)', fontWeight: 600, letterSpacing: '0.05em' }}>
+          <div style={{ fontSize: '0.78rem', color: 'var(--gold)', fontWeight: 800, letterSpacing: '0.12em' }}>
             STUDENT PORTAL
           </div>
         </div>

@@ -4,41 +4,18 @@ const FROM_ADDRESS = 'BMI University <admissions@hkmministries.org>';
 
 import type { Env } from './types';
 
+// ─── Public Types ────────────────────────────────────────────────────────────
+
 export interface EmailPayload {
   to: string;
   subject: string;
   html: string;
-  logId?: string;
   traceId?: string;
   templateName?: string;
   context?: Record<string, unknown>;
 }
 
-export interface EmailAttemptLog {
-  attempt: number;
-  timestamp: string;
-  sender: string;
-  success: boolean;
-  statusCode?: number;
-  errorMessage?: string;
-  durationMs: number;
-}
-
-export interface PersistentEmailLog {
-  id: string;
-  traceId: string;
-  toAddress: string;
-  subject: string;
-  templateName?: string;
-  status: 'queued' | 'sending' | 'sent' | 'failed' | 'dead';
-  attempts: number;
-  maxAttempts: number;
-  lastError?: string;
-  startedAt: string;
-  finishedAt?: string;
-  attemptHistory: EmailAttemptLog[];
-  context?: string;
-}
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
@@ -53,307 +30,125 @@ export function generateTraceId(): string {
   return `trace_${crypto.randomUUID().replace(/-/g, '')}_${Date.now().toString(36)}`;
 }
 
-async function sleep(ms: number): Promise<void> {
-  await new Promise(resolve => setTimeout(resolve, ms));
+// ─── Core Email Delivery ─────────────────────────────────────────────────────
+//
+// Design principles (2026 best practices):
+//   1. Direct Resend REST API — no intermediary queues for transactional mail.
+//   2. Synchronous await — caller gets confirmation before proceeding.
+//   3. Exponential backoff retry with jitter (max 3 attempts).
+//   4. Console-based observability — structured logs, no D1 dependency.
+//   5. Fail-safe — errors are caught and logged, never crash the caller.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const MAX_ATTEMPTS = 3;
+
+function backoffMs(attempt: number): number {
+  return Math.min(1000 * Math.pow(2, attempt) + Math.random() * 500, 15000);
 }
 
-function getExponentialBackoffDelay(attempt: number): number {
-  const baseDelay = 1000;
-  const multiplier = Math.pow(2, attempt);
-  const jitter = Math.random() * 500;
-  return Math.min(baseDelay * multiplier + jitter, 30000);
-}
-
-async function sendResendWithRetry(
-  env: Env,
-  payload: EmailPayload,
-  traceId: string,
-  maxAttempts: number = 3
-): Promise<{ ok: boolean; status: number; error?: string; attempts: EmailAttemptLog[] }> {
-  const senders = [
-    env.RESEND_FROM_EMAIL || FROM_ADDRESS,
-    ...(env.RESEND_FROM_EMAIL && env.RESEND_FROM_EMAIL !== 'onboarding@resend.dev' ? ['onboarding@resend.dev'] : [])
-  ];
-
-  const attemptHistory: EmailAttemptLog[] = [];
-
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    if (attempt > 0) {
-      const delay = getExponentialBackoffDelay(attempt - 1);
-      console.info(`[email:${traceId}] Retry attempt ${attempt + 1}/${maxAttempts} after ${delay}ms backoff`);
-      await sleep(delay);
-    }
-
-    for (const fromAddr of senders) {
-      const attemptStart = performance.now();
-      const attemptTimestamp = new Date().toISOString();
-
-      try {
-        const res = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${env.RESEND_API_KEY}`,
-            'Content-Type': 'application/json',
-            'X-Trace-Id': traceId,
-          },
-          body: JSON.stringify({
-            from: fromAddr,
-            to: payload.to.trim(),
-            subject: payload.subject,
-            html: payload.html,
-            headers: {
-              'X-Email-Trace-Id': traceId,
-              'X-Email-Template': payload.templateName || 'unknown',
-            },
-          }),
-        });
-
-        const duration = performance.now() - attemptStart;
-
-        if (res.ok) {
-          attemptHistory.push({
-            attempt: attempt + 1,
-            timestamp: attemptTimestamp,
-            sender: fromAddr,
-            success: true,
-            statusCode: res.status,
-            durationMs: Math.round(duration),
-          });
-          console.info(`[email:${traceId}] Delivered via ${fromAddr} (attempt ${attempt + 1}/${maxAttempts}) in ${Math.round(duration)}ms`);
-          return { ok: true, status: res.status, attempts: attemptHistory };
-        }
-
-        const errText = await res.text().catch(() => 'no error body');
-        attemptHistory.push({
-          attempt: attempt + 1,
-          timestamp: attemptTimestamp,
-          sender: fromAddr,
-          success: false,
-          statusCode: res.status,
-          errorMessage: errText.substring(0, 500),
-          durationMs: Math.round(duration),
-        });
-        console.warn(`[email:${traceId}] Sender ${fromAddr} rejected (${res.status}, attempt ${attempt + 1}/${maxAttempts}): ${errText.substring(0, 200)}`);
-
-        if (res.status === 429) {
-          console.warn(`[email:${traceId}] Rate limited (429) — will retry with extended backoff`);
-          continue;
-        }
-        if (res.status >= 500) {
-          console.warn(`[email:${traceId}] Server error (${res.status}) — will retry`);
-          continue;
-        }
-        if (res.status === 403 || res.status === 422) {
-          console.warn(`[email:${traceId}] Client error (${res.status}) — trying alternate sender`);
-          continue;
-        }
-        if (res.status === 401) {
-          console.error(`[email:${traceId}] Authentication failed (401) — RESEND_API_KEY may be invalid`);
-          break;
-        }
-        break;
-      } catch (err) {
-        const duration = performance.now() - attemptStart;
-        const errorMsg = err instanceof Error ? err.message : String(err);
-        attemptHistory.push({
-          attempt: attempt + 1,
-          timestamp: attemptTimestamp,
-          sender: fromAddr,
-          success: false,
-          errorMessage: errorMsg.substring(0, 500),
-          durationMs: Math.round(duration),
-        });
-        console.error(`[email:${traceId}] Network error (attempt ${attempt + 1}/${maxAttempts}): ${errorMsg.substring(0, 200)}`);
-        continue;
-      }
-    }
-  }
-
-  const finalError = attemptHistory.length > 0
-    ? `Final error: ${attemptHistory[attemptHistory.length - 1].errorMessage || 'unknown'}`
-    : 'All attempts exhausted - no attempts made';
-
-  console.error(`[email:${traceId}] All ${maxAttempts} attempts exhausted after ${attemptHistory.length} sender attempts`);
-  return { ok: false, status: 0, error: finalError, attempts: attemptHistory };
-}
-
-async function writePersistentEmailLog(
-  env: Env,
-  log: PersistentEmailLog
-): Promise<void> {
-  try {
-    if (!env.PLATFORM_CONTEXT?.db) {
-      console.debug(`[email:${log.traceId}] No DB available for persistent log, using in-memory only`);
-      return;
-    }
-
-    const existing = await env.PLATFORM_CONTEXT.db.prepare(
-      `SELECT id FROM email_logs WHERE id = ?`
-    ).bind(log.id).first<{ id: string }>();
-
-    if (existing) {
-      await env.PLATFORM_CONTEXT.db.prepare(
-        `UPDATE email_logs SET
-           trace_id = ?,
-           to_address = ?,
-           subject = ?,
-           template_name = ?,
-           status = ?,
-           attempts = ?,
-           max_attempts = ?,
-           last_error = ?,
-           started_at = ?,
-           finished_at = ?,
-           attempt_history = ?,
-           context = ?
-         WHERE id = ?`
-      ).bind(
-        log.traceId,
-        log.toAddress,
-        log.subject,
-        log.templateName || null,
-        log.status,
-        log.attempts,
-        log.maxAttempts,
-        log.lastError || null,
-        log.startedAt,
-        log.finishedAt || null,
-        JSON.stringify(log.attemptHistory),
-        log.context || null,
-        log.id
-      ).run();
-    } else {
-      await env.PLATFORM_CONTEXT.db.prepare(
-        `INSERT INTO email_logs
-           (id, trace_id, to_address, subject, template_name, status, attempts, max_attempts,
-            last_error, started_at, finished_at, attempt_history, context)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).bind(
-        log.id,
-        log.traceId,
-        log.toAddress,
-        log.subject,
-        log.templateName || null,
-        log.status,
-        log.attempts,
-        log.maxAttempts,
-        log.lastError || null,
-        log.startedAt,
-        log.finishedAt || null,
-        JSON.stringify(log.attemptHistory),
-        log.context || null
-      ).run();
-    }
-
-    console.debug(`[email:${log.traceId}] Persistent log ${log.status} (id=${log.id.substring(0, 8)}...)`);
-  } catch (dbErr) {
-    console.error(`[email:${log.traceId}] Failed to write persistent email log:`, dbErr);
-  }
-}
-
+/**
+ * Send a single email via the Resend REST API with retry.
+ * Returns `true` when Resend accepts the message (HTTP 2xx).
+ */
 export async function sendEmail(env: Env, payload: EmailPayload): Promise<boolean> {
-  const logId = crypto.randomUUID();
   const traceId = payload.traceId || generateTraceId();
-  let sent = false;
-  let errorDetail: string | null = null;
-  const startedAt = new Date().toISOString();
-  let attemptHistory: EmailAttemptLog[] = [];
+  const tag = `[email:${traceId}]`;
 
-  const persistentLog: PersistentEmailLog = {
-    id: logId,
-    traceId,
-    toAddress: payload.to,
-    subject: payload.subject,
-    templateName: payload.templateName,
-    status: 'sending',
-    attempts: 0,
-    maxAttempts: 3,
-    startedAt,
-    attemptHistory: [],
-    context: payload.context ? JSON.stringify(payload.context) : undefined,
-  };
-
-  console.info(`[email:${traceId}] Starting email delivery [logId=${logId.substring(0, 8)}] to=${payload.to} subject="${payload.subject.substring(0, 60)}"`);
-
+  // ── Pre-flight checks ──────────────────────────────────────────────────
   if (!isValidEmail(payload.to)) {
-    errorDetail = 'invalid_recipient';
-    console.error(`[email:${traceId}] Invalid recipient address, skipping: ${payload.to}`);
-    persistentLog.status = 'failed';
-    persistentLog.lastError = errorDetail;
-    persistentLog.finishedAt = new Date().toISOString();
-    await writePersistentEmailLog(env, persistentLog);
+    console.error(`${tag} REJECTED — invalid recipient: ${payload.to}`);
     return false;
   }
-
   if (!payload.subject || !payload.html) {
-    errorDetail = 'missing_payload_fields';
-    console.error(`[email:${traceId}] Missing subject or html body, skipping to: ${payload.to}`);
-    persistentLog.status = 'failed';
-    persistentLog.lastError = errorDetail;
-    persistentLog.finishedAt = new Date().toISOString();
-    await writePersistentEmailLog(env, persistentLog);
+    console.error(`${tag} REJECTED — missing subject or html body for: ${payload.to}`);
     return false;
   }
-
   if (!env.RESEND_API_KEY) {
-    errorDetail = 'missing_api_key';
-    console.warn(`[email:${traceId}] RESEND_API_KEY is not configured. Email logged but skipped:`, payload.subject);
-    persistentLog.status = 'failed';
-    persistentLog.lastError = errorDetail;
-    persistentLog.finishedAt = new Date().toISOString();
-    await writePersistentEmailLog(env, persistentLog);
+    console.warn(`${tag} SKIPPED — RESEND_API_KEY not configured. Subject: "${payload.subject.substring(0, 60)}"`);
     return false;
   }
 
-  const queuedPayload: EmailPayload = { ...payload, logId, traceId };
+  const fromAddr = FROM_ADDRESS;
 
-  if (env.PLATFORM_CONTEXT?.queue) {
+  console.info(`${tag} SENDING to=${payload.to} subject="${payload.subject.substring(0, 60)}" template=${payload.templateName || 'unknown'}`);
+
+  // ── Retry loop ─────────────────────────────────────────────────────────
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    if (attempt > 1) {
+      const delay = backoffMs(attempt - 1);
+      console.info(`${tag} Retry ${attempt}/${MAX_ATTEMPTS} after ${Math.round(delay)}ms`);
+      await new Promise(r => setTimeout(r, delay));
+    }
+
+    const start = performance.now();
     try {
-      persistentLog.status = 'queued';
-      await writePersistentEmailLog(env, persistentLog);
-      await env.PLATFORM_CONTEXT.queue.send(queuedPayload);
-      sent = true;
-      console.info(`[email:${traceId}] Queued for delivery via Cloudflare Queue`);
-      persistentLog.status = 'sent';
-      persistentLog.attempts = 1;
-      persistentLog.finishedAt = new Date().toISOString();
-      persistentLog.attemptHistory = [{
-        attempt: 1,
-        timestamp: new Date().toISOString(),
-        sender: 'cloudflare-queue',
-        success: true,
-        durationMs: 0,
-      }];
-      await writePersistentEmailLog(env, persistentLog);
-      return true;
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: fromAddr,
+          to: payload.to.trim(),
+          subject: payload.subject,
+          html: payload.html,
+        }),
+      });
+
+      const ms = Math.round(performance.now() - start);
+
+      if (res.ok) {
+        let resendId = '';
+        try { const j = await res.json() as { id?: string }; resendId = j.id || ''; } catch { /* ok */ }
+        console.info(`${tag} DELIVERED (${res.status}) in ${ms}ms — Resend ID: ${resendId}`);
+        return true;
+      }
+
+      // Non-2xx response
+      const errBody = await res.text().catch(() => '(no body)');
+      console.warn(`${tag} FAILED attempt ${attempt}/${MAX_ATTEMPTS} (${res.status}) in ${ms}ms: ${errBody.substring(0, 300)}`);
+
+      // 401 = bad API key, don't retry
+      if (res.status === 401) {
+        console.error(`${tag} FATAL — RESEND_API_KEY is invalid (401). Aborting all retries.`);
+        return false;
+      }
+      // 422 = validation error (bad from address, etc.), don't retry
+      if (res.status === 422) {
+        console.error(`${tag} FATAL — Resend validation error (422). Check from address and payload. Aborting.`);
+        return false;
+      }
+      // 429 / 5xx = transient, retry
+      continue;
+
     } catch (err) {
-      const queueError = err instanceof Error ? err.message : String(err);
-      console.warn(`[email:${traceId}] Queue.send failed (${queueError.substring(0, 100)}), falling back to direct Resend API fetch`);
-      persistentLog.status = 'sending';
-      persistentLog.lastError = `queue_failed: ${queueError.substring(0, 200)}`;
+      const ms = Math.round(performance.now() - start);
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`${tag} NETWORK ERROR attempt ${attempt}/${MAX_ATTEMPTS} in ${ms}ms: ${msg.substring(0, 200)}`);
+      continue;
     }
   }
 
-  const result = await sendResendWithRetry(env, payload, traceId, 3);
-  attemptHistory = result.attempts;
-  sent = result.ok;
-  if (!sent) errorDetail = result.error || `status_${result.status}`;
+  console.error(`${tag} EXHAUSTED — all ${MAX_ATTEMPTS} attempts failed for ${payload.to}`);
+  return false;
+}
 
-  persistentLog.status = sent ? 'sent' : (persistentLog.attempts >= persistentLog.maxAttempts ? 'dead' : 'failed');
-  persistentLog.attempts = attemptHistory.length;
-  persistentLog.lastError = errorDetail || undefined;
-  persistentLog.finishedAt = new Date().toISOString();
-  persistentLog.attemptHistory = attemptHistory;
-
-  await writePersistentEmailLog(env, persistentLog);
-
-  if (sent) {
-    console.info(`[email:${traceId}] Email successfully delivered in ${attemptHistory.length} attempt(s)`);
-  } else {
-    console.error(`[email:${traceId}] Email delivery FAILED after ${attemptHistory.length} attempt(s): ${errorDetail}`);
+/**
+ * Safe, non-throwing email dispatch. Always awaits delivery confirmation.
+ * Use this from route handlers — it will never throw or crash the request.
+ */
+export async function safeDispatchEmail(
+  env: Env,
+  _ctx: ExecutionContext | undefined,
+  payload: EmailPayload
+): Promise<void> {
+  const traceId = payload.traceId || generateTraceId();
+  try {
+    await sendEmail(env, { ...payload, traceId });
+  } catch (e: any) {
+    console.error(`[email:dispatch:${traceId}] Unexpected error (swallowed): ${e?.message || String(e)}`);
   }
-
-  return sent;
 }
 
 import type { PlatformContext } from '@bmi/bootstrap';
@@ -1067,31 +862,4 @@ export function adminNewApplicationNoticeEmail(
 }
 
 
-export async function safeDispatchEmail(
-  env: Env,
-  ctx: ExecutionContext | undefined,
-  payload: EmailPayload
-): Promise<void> {
-  const traceId = payload.traceId || generateTraceId();
-  const tracedPayload = { ...payload, traceId };
 
-  console.info(`[email:dispatch:${traceId}] Safe dispatch initiated: ${tracedPayload.subject.substring(0, 50)} → ${tracedPayload.to}`);
-
-  const emailPromise = sendEmail(env, tracedPayload).then(success => {
-    if (success) {
-      console.info(`[email:dispatch:${traceId}] Safe dispatch completed successfully`);
-    } else {
-      console.warn(`[email:dispatch:${traceId}] Safe dispatch completed with failure (non-blocking)`);
-    }
-    return success;
-  }).catch(e => {
-    console.error(`[email:dispatch:${traceId}] Safe dispatch caught error (non-blocking):`, e?.message || String(e));
-    return false;
-  });
-
-  if (ctx) {
-    ctx.waitUntil(emailPromise);
-  } else {
-    await emailPromise;
-  }
-}
