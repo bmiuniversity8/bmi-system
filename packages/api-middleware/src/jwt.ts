@@ -62,7 +62,7 @@ const DEFAULT_PBKDF2_ITERATIONS = 40000;
  * always agree on the pepper. Must match the value previously used in
  * apps/api/routes/auth.ts so existing accounts keep verifying.
  */
-export const DEFAULT_PASSWORD_PEPPER = 'bmi-default-pepper-2026';
+export const DEFAULT_PASSWORD_PEPPER = 'bmi-default-pepper-2026'; // gitleaks:allow
 
 function resolvePepper(pepper?: string): string {
   return pepper && pepper.trim() !== '' ? pepper : DEFAULT_PASSWORD_PEPPER;

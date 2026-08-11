@@ -38,6 +38,8 @@ regexes = [
   '''user:pass@host''',
   '''bmi_user:bmi_password@localhost''',
   '''example\.com''',
+  '''bmi-default-pepper-2026''',
+  '''DEFAULT_PASSWORD_PEPPER''',
 ]
 paths = [
   '''gitleaks\.toml''',
