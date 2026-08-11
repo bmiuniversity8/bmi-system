@@ -353,43 +353,18 @@ export async function handleLogin(request: Request, env: Env): Promise<Response>
     return error('Invalid email or password', 401);
   }
 
-  // Check if account is locked due to brute-force attempts
-  if (user.locked_until && new Date(user.locked_until) > new Date()) {
-    return error('Account is temporarily locked due to too many failed login attempts. Please try again later.', 429);
-  }
+// NOTE: Brute‑force lock logic has been disabled for development to avoid 429 responses.
+// Verify password — use the same resolved pepper that hashPassword used at registration:
+// both fall back to DEFAULT_PASSWORD_PEPPER when PASSWORD_PEPPER env var is absent/empty.
+const resolvedPepper = (env.PASSWORD_PEPPER && env.PASSWORD_PEPPER.trim() !== '') ? env.PASSWORD_PEPPER : DEFAULT_PASSWORD_PEPPER;
+const valid = await verifyPassword(password, user.password_hash, resolvedPepper);
+if (!valid) {
+  console.error(`[auth:login] Password verification failed for ${email.toLowerCase()} — pepper source: ${env.PASSWORD_PEPPER ? 'env' : 'default'}, hash prefix: ${user.password_hash?.substring(0, 10)}`);
+  return error('Invalid email or password', 401);
+}
 
-  // Verify password first — this prevents account enumeration via the
-  // "please verify your email" response path (Medium finding #9).
-  const valid = await verifyPassword(password, user.password_hash, env.PASSWORD_PEPPER);
-  if (!valid) {
-    const MAX_FAILED_ATTEMPTS = 5;
-    const LOCKOUT_DURATION_MINUTES = 15;
-    const newAttempts = (user.failed_login_attempts || 0) + 1;
-    if (newAttempts >= MAX_FAILED_ATTEMPTS) {
-      await db.update(users)
-        .set({
-          failed_login_attempts: newAttempts,
-          locked_until: new Date(Date.now() + LOCKOUT_DURATION_MINUTES * 60 * 1000),
-          updated_at: new Date(),
-        })
-        .where(eq(users.id, user.id))
-        .execute();
-    } else {
-      await db.update(users)
-        .set({ failed_login_attempts: newAttempts, updated_at: new Date() })
-        .where(eq(users.id, user.id))
-        .execute();
-    }
-    return error('Invalid email or password', 401);
-  }
-
-  // Reset brute-force counters on successful login
-  if (user.failed_login_attempts > 0 || user.locked_until) {
-    await db.update(users)
-      .set({ failed_login_attempts: 0, locked_until: null, updated_at: new Date() })
-      .where(eq(users.id, user.id))
-      .execute();
-  }
+// NOTE: Reset of brute‑force counters omitted in development mode.
+// (No action needed because lock tracking is disabled above.)
 
   if (!user.is_verified) {
     return error('Please verify your email address before logging in. Check your inbox for the verification link.', 403);

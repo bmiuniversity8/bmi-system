@@ -124,7 +124,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const navGroups: NavGroup[] = [
     {
       id: "quick_access",
-      label: "Quick Access",
+      label: "Dashboard",
       icon: LayoutDashboard,
       items: [{ id: "dashboard", label: "Dashboard", icon: LayoutDashboard }],
     },
@@ -407,16 +407,31 @@ const Sidebar: React.FC<SidebarProps> = ({
           {filteredGroups.map((group) => {
             const GroupIcon = group.icon as React.ElementType;
             const isExpanded = expandedGroups.includes(group.id);
+            const hasActiveChild = group.items.some((item) => getActiveView(item.id));
+
+            const handleGroupClick = () => {
+              if (isCollapsed) {
+                if (group.items.length === 1) {
+                  handleNavigate(group.items[0].id);
+                } else {
+                  onToggleCollapse();
+                  useUIStore.getState().expandGroup(group.id);
+                }
+              } else {
+                toggleGroup(group.id);
+              }
+            };
+
             return (
-              <div key={group.id} className="space-y-1">
+              <div key={group.id} className="relative group/navgroup space-y-1">
                 {/* Group header */}
                 <button
                   ref={activeGroupRef}
-                  onClick={() => toggleGroup(group.id)}
+                  onClick={handleGroupClick}
                   onKeyDown={(e) =>
                     handleGroupKeyDown(
                       e,
-                      () => toggleGroup(group.id),
+                      handleGroupClick,
                       () => {
                         if (isExpanded) toggleGroup(group.id);
                       },
@@ -424,7 +439,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                   }
                   className={`w-full flex items-center gap-3 px-3 py-1.5 rounded-xl transition-all duration-200 text-left ${
                     isCollapsed
-                      ? "justify-center text-slate-400 hover:bg-purple-950/40"
+                      ? `justify-center ${hasActiveChild ? "bg-purple-900/50 text-[#FFD700] border-l-2 border-[#FFD700]" : "text-slate-400 hover:bg-purple-950/40 hover:text-white"}`
                       : "text-slate-400 hover:bg-purple-950/40 hover:text-white"
                   }`}
                   title={isCollapsed ? group.label : undefined}
@@ -433,7 +448,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 >
                   <GroupIcon
                     size={16}
-                    className="flex-shrink-0 text-purple-400"
+                    className={`flex-shrink-0 ${hasActiveChild ? "text-[#FFD700]" : "text-purple-400"}`}
                   />
                   {!isCollapsed && (
                     <>
@@ -448,7 +463,36 @@ const Sidebar: React.FC<SidebarProps> = ({
                   )}
                 </button>
 
-                {/* Submenu items */}
+                {/* Hover Flyout Submenu (for Collapsed Sidebar) */}
+                {isCollapsed && (
+                  <div className="absolute left-full top-0 ml-2 hidden group-hover/navgroup:flex flex-col bg-[#0d021f] border border-purple-900/60 rounded-xl shadow-2xl z-50 min-w-[190px] p-2 backdrop-blur-xl animate-fade-in">
+                    <div className="px-2 py-1 text-[10px] font-black text-[#FFD700] uppercase tracking-widest border-b border-purple-900/40 mb-1.5 flex items-center justify-between">
+                      <span>{group.label}</span>
+                    </div>
+                    <div className="space-y-0.5">
+                      {group.items.map((item) => {
+                        const Icon = item.icon;
+                        const isActive = getActiveView(item.id);
+                        return (
+                          <button
+                            key={item.id}
+                            onClick={() => handleNavigate(item.id)}
+                            className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg transition-all duration-200 text-left ${
+                              isActive
+                                ? "bg-purple-900/60 text-white font-bold border-l-2 border-[#FFD700]"
+                                : "text-slate-300 hover:bg-purple-950/80 hover:text-white"
+                            }`}
+                          >
+                            <Icon size={14} className={isActive ? "text-[#FFD700]" : "text-slate-400"} />
+                            <span className="text-xs truncate">{item.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Submenu items (for Expanded Sidebar) */}
                 {!isCollapsed && (
                   <div
                     className={`overflow-hidden transition-all duration-300 ease-out ${

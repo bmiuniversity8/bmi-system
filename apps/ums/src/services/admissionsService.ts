@@ -7,6 +7,13 @@ import { authFetch } from './authService';
 import { API_URL } from './config';
 import { parseJsonSafe } from './apiClient';
 
+export interface AppDocument {
+  id: string;
+  doc_type: string;
+  file_name: string;
+  uploaded_at: string;
+}
+
 export interface Application {
   id: string;
   applicant_id: string;
@@ -29,6 +36,7 @@ export interface Application {
   high_school?: string;
   graduation_year?: number;
   gpa?: number;
+  documents?: AppDocument[];
 }
 
 export interface StatusLogEntry {

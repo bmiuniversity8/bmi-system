@@ -99,10 +99,10 @@ export default function Admissions() {
     setLogs([]);
     setNotes("");
     setDocChecklist({
-      transcript: "verified",
-      id_copy: "verified",
-      recommendation: app.degree_level === "postgraduate" || app.degree_level === "doctorate" ? "verified" : "pending",
-      statement: "verified",
+      transcript: "pending",
+      id_copy: "pending",
+      recommendation: "pending",
+      statement: "pending",
     });
     try {
       const [details, auditLogs] = await Promise.all([
@@ -111,6 +111,16 @@ export default function Admissions() {
       ]);
       setAppDetails(details);
       setLogs(auditLogs);
+
+      const docs = details?.documents || [];
+      const hasDoc = (types: string[]) => docs.some(d => types.includes(d.doc_type?.toLowerCase()));
+
+      setDocChecklist({
+        transcript: hasDoc(["transcript", "academic_transcript", "official_transcript"]) ? "verified" : "pending",
+        id_copy: hasDoc(["id_document", "id_copy", "passport", "government_id"]) ? "verified" : "pending",
+        recommendation: hasDoc(["recommendation", "recommendation_letter"]) ? "verified" : "pending",
+        statement: hasDoc(["statement", "personal_statement", "statement_of_intent"]) ? "verified" : "pending",
+      });
     } catch {
       setError("Failed to load full application details");
     }
@@ -600,29 +610,46 @@ export default function Admissions() {
               <div className="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800 shadow-xs">
                 <h3 className="text-xs font-black text-[#2E004F] dark:text-purple-300 uppercase tracking-wider mb-3 flex items-center justify-between">
                   <span className="flex items-center gap-1.5"><FileCheck size={16} /> Submitted Documentation Checklist</span>
-                  <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
-                    4 Documents On File
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                    (appDetails?.documents?.length || 0) > 0
+                      ? "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800"
+                      : "text-amber-600 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800"
+                  }`}>
+                    {appDetails?.documents?.length || 0} Document{(appDetails?.documents?.length === 1) ? "" : "s"} On File
                   </span>
                 </h3>
 
                 <div className="space-y-2 text-xs">
                   {[
-                    { key: "transcript", label: "Official Academic Transcript / Records", desc: "PDF Transcript verified by registrar" },
-                    { key: "id_copy", label: "Government Issued Photo ID / Passport", desc: "Valid identity documentation" },
-                    { key: "recommendation", label: "Academic Recommendation Letter", desc: "Signed by faculty referee" },
-                    { key: "statement", label: "Personal Statement of Intent", desc: "500-word statement" }
+                    { key: "transcript", label: "Official Academic Transcript / Records", desc: "PDF Transcript verified by registrar", matchTypes: ["transcript", "academic_transcript", "official_transcript"] },
+                    { key: "id_copy", label: "Government Issued Photo ID / Passport", desc: "Valid identity documentation", matchTypes: ["id_document", "id_copy", "passport", "government_id"] },
+                    { key: "recommendation", label: "Academic Recommendation Letter", desc: "Signed by faculty referee", matchTypes: ["recommendation", "recommendation_letter"] },
+                    { key: "statement", label: "Personal Statement of Intent", desc: "500-word statement", matchTypes: ["statement", "personal_statement", "statement_of_intent"] }
                   ].map(doc => {
-                    const status = docChecklist[doc.key] || "pending";
+                    const uploaded = appDetails?.documents?.find(d => doc.matchTypes.includes(d.doc_type?.toLowerCase()));
+                    const status = docChecklist[doc.key] || (uploaded ? "verified" : "pending");
                     return (
                       <div key={doc.key} className="flex items-center justify-between p-2.5 rounded-lg border border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30">
                         <div>
-                          <div className="font-bold text-gray-900 dark:text-gray-100">{doc.label}</div>
-                          <div className="text-[10px] text-gray-400">{doc.desc}</div>
+                          <div className="font-bold text-gray-900 dark:text-gray-100 flex items-center gap-1.5">
+                            {doc.label}
+                            {uploaded && (
+                              <span className="text-[9px] font-semibold px-1.5 py-0.2 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">
+                                Uploaded ({uploaded.file_name})
+                              </span>
+                            )}
+                            {!uploaded && (
+                              <span className="text-[9px] font-semibold px-1.5 py-0.2 rounded bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300">
+                                Not Uploaded
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-gray-400">{uploaded ? `File: ${uploaded.file_name} • ${doc.desc}` : doc.desc}</div>
                         </div>
                         <div className="flex items-center gap-1">
                           <button
                             onClick={() => setDocChecklist(prev => ({ ...prev, [doc.key]: "verified" }))}
-                            className={`px-2 py-1 text-[10px] font-bold rounded ${
+                            className={`px-2 py-1 text-[10px] font-bold rounded cursor-pointer ${
                               status === "verified"
                                 ? "bg-emerald-600 text-white shadow-xs"
                                 : "bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
@@ -632,7 +659,7 @@ export default function Admissions() {
                           </button>
                           <button
                             onClick={() => setDocChecklist(prev => ({ ...prev, [doc.key]: "flagged" }))}
-                            className={`px-2 py-1 text-[10px] font-bold rounded ${
+                            className={`px-2 py-1 text-[10px] font-bold rounded cursor-pointer ${
                               status === "flagged"
                                 ? "bg-rose-600 text-white shadow-xs"
                                 : "bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300"

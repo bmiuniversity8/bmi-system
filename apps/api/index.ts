@@ -27,7 +27,7 @@ import { handleListUmsCourses, handleCreateCourse, handleUpdateCourse, handleDel
 import { handleListStaff, handleGetStaff, handleCreateStaff, handleUpdateStaff, handleProvisionControlledAccount } from './routes/ums-staff';
 import { handleGetStudentPrograms, handleProgramTransfer } from './routes/programs';
 import { handleListTransactions } from './routes/ums-finance';
-import { handleGetRevenueTrend, handleGetDashboardStats, handleGetUpcomingDeadlines } from './routes/ums-dashboard';
+import { handleGetRevenueTrend, handleGetDashboardStats, handleGetUpcomingDeadlines, handleRegisterTranscript } from './routes/ums-dashboard';
 import {
   handleListStudyCenters, handleGetStudyCenter, handleGetStudyCenterStats,
   handleCreateStudyCenter, handleUpdateStudyCenter,
@@ -241,6 +241,8 @@ const ROUTES: Route[] = [
   { method: 'GET', path: /^\/api\/v1\/dashboard\/revenue-trend$/, roles: ['admin'], handler: async (req, env) =>handleGetRevenueTrend(req, env) },
   { method: 'GET', path: /^\/api\/v1\/dashboard\/stats$/, roles: ['admin', 'staff'], handler: async (req, env) =>handleGetDashboardStats(req, env) },
   { method: 'GET', path: /^\/api\/v1\/dashboard\/deadlines$/, roles: ['admin', 'staff', 'student'], handler: async (req, env) =>handleGetUpcomingDeadlines(req, env) },
+  { method: 'GET', path: /^\/api\/v1\/dashboard\/upcoming-deadlines$/, roles: ['admin', 'staff', 'student'], handler: async (req, env) =>handleGetUpcomingDeadlines(req, env) },
+  { method: 'POST', path: /^\/api\/v1\/transcripts\/register$/, roles: ['admin', 'staff', 'student'], handler: async (req, env) =>handleRegisterTranscript(req, env) },
   { method: 'GET', path: /^\/api\/v1\/stats\/enrollment-by-faculty$/, roles: ['admin', 'staff'], handler: async (req, env) =>handleEnrollmentByFaculty(req, env) },
   { method: 'GET', path: /^\/api\/v1\/study-centers\/all$/, roles: ['admin', 'staff'], handler: async (req, env) =>handleListStudyCenters(req, env) },
   { method: 'GET', path: /^\/api\/v1\/study-centers$/, roles: ['admin', 'staff'], handler: async (req, env) =>handleListStudyCenters(req, env) },

@@ -377,7 +377,7 @@ export async function handleGetApplication(request: Request, env: Env): Promise<
   const app = await env.PLATFORM_CONTEXT!.db.prepare(
     `SELECT a.*, u.first_name, u.last_name, u.email, u.phone, u.date_of_birth, u.nationality, u.address, u.gender,
        (SELECT json_group_array(json_object('id', d.id, 'doc_type', d.doc_type, 'file_name', d.file_name, 'uploaded_at', d.uploaded_at))
-        FROM documents d WHERE d.application_id = a.id) as documents
+        FROM documents d WHERE d.application_id = a.id OR d.user_id = a.user_id) as documents
      FROM applications a JOIN users u ON a.user_id = u.id WHERE a.id = ?`
   ).bind(appId).first<Record<string, unknown>>();
 

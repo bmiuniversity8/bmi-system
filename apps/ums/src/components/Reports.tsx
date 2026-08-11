@@ -45,6 +45,7 @@ const Reports: React.FC = () => {
   const [apiEnrollment, setApiEnrollment] = useState<any[]>([]);
   const [apiFinancialTrend, setApiFinancialTrend] = useState<any[]>([]);
   const [apiDepartmentalAllocation, setApiDepartmentalAllocation] = useState<any[]>([]);
+  const [apiMetrics, setApiMetrics] = useState<{ yoyGrowth?: string; researchGrants?: string; studentRetention?: string; facultyRatio?: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -63,6 +64,9 @@ const Reports: React.FC = () => {
               }
               if (Array.isArray(d.data.departmentalAllocation)) {
                 setApiDepartmentalAllocation(d.data.departmentalAllocation);
+              }
+              if (d.data.metrics) {
+                setApiMetrics(d.data.metrics);
               }
             }
           })
@@ -257,22 +261,22 @@ const Reports: React.FC = () => {
              <div className="lg:col-span-2 grid grid-cols-2 gap-4">
                 <div className="bg-emerald-50 dark:bg-emerald-900/10 p-6 border border-emerald-100 dark:border-emerald-800 flex flex-col justify-center">
                    <p className="text-[10px] font-black uppercase text-emerald-600 tracking-widest">YoY Growth</p>
-                   <p className="text-4xl font-black text-emerald-800 dark:text-emerald-400 mt-2">+12.4%</p>
+                   <p className="text-4xl font-black text-emerald-800 dark:text-emerald-400 mt-2">{apiMetrics?.yoyGrowth || '0.0%'}</p>
                    <p className="text-xs font-bold text-emerald-600/60 mt-1">Surpassing Projection</p>
                 </div>
                 <div className="bg-blue-50 dark:bg-blue-900/10 p-6 border border-blue-100 dark:border-blue-800 flex flex-col justify-center">
-                   <p className="text-[10px] font-black uppercase text-blue-600 tracking-widest">Research Grants</p>
-                   <p className="text-4xl font-black text-blue-800 dark:text-blue-400 mt-2">$2.1M</p>
+                   <p className="text-[10px] font-black uppercase text-blue-600 tracking-widest">Research Grants / Revenue</p>
+                   <p className="text-4xl font-black text-blue-800 dark:text-blue-400 mt-2">{apiMetrics?.researchGrants || 'GHS 0'}</p>
                    <p className="text-xs font-bold text-blue-600/60 mt-1">Secured Fiscal 2024</p>
                 </div>
                 <div className="bg-amber-50 dark:bg-amber-900/10 p-6 border border-amber-100 dark:border-amber-800 flex flex-col justify-center">
                    <p className="text-[10px] font-black uppercase text-amber-600 tracking-widest">Student Retention</p>
-                   <p className="text-4xl font-black text-amber-800 dark:text-amber-400 mt-2">94.2%</p>
+                   <p className="text-4xl font-black text-amber-800 dark:text-amber-400 mt-2">{apiMetrics?.studentRetention || '0.0%'}</p>
                    <p className="text-xs font-bold text-amber-600/60 mt-1">Above National Avg</p>
                 </div>
                 <div className="bg-purple-50 dark:bg-purple-900/10 p-6 border border-purple-100 dark:border-purple-800 flex flex-col justify-center">
                    <p className="text-[10px] font-black uppercase text-purple-600 tracking-widest">Faculty Ratio</p>
-                   <p className="text-4xl font-black text-purple-800 dark:text-purple-400 mt-2">1:18</p>
+                   <p className="text-4xl font-black text-purple-800 dark:text-purple-400 mt-2">{apiMetrics?.facultyRatio || '1:0'}</p>
                    <p className="text-xs font-bold text-purple-600/60 mt-1">Optimal Academic Density</p>
                 </div>
              </div>

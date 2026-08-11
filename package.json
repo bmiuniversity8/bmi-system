@@ -11,7 +11,11 @@
     "ci:typecheck": "turbo run type-check typecheck",
     "ci:test": "turbo run test",
     "ci:lint": "turbo run lint",
-    "ci:all": "turbo run build lint type-check test --concurrency=100%"
+    "ci:all": "turbo run build lint type-check test --concurrency=100%",
+    "deploy:api": "pnpm --filter @bmi/api run deploy",
+    "deploy:ums": "pnpm --filter bmi-ums-frontend run deploy",
+    "deploy:portal": "pnpm --filter bmi-portal run deploy",
+    "deploy:all": "pnpm run deploy:api && pnpm run deploy:ums && pnpm run deploy:portal"
   },
   "optionalDependencies": {
     "@tailwindcss/oxide-linux-x64-gnu": "^4.3.2",
