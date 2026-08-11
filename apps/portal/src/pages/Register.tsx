@@ -2,8 +2,17 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { z } from 'zod';
+import { Check } from 'lucide-react';
 
 const STORAGE_KEY = 'bmi_register_form';
+
+const PASSWORD_REQUIREMENTS = [
+  { id: 'length', label: 'At least 8 characters', test: (pw: string) => pw.length >= 8 },
+  { id: 'uppercase', label: 'One uppercase letter (A-Z)', test: (pw: string) => /[A-Z]/.test(pw) },
+  { id: 'lowercase', label: 'One lowercase letter (a-z)', test: (pw: string) => /[a-z]/.test(pw) },
+  { id: 'number', label: 'One number (0-9)', test: (pw: string) => /[0-9]/.test(pw) },
+  { id: 'special', label: 'One special character (!@#$%^&*)', test: (pw: string) => /[^A-Za-z0-9]/.test(pw) },
+];
 
 const passwordSchema = z.string()
   .min(8, 'Password must be at least 8 characters')
@@ -304,6 +313,25 @@ export default function Register() {
                     <span style={{ fontSize: '0.75rem', color: strength.color, fontWeight: 600 }}>{strength.label}</span>
                   </div>
                 )}
+
+                {/* Password Requirements Live Checklist */}
+                <div style={{ marginTop: '0.75rem', background: '#f8fafc', padding: '0.75rem', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                  <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.15rem' }}>
+                    Password Requirements:
+                  </span>
+                  {PASSWORD_REQUIREMENTS.map((req) => {
+                    const isMet = req.test(form.password);
+                    return (
+                      <div key={req.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.78rem', color: isMet ? '#16a34a' : '#64748b', fontWeight: isMet ? 600 : 400, transition: 'all 0.2s ease' }}>
+                        <div style={{ width: 16, height: 16, borderRadius: '50%', background: isMet ? '#dcfce7' : '#e2e8f0', border: `1px solid ${isMet ? '#86efac' : '#cbd5e1'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          {isMet ? <Check size={10} color="#16a34a" strokeWidth={3} /> : <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#94a3b8' }} />}
+                        </div>
+                        <span>{req.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+
                 {validation.password && <span className="form-error">{validation.password}</span>}
               </div>
               <div className="form-group">
