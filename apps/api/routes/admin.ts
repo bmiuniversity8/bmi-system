@@ -1,5 +1,4 @@
 import { ok, error, logAdminAction, typedJson } from '../lib/types';
-import { sendEmail } from '../lib/email';
 import { getPortalUrl } from '../lib/config';
 import type { Env } from '../lib/types';
 import { createCoreDb } from '../lib/db';
@@ -235,35 +234,13 @@ export async function handleAdminResetPassword(request: Request, env: Env, actor
 
   if (env.RESEND_API_KEY) {
     const resetUrl = `${getPortalUrl(env)}/reset-password?token=${resetToken}`;
-    await sendEmail(env, {
+    const { safeDispatchEmail, passwordResetEmail } = await import('../lib/email');
+    await safeDispatchEmail(env, undefined, {
       to: target.email,
       subject: 'BMI University — Password Reset by Administrator',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f8fafc; padding: 40px 20px;">
-          <div style="background: #0f172a; padding: 24px; border-radius: 8px 8px 0 0; text-align: center;">
-            <h1 style="color: #d4af37; margin: 0; font-size: 24px;">BMI University</h1>
-            <p style="color: rgba(255,255,255,0.7); margin: 4px 0 0;">Password Reset</p>
-          </div>
-          <div style="background: #fff; padding: 32px; border-radius: 0 0 8px 8px; border: 1px solid #e2e8f0;">
-            <h2 style="color: #0f172a;">Hi ${target.first_name},</h2>
-            <p style="color: #475569; line-height: 1.6;">
-              An administrator has initiated a password reset for your BMI University account.
-              Please click the link below to set a new password:
-            </p>
-            <div style="margin: 32px 0; text-align: center;">
-              <a href="${resetUrl}"
-                 style="display: inline-block; background: #d4af37; color: #0f172a; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 16px;">
-                Reset Password
-              </a>
-            </div>
-            <p style="color: #94a3b8; font-size: 13px;">
-              Or copy this link into your browser:<br>
-              <a href="${resetUrl}" style="color: #d4af37; word-break: break-all;">${resetUrl}</a>
-            </p>
-            <p style="color: #94a3b8; font-size: 13px;">This link expires in 24 hours.</p>
-          </div>
-        </div>
-      `
+      html: passwordResetEmail(target.first_name, resetUrl, { isAdminAction: true }),
+      templateName: 'admin_password_reset',
+      context: { action: 'admin_password_reset', target_user_id: targetId },
     });
   }
 

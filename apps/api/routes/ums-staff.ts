@@ -215,33 +215,17 @@ export async function handleProvisionControlledAccount(request: Request, env: En
        updated_at = datetime('now')`
   ).bind(userId, generatedStaffNo, department_id || null, designation).run();
 
-  // Send welcome / credential e-mail — best-effort, non-blocking
+  // Send welcome / credential e-mail via safeDispatchEmail with standardized template
   if (env.RESEND_API_KEY) {
-    const { sendEmail, buildEmailLayout } = await import('../lib/email');
+    const { safeDispatchEmail, staffWelcomeEmail } = await import('../lib/email');
     const portalUrl = getUmsUrl(env);
-    const emailHtml = buildEmailLayout('BMI University — Account Created', `
-      <h2 style="color:#0f172a;">Welcome, ${first_name}!</h2>
-      <p style="color:#475569;line-height:1.6;">
-        An administrator has provisioned a <strong>${designation}</strong> account for you
-        on the University Management System (UMS).
-      </p>
-      <div style="background:#f8fafc;border-left:4px solid #d4af37;padding:16px;margin:24px 0;border-radius:4px;">
-        <p style="margin:0 0 8px;"><strong>Login Portal:</strong>
-          <a href="${portalUrl}" style="color:#6b21a8;">${portalUrl}</a></p>
-        <p style="margin:0 0 8px;"><strong>Email:</strong> ${email.toLowerCase()}</p>
-        <p style="margin:0;"><strong>Temporary Password:</strong>
-          <code style="background:#e2e8f0;padding:2px 6px;border-radius:4px;">${tempPassword}</code></p>
-      </div>
-      <p style="color:#dc2626;font-weight:bold;">⚠ You will be required to set a new password on first login.</p>
-      <p style="color:#94a3b8;font-size:13px;">
-        If you did not expect this email, contact your system administrator immediately.
-      </p>
-    `);
-    sendEmail(env, {
+    await safeDispatchEmail(env, undefined, {
       to: email.toLowerCase(),
       subject: 'BMI University — Your UMS Account Has Been Created',
-      html: emailHtml,
-    }).catch((e: unknown) => console.error('[provision-controlled] welcome email failed:', e));
+      html: staffWelcomeEmail(first_name, designation, email.toLowerCase(), tempPassword, portalUrl),
+      templateName: 'staff_welcome',
+      context: { action: 'provision_staff', staff_no: generatedStaffNo },
+    });
   }
 
   const { logAdminAction } = await import('../lib/types');

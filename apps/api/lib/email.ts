@@ -753,6 +753,104 @@ export function documentReadyEmail(firstName: string, docType: string): string {
   return buildEmailLayout(`${label} Ready`, content);
 }
 
+export function staffWelcomeEmail(
+  firstName: string,
+  designation: string,
+  email: string,
+  tempPassword: string,
+  umsUrl: string
+): string {
+  const content = `
+    <h2 style="color:#0f172a;">Welcome to BMI University, ${firstName}!</h2>
+    <p style="color:#475569;line-height:1.6;">
+      An administrator has provisioned a <strong>${designation}</strong> account for you on the University Management System (UMS).
+    </p>
+    <div style="background:#f8fafc;border-left:4px solid #d4af37;padding:16px;margin:24px 0;border-radius:4px;">
+      <p style="margin:0 0 8px;"><strong>Login Portal:</strong> <a href="${umsUrl}" style="color:#6b21a8;">${umsUrl}</a></p>
+      <p style="margin:0 0 8px;"><strong>Email:</strong> ${email}</p>
+      <p style="margin:0;"><strong>Temporary Password:</strong> <code style="background:#e2e8f0;padding:2px 6px;border-radius:4px;">${tempPassword}</code></p>
+    </div>
+    <p style="color:#dc2626;font-weight:bold;">⚠ You will be required to set a new password on first login.</p>
+    <p style="color:#94a3b8;font-size:13px;">
+      If you did not expect this email, contact your system administrator immediately.
+    </p>
+  `;
+  return buildEmailLayout('Account Created', content);
+}
+
+export function passwordResetEmail(
+  firstName: string,
+  resetUrl: string,
+  options?: { isStaff?: boolean; isAdminAction?: boolean }
+): string {
+  const isStaff = options?.isStaff ?? false;
+  const isAdminAction = options?.isAdminAction ?? false;
+  const systemLabel = isStaff ? 'University Management System (UMS)' : 'Student Portal';
+  const subtitle = isAdminAction ? 'Password Reset by Administrator' : `Password Reset — ${systemLabel}`;
+
+  const content = `
+    <h2 style="color: #0f172a;">Hi ${firstName},</h2>
+    <p style="color: #475569; line-height: 1.6;">
+      ${isAdminAction
+        ? 'An administrator has initiated a password reset for your BMI University account.'
+        : `We received a request to reset your BMI University password for the <strong>${systemLabel}</strong>.`}
+      Please click the button below to set a new password:
+    </p>
+    <div style="margin: 32px 0; text-align: center;">
+      <a href="${resetUrl}"
+         style="display: inline-block; background: #d4af37; color: #0f172a; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 16px;">
+        Reset Password
+      </a>
+    </div>
+    <p style="color: #94a3b8; font-size: 13px;">
+      Or copy this link into your browser:<br>
+      <a href="${resetUrl}" style="color: #d4af37; word-break: break-all;">${resetUrl}</a>
+    </p>
+    <p style="color: #94a3b8; font-size: 13px;">
+      This link expires in <strong>${isAdminAction ? '24 hours' : '1 hour'}</strong>. If you didn't request this, you can safely ignore this email.
+    </p>
+  `;
+  return buildEmailLayout(subtitle, content);
+}
+
+export function recommendationRequestEmail(
+  refereeName: string,
+  applicantName: string,
+  program: string,
+  uploadUrl: string
+): string {
+  const content = `
+    <h2 style="color: #0f172a;">Dear ${refereeName},</h2>
+    <p style="color: #475569; line-height: 1.6;">
+      <strong>${applicantName}</strong> has applied to the <strong>${program}</strong> program at BMI University and has requested a letter of recommendation from you.
+    </p>
+    <p style="color: #475569; line-height: 1.6;">
+      Please use the secure link below to upload your recommendation letter. This link is unique to you and will expire after 30 days.
+    </p>
+    <div style="margin: 24px 0; text-align: center;">
+      <a href="${uploadUrl}" style="display:inline-block;padding:12px 24px;background:#0f172a;color:white;text-decoration:none;border-radius:6px;font-weight:bold;">Upload Recommendation Letter</a>
+    </div>
+    <p style="color: #475569; line-height: 1.6; font-size: 13px;">Or copy this link: <a href="${uploadUrl}" style="color:#d4af37;">${uploadUrl}</a></p>
+  `;
+  return buildEmailLayout('Recommendation Request', content);
+}
+
+export function recommendationReceivedEmail(
+  firstName: string,
+  portalUrl: string = PORTAL_URL
+): string {
+  const content = `
+    <h2 style="color: #0f172a;">Dear ${firstName},</h2>
+    <p style="color: #475569; line-height: 1.6;">
+      A recommendation letter has been received and added to your application.
+    </p>
+    <div style="margin: 24px 0; text-align: center;">
+      <a href="${portalUrl}/status" style="display:inline-block;padding:12px 24px;background:#d4af37;color:#0f172a;text-decoration:none;border-radius:6px;font-weight:bold;">View Application Status</a>
+    </div>
+  `;
+  return buildEmailLayout('Recommendation Received', content);
+}
+
 export function onboardingStepCompletedEmail(
   firstName: string,
   _stepId: string,

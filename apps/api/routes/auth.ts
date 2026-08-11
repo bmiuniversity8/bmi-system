@@ -1,9 +1,9 @@
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { NeonHttpDatabase } from 'drizzle-orm/neon-http';
-import { hashPassword, verifyPassword } from '@bmi/api-middleware';
+import { hashPassword, verifyPassword, DEFAULT_PASSWORD_PEPPER } from '@bmi/api-middleware';
 import { signJWT, validatePasswordStrength, isCommonPassword } from '../lib/jwt';
 import { ok, error, generateCsrfToken } from '../lib/types';
-import { buildEmailLayout, safeDispatchEmail, isValidEmail, generateTraceId, emailVerificationEmail, accountActivationConfirmationEmail, welcomeEmail } from '../lib/email';
+import { safeDispatchEmail, isValidEmail, generateTraceId, emailVerificationEmail, accountActivationConfirmationEmail, welcomeEmail, passwordResetEmail } from '../lib/email';
 import { getPortalUrl, getUmsUrl } from '../lib/config';
 import { generateTOTPSecret, verifyTOTP, getTOTPAuthUrl } from '../lib/totp';
 import { getOAuthConfig, exchangeCodeForToken, getUserInfo, type OAuthProvider } from '../lib/sso';
@@ -109,7 +109,7 @@ export async function handleRegister(request: Request, env: Env, ctx?: Execution
     const verificationToken = crypto.randomUUID();
     const verificationId = crypto.randomUUID();
 
-    const pepper = env.PASSWORD_PEPPER || 'bmi-default-pepper-2026';
+    const pepper = env.PASSWORD_PEPPER || DEFAULT_PASSWORD_PEPPER;
     const passwordHash = await hashPassword(password, pepper, env.PBKDF2_ITERATIONS);
 
     const normalizedEmail = email.toLowerCase();
@@ -606,23 +606,13 @@ export async function handleForgotPassword(request: Request, env: Env, ctx?: Exe
     const isStaffRole = ['admin', 'staff', 'registrar', 'faculty'].includes(user.role);
     const baseUrl = isStaffRole ? getUmsUrl(env) : getPortalUrl(env);
     const resetUrl = `${baseUrl}/reset-password?token=${resetToken}`;
-    const systemLabel = isStaffRole ? 'University Management System (UMS)' : 'Student Portal';
 
     await safeDispatchEmail(env, ctx, {
       to: normalizedEmail,
       subject: 'BMI University — Password Reset Request',
-      html: buildEmailLayout(
-        `Password Reset — ${systemLabel}`,
-        `
-        <h2 style="color:#0f172a;">Hi ${user.first_name},</h2>
-        <p style="color:#475569;line-height:1.6;">We received a request to reset your BMI University password for the <strong>${systemLabel}</strong>. Click the button below to set a new password:</p>
-        <div style="margin:32px 0;text-align:center;">
-          <a href="${resetUrl}" style="display:inline-block;padding:14px 32px;background:#d4af37;color:#0f172a;text-decoration:none;border-radius:6px;font-weight:bold;font-size:16px;">Reset Password</a>
-        </div>
-        <p style="color:#94a3b8;font-size:13px;">Or copy this link into your browser:<br><a href="${resetUrl}" style="color:#d4af37;word-break:break-all;">${resetUrl}</a></p>
-        <p style="color:#94a3b8;font-size:13px;">This link expires in <strong>1 hour</strong>. If you didn't request this, you can safely ignore this email.</p>
-        `
-      ),
+      html: passwordResetEmail(user.first_name, resetUrl, { isStaff: isStaffRole, isAdminAction: false }),
+      templateName: 'password_reset_request',
+      context: { action: 'forgot_password', role: user.role },
     });
   }
 

@@ -21,7 +21,11 @@ vi.mock('../lib/types', async (importOriginal) => {
     logAdminAction: vi.fn().mockResolvedValue(undefined),
   };
 });
-vi.mock('../lib/email', () => ({ sendEmail: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('../lib/email', () => ({
+  sendEmail: vi.fn().mockResolvedValue(true),
+  safeDispatchEmail: vi.fn().mockResolvedValue(undefined),
+  passwordResetEmail: vi.fn().mockReturnValue('<html></html>'),
+}));
 vi.mock('../lib/config', () => ({ getPortalUrl: vi.fn().mockReturnValue('https://portal.test') }));
 vi.mock('@bmi/api-middleware', () => ({ hashPassword: vi.fn().mockResolvedValue('hashed-pw') }));
 vi.mock('../lib/db', () => ({ createCoreDb: vi.fn() }));
