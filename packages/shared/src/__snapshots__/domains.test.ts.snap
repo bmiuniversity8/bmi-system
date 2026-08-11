@@ -4,9 +4,7 @@ exports[`@bmi/shared — domains > snapshot — allowed origins list has not cha
 [
   "https://bmiuniversities.org",
   "https://www.bmiuniversities.org",
-  "https://portal.bmiuniversities.org",
   "https://bmi-portal-b0i.pages.dev",
-  "https://ums.bmiuniversities.org",
   "https://bmi-ums-88m.pages.dev",
   "https://bmi-university-bzd.pages.dev",
   "https://bmi-portal.pages.dev",
