@@ -25,6 +25,7 @@ import {
 import { Hostel } from "../types";
 import { useDataStore } from "../stores/dataStore";
 import { useApiDataStore } from "../stores/apiDataStore";
+import { useTransportRoutesQuery, useTransportPassesQuery } from "../hooks/api/useAlumniCampus";
 
 const Hostels: React.FC = () => {
   const students = useDataStore((s) => s.students);
@@ -38,8 +39,12 @@ const Hostels: React.FC = () => {
   } = useApiDataStore();
 
   const [activeTab, setActiveTab] = useState<"halls" | "registry" | "transport">("halls");
-  const [routes] = useState([{id: 1, routeName: "Main Campus - City Center", vehicleNumber: "KAB 123C"}]);
-  const [passes] = useState([{id: 1, routeId: 1, routeName: "Main Campus - City Center", validUntil: "2024-12-31"}]);
+  
+  const { data: apiRoutes } = useTransportRoutesQuery();
+  const routes = apiRoutes ?? [];
+
+  const { data: apiPasses } = useTransportPassesQuery();
+  const passes = apiPasses ?? [];
   const [searchTerm, setSearchTerm] = useState("");
   const [isAllocationModalOpen, setIsAllocationModalOpen] = useState(false);
   const [selectedHall, setSelectedHall] = useState<Hostel | null>(null);
@@ -295,13 +300,13 @@ const Hostels: React.FC = () => {
               </div>
               <table className="w-full text-left">
                 <thead className="bg-gray-50 dark:bg-gray-700/50 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 dark:border-gray-700">
-                  <tr><th className="px-6 py-5">Route</th><th className="px-6 py-5">Vehicle</th></tr>
+                  <tr><th className="px-6 py-5">Route</th><th className="px-6 py-5">Capacity</th></tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
                   {routes.map(r => (
                     <tr key={r.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                      <td className="px-6 py-5 font-bold text-sm">{r.routeName}</td>
-                      <td className="px-6 py-5 text-gray-500">{r.vehicleNumber}</td>
+                      <td className="px-6 py-5 font-bold text-sm">{r.name}</td>
+                      <td className="px-6 py-5 text-gray-500">{r.capacity} seats</td>
                     </tr>
                   ))}
                 </tbody>
@@ -319,7 +324,7 @@ const Hostels: React.FC = () => {
                   {passes.map(p => (
                     <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
                       <td className="px-6 py-5 font-bold text-sm">{p.routeName}</td>
-                      <td className="px-6 py-5 text-gray-500">{p.validUntil}</td>
+                      <td className="px-6 py-5 text-gray-500">{p.validTo}</td>
                     </tr>
                   ))}
                 </tbody>

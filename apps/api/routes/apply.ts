@@ -1,6 +1,15 @@
 import type { IDatabase } from '@bmi/ports';
 import { ok, error, logAdminAction } from '../lib/types';
-import { sendEmail, applicationSubmittedEmail, statusUpdateEmail } from '../lib/email';
+import {
+  sendEmail,
+  applicationSubmittedEmail,
+  statusUpdateEmail,
+  accountSetupPromptEmail,
+  isValidEmail,
+  generateTraceId,
+  buildEmailLayout,
+  safeDispatchEmail,
+} from '../lib/email';
 import type { Env } from '../lib/types';
 import { VALID_PROGRAMS } from '../lib/programs';
 import { dispatchWebhook } from '../lib/webhook';
@@ -8,7 +17,11 @@ import { generateApplicationNumber } from '../lib/app_number';
 import { getLifecycleHistory } from '../lib/lifecycle';
 import { dispatchPendingJobs } from '../lib/provisioning';
 import { parseBody, SubmitApplicationSchema, ApplicationDraftSchema } from '../lib/schemas';
-import { executeAdmissionPipelineOptimized, executeWithMonitoring, executeBatch } from '../lib/performance';
+import { executeAdmissionPipelineOptimized, executeWithMonitoring } from '../lib/performance';
+import { createCoreDb, setRequestContext, isNeon } from '../lib/db';
+import { users } from '../schema/core';
+import { eq } from 'drizzle-orm';
+import type { NeonHttpDatabase } from 'drizzle-orm/neon-http';
 
 function sanitizeHtml(input: string): string {
   return input
@@ -21,7 +34,7 @@ function sanitizeHtml(input: string): string {
 
 export async function handleSubmitApplication(request: Request, env: Env, userId: string, ctx?: ExecutionContext): Promise<Response> {
   const startTime = performance.now();
-  
+
   const parsed = await parseBody(request, SubmitApplicationSchema);
   if (parsed instanceof Response) return parsed;
 
@@ -31,13 +44,14 @@ export async function handleSubmitApplication(request: Request, env: Env, userId
     return error('Invalid program selected', 400);
   }
 
+  const db = env.PLATFORM_CONTEXT!.db;
+
   const [existingApp, maxApps, deadline] = await Promise.all([
-    env.PLATFORM_CONTEXT!.db.prepare('SELECT COUNT(*) as count FROM applications WHERE user_id = ? AND status NOT IN (\'rejected\')').bind(userId).first<{count: number}>(),
-    env.PLATFORM_CONTEXT!.db.prepare('SELECT value FROM app_config WHERE key = \'max_applications_per_user\'').first<{value: string}>(),
-    env.PLATFORM_CONTEXT!.db.prepare('SELECT value FROM app_config WHERE key = \'application_deadline\'').first<{value: string}>()
+    db.prepare('SELECT COUNT(*) as count FROM applications WHERE user_id = ? AND status NOT IN (\'rejected\')').bind(userId).first<{ count: number }>(),
+    db.prepare('SELECT value FROM app_config WHERE key = \'max_applications_per_user\'').first<{ value: string }>(),
+    db.prepare('SELECT value FROM app_config WHERE key = \'application_deadline\'').first<{ value: string }>()
   ]);
 
-  // Fast validation checks
   const existing = existingApp?.count || 0;
   if (existing > 0) {
     return error('You already have an active application. Please contact admissions to submit a new one.', 409);
@@ -45,7 +59,7 @@ export async function handleSubmitApplication(request: Request, env: Env, userId
 
   const maxAppsConfig = maxApps?.value;
   if (maxAppsConfig) {
-    const totalCountResult = await env.PLATFORM_CONTEXT!.db.prepare('SELECT COUNT(*) as count FROM applications WHERE user_id = ?').bind(userId).first<{count: number}>();
+    const totalCountResult = await db.prepare('SELECT COUNT(*) as count FROM applications WHERE user_id = ?').bind(userId).first<{ count: number }>();
     const totalApps = totalCountResult?.count || 0;
 
     if (totalApps >= parseInt(maxAppsConfig)) {
@@ -65,9 +79,8 @@ export async function handleSubmitApplication(request: Request, env: Env, userId
   const sanitizedStatement = personal_statement ? sanitizeHtml(personal_statement) : null;
   const sanitizedEducation = prior_education ? sanitizeHtml(prior_education) : null;
 
-  // Create application with optimized batch operations
   try {
-    await createApplicationWithDependenciesOptimized(env.PLATFORM_CONTEXT!.db, {
+    await createApplicationWithDependenciesOptimized(db, {
       appId,
       userId,
       program,
@@ -88,58 +101,58 @@ export async function handleSubmitApplication(request: Request, env: Env, userId
   }
 
   // Delete draft upon successful submission
-  if (ctx) {
-    ctx.waitUntil(
-      executeWithMonitoring(
-        env.PLATFORM_CONTEXT!.db.prepare('DELETE FROM application_drafts WHERE user_id = ?').bind(userId),
-        'delete_application_draft'
-      ).catch(e => console.error('[draft] Failed to delete draft:', e))
-    );
-  } else {
-    await env.PLATFORM_CONTEXT!.db.prepare('DELETE FROM application_drafts WHERE user_id = ?').bind(userId).run().catch(() => {});
-  }
+  const deleteDraft = async () => {
+    try {
+      await db.prepare('DELETE FROM application_drafts WHERE user_id = ?').bind(userId).run();
+    } catch (e) {
+      console.error('[draft] Failed to delete draft:', e);
+    }
+  };
 
   // Async operations for non-critical tasks
   let applicationNumber: string | null = null;
-  
-  if (ctx) {
-    // Generate application number asynchronously
-    ctx.waitUntil(
-      generateAndUpdateApplicationNumber(env.PLATFORM_CONTEXT!.db, appId)
+
+  const runBgTasks = async () => {
+    const promises: Promise<unknown>[] = [deleteDraft()];
+
+    promises.push(
+      generateAndUpdateApplicationNumber(db, appId)
         .catch(e => console.error('[app_number] Background generation failed:', e))
     );
-    
-    // Send notification emails asynchronously  
-    ctx.waitUntil(
+
+    promises.push(
       sendApplicationNotificationsOptimized(env, userId, program, appId)
         .catch(e => console.error('[email] Background notification failed:', e))
     );
+
+    await Promise.allSettled(promises);
+  };
+
+  if (ctx) {
+    ctx.waitUntil(runBgTasks());
   } else {
-    // Fallback for non-context execution (testing)
+    await runBgTasks();
+    // Synchronously populate applicationNumber in the non-ctx (fallback/testing) path
     const year = new Date().getUTCFullYear();
     try {
-      applicationNumber = await generateApplicationNumber(env.PLATFORM_CONTEXT!.db, year);
-      await executeWithMonitoring(
-        env.PLATFORM_CONTEXT!.db.prepare('UPDATE applications SET application_number = ? WHERE id = ?').bind(applicationNumber, appId),
-        'set_application_number'
-      );
+      const generated = await generateApplicationNumber(db, year).catch(() => null);
+      if (generated) {
+        applicationNumber = generated;
+        await db.prepare('UPDATE applications SET application_number = ?, updated_at = datetime(\'now\') WHERE id = ?').bind(generated, appId).run();
+      }
     } catch (e) {
-      console.error('[app_number] Failed to generate application number:', e);
+      console.error('[app_number] Fallback generation failed:', e);
     }
-    
-    // Send emails synchronously as fallback
-    await sendApplicationNotificationsOptimized(env, userId, program, appId, applicationNumber);
   }
 
-  // Performance tracking
   const duration = performance.now() - startTime;
   if (duration > 800) {
     console.warn(`Slow application submission detected: ${duration}ms for user ${userId}`);
   }
 
-  return ok({ 
-    application_id: appId, 
-    application_number: applicationNumber || 'PENDING', 
+  return ok({
+    application_id: appId,
+    application_number: applicationNumber || 'PENDING',
     status: 'submitted',
     _perf: { duration_ms: Math.round(duration) }
   });
@@ -161,7 +174,7 @@ export async function handleSaveDraft(request: Request, env: Env, userId: string
     // To safely parse in JS, append 'Z'
     const updatedStr = existing.updated_at.replace(' ', 'T') + 'Z';
     const secondsSinceLastUpdate = (Date.now() - new Date(updatedStr).getTime()) / 1000;
-    
+
     if (secondsSinceLastUpdate < 60) {
       return ok({ message: 'Draft saved (cooldown)', throttled: true });
     }
@@ -184,7 +197,7 @@ export async function handleSaveDraft(request: Request, env: Env, userId: string
 }
 
 
-// Optimized application creation with enhanced batching
+// Optimized application creation with enhanced batching + ACID transaction wrapper
 async function createApplicationWithDependenciesOptimized(
   db: IDatabase,
   applicationData: {
@@ -204,91 +217,92 @@ async function createApplicationWithDependenciesOptimized(
   }
 ): Promise<string> {
   const { appId, userId, program, degreeLevel, personalStatement, priorEducation, dateOfBirth, nationality, address, gender, highSchool, graduationYear, gpa } = applicationData;
-  
-  const operations = [
-    // Update user's personal info
-    db.prepare(
-      `UPDATE users SET date_of_birth = ?, nationality = ?, address = ?, gender = ?, updated_at = datetime('now') WHERE id = ?`
-    ).bind(dateOfBirth ?? null, nationality ?? null, address ?? null, gender ?? null, userId),
 
-    // Main application record with optimized fields
-    db.prepare(
+  await db.transaction(async (tx) => {
+    // 1. Update user's personal info
+    await tx.prepare(
+      `UPDATE users SET date_of_birth = ?, nationality = ?, address = ?, gender = ?, updated_at = datetime('now') WHERE id = ?`
+    ).bind(dateOfBirth ?? null, nationality ?? null, address ?? null, gender ?? null, userId).run();
+
+    // 2. Main application record with optimized fields
+    await tx.prepare(
       `INSERT INTO applications (id, user_id, program, degree_level, status, personal_statement, prior_education, high_school, graduation_year, gpa, submitted_at, created_at, updated_at)
        VALUES (?, ?, ?, ?, 'submitted', ?, ?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now'))`
-    ).bind(appId, userId, program, degreeLevel, personalStatement ?? null, priorEducation ?? null, highSchool ?? null, graduationYear ?? null, gpa ?? null),
-    
-    // Initial status log with timestamp
-    db.prepare(
+    ).bind(appId, userId, program, degreeLevel, personalStatement ?? null, priorEducation ?? null, highSchool ?? null, graduationYear ?? null, gpa ?? null).run();
+
+    // 3. Initial status log with timestamp
+    await tx.prepare(
       `INSERT INTO application_status_logs (id, application_id, changed_by, old_status, new_status, notes, changed_at)
        VALUES (?, ?, ?, NULL, 'submitted', 'Initial submission', datetime('now'))`
-    ).bind(crypto.randomUUID(), appId, userId)
-  ];
-
-  const result = await executeBatch(db, operations, 50); // Higher batch size for performance
-  
-  if (!result.success) {
-    const errorDetails = result.failures.map(f => f.error).join(', ');
-    throw new Error(`Application creation failed: ${errorDetails}`);
-  }
+    ).bind(crypto.randomUUID(), appId, userId).run();
+  });
 
   return appId;
 }
 
-// Background application number generation
+// Background application number generation (ACID-wrapped)
 async function generateAndUpdateApplicationNumber(db: IDatabase, appId: string): Promise<void> {
   const year = new Date().getUTCFullYear();
   try {
     const applicationNumber = await generateApplicationNumber(db, year);
-    await executeWithMonitoring(
-      db.prepare('UPDATE applications SET application_number = ?, updated_at = datetime(\'now\') WHERE id = ?')
-        .bind(applicationNumber, appId),
-      'background_set_application_number'
-    );
-    const noteMsg = `Application Reference Number assigned: ${applicationNumber}`;
-    await db.prepare(
-      `INSERT INTO application_status_logs (id, application_id, changed_by, old_status, new_status, notes, changed_at)
-       VALUES (?, ?, 'system', NULL, 'application_number_generated', ?, datetime('now'))`
-    ).bind(crypto.randomUUID(), appId, noteMsg).run().catch(() => {});
+
+    await db.transaction(async (tx) => {
+      await tx.prepare(
+        'UPDATE applications SET application_number = ?, updated_at = datetime(\'now\') WHERE id = ?'
+      ).bind(applicationNumber, appId).run();
+
+      const noteMsg = `Application Reference Number assigned: ${applicationNumber}`;
+      await tx.prepare(
+        `INSERT INTO application_status_logs (id, application_id, changed_by, old_status, new_status, notes, changed_at)
+         VALUES (?, ?, 'system', NULL, 'application_number_generated', ?, datetime('now'))`
+      ).bind(crypto.randomUUID(), appId, noteMsg).run();
+    });
   } catch (e) {
     console.error('[app_number] Background generation failed for', appId, ':', e);
     throw e;
   }
 }
 
-// Optimized notification email sending
+// Optimized notification email sending — per-email independent failure handling
 async function sendApplicationNotificationsOptimized(
-  env: Env, 
-  userId: string, 
-  program: string, 
-  appId: string, 
+  env: Env,
+  userId: string,
+  program: string,
+  appId: string,
   applicationNumber?: string | null
 ): Promise<void> {
 
-  // Get user data with single query — must use .first(), not executeWithMonitoring,
-  // because executeWithMonitoring calls .run() which discards row data in the D1 adapter.
   type UserRow = { email: string; first_name: string };
   const user = await env.PLATFORM_CONTEXT!.db
     .prepare('SELECT email, first_name FROM users WHERE id = ?')
     .bind(userId)
     .first<UserRow>();
-  if (!user) return;
+  if (!user) {
+    console.warn('[email:apply] No user found for notifications, userId=', userId);
+    return;
+  }
+  if (!isValidEmail(user.email)) {
+    console.warn('[email:apply] Invalid user email, skipping:', user.email);
+    return;
+  }
 
-  // Prepare email promises for parallel execution
-  const emailPromises: Promise<boolean>[] = [];
-  
-  // User notification email
-  emailPromises.push(
-    sendEmail(env, {
+  const refNumber = applicationNumber ?? appId;
+
+  // 1. Applicant confirmation
+  try {
+    await sendEmail(env, {
       to: user.email,
       subject: 'BMI University — Application Received',
-      html: applicationSubmittedEmail(user.first_name, program, applicationNumber ?? appId),
-    })
-  );
+      html: applicationSubmittedEmail(user.first_name, program, refNumber),
+    });
+  } catch (e) {
+    console.error('[email:apply] Applicant notification failed for', user.email, ':', e);
+  }
 
-  // Admin notification email (if configured)
-  if (env.ADMIN_EMAIL) {
-    emailPromises.push(
-      sendEmail(env, {
+  // 2. Admin notification
+  if (env.ADMIN_EMAIL && isValidEmail(env.ADMIN_EMAIL)) {
+    try {
+      await sendEmail(env, {
         to: env.ADMIN_EMAIL,
         subject: `New Application — ${user.first_name} for ${program}`,
         html: `<p>A new application has been submitted.</p>
@@ -296,12 +310,11 @@ async function sendApplicationNotificationsOptimized(
                <p><b>Program:</b> ${program}</p>
                <p><b>Application Number:</b> ${applicationNumber ?? 'PENDING'}</p>
                <p><b>Application ID:</b> ${appId}</p>`,
-      })
-    );
+      });
+    } catch (e) {
+      console.error('[email:apply] Admin notification failed:', e);
+    }
   }
-
-  // Send all emails in parallel
-  await Promise.allSettled(emailPromises);
 }
 
 export async function handleGetMyApplication(_request: Request, env: Env, userId: string): Promise<Response> {
@@ -381,8 +394,10 @@ export async function handleUpdateStatus(
   env: Env,
   appId: string,
   adminId: string,
-  ctx: ExecutionContext
+  ctx?: ExecutionContext
 ): Promise<Response> {
+  const traceId = (request.headers.get('X-Trace-Id') as string | undefined) || generateTraceId();
+
   let body: { status: string; notes?: string };
   try {
     body = await request.json();
@@ -396,12 +411,34 @@ export async function handleUpdateStatus(
     return error(`Status must be one of: ${validStatuses.join(', ')}`);
   }
 
-  // Must use .first(), not executeWithMonitoring: the latter calls .run() internally,
-  // which in the D1 adapter discards .results and returns only {success, meta}.
-  // That makes `app` always truthy but with all fields undefined — the 404 never
-  // fires and old_status / email / user_id propagate as undefined downstream.
+  if (!adminId || typeof adminId !== 'string' || adminId.trim().length < 4) {
+    console.error(`[apply:update:${traceId}] Rejected - invalid adminId format`);
+    return error('Invalid request context. Admin identity verification failed.', 401);
+  }
+  const trimmedAdminId = adminId.trim();
+
+  const authDb = createCoreDb(env);
+  if (isNeon(authDb)) await setRequestContext(authDb as NeonHttpDatabase<any>, trimmedAdminId);
+  const adminRecord = (await authDb.select({ id: users.id, role: users.role, first_name: users.first_name, email: users.email })
+    .from(users)
+    .where(eq(users.id, trimmedAdminId))
+    .execute())[0];
+
+  if (!adminRecord) {
+    console.error(`[apply:update:${traceId}] Admin identity ${trimmedAdminId.substring(0, 8)}... NOT FOUND in users table`);
+    return error('Admin identity could not be verified. Please log in again.', 401);
+  }
+
+  const authorizedRoles = ['admin', 'staff', 'registrar'];
+  if (!authorizedRoles.includes(adminRecord.role)) {
+    console.error(`[apply:update:${traceId}] Role guard failed: user ${trimmedAdminId.substring(0, 8)}... has role "${adminRecord.role}" (required: admin/staff/registrar)`);
+    return error(`Insufficient permissions. Your role "${adminRecord.role}" cannot update application statuses.`, 403);
+  }
+
+  const db = env.PLATFORM_CONTEXT!.db;
+
   type AppRow = { id: string; status: string; program: string; user_id: string; email: string; first_name: string };
-  const app = await env.PLATFORM_CONTEXT!.db
+  const app = await db
     .prepare(
       `SELECT a.id, a.status, a.program, a.user_id, u.email, u.first_name
        FROM applications a JOIN users u ON a.user_id = u.id
@@ -411,96 +448,208 @@ export async function handleUpdateStatus(
     .first<AppRow>();
   if (!app) return error('Application not found', 404);
 
+  if (!isValidEmail(app.email)) {
+    console.warn(`[apply:update:${traceId}] Invalid recipient email on file for app ${appId.substring(0, 8)}:`, app.email);
+  }
+
   const oldStatus = app.status;
   let pipelineResult: { uid: string | null; registration_number: string | null } | null = null;
   let admissionCode: string | undefined;
 
   const sanitizedNotes = notes ? notes.replace(/<[^>]*>/g, '').substring(0, 2000) : null;
 
-  // Use batch operations for status update
-  const statusUpdateOps = [
-    env.PLATFORM_CONTEXT!.db.prepare(
-      `UPDATE applications SET status = ?, reviewer_id = ?, reviewer_notes = ?, reviewed_at = datetime('now'), updated_at = datetime('now')
-       WHERE id = ?`
-    ).bind(status, adminId, sanitizedNotes, appId),
-    
-    env.PLATFORM_CONTEXT!.db.prepare(
-      `INSERT INTO application_status_logs (id, application_id, changed_by, old_status, new_status, notes)
-       VALUES (?, ?, ?, ?, ?, ?)`
-    ).bind(crypto.randomUUID(), appId, adminId, oldStatus, status, sanitizedNotes)
-  ];
+  try {
+    await db.transaction(async (tx) => {
+      await tx.prepare(
+        `UPDATE applications SET status = ?, reviewer_id = ?, reviewer_notes = ?, reviewed_at = datetime('now'), updated_at = datetime('now')
+         WHERE id = ?`
+      ).bind(status, trimmedAdminId, sanitizedNotes, appId).run();
 
-  const batchResult = await executeBatch(env.PLATFORM_CONTEXT!.db, statusUpdateOps);
-  if (!batchResult.success) {
-    return error('Failed to update application status. Please try again.');
+      await tx.prepare(
+        `INSERT INTO application_status_logs (id, application_id, changed_by, old_status, new_status, notes, changed_at)
+         VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`
+      ).bind(crypto.randomUUID(), appId, trimmedAdminId, oldStatus, status, sanitizedNotes).run();
+
+      if (status === 'accepted') {
+        admissionCode = crypto.randomUUID().split('-')[0].toUpperCase() + crypto.randomUUID().split('-')[0].toUpperCase();
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        await tx.prepare(
+          `UPDATE users SET role = 'student', admission_code = ?, admission_code_expires_at = ?, updated_at = datetime('now') WHERE id = ?`
+        ).bind(admissionCode, expiresAt, app.user_id).run();
+      }
+    });
+  } catch (e) {
+    console.error(`[apply:update:${traceId}] Status update transaction FAILED (rolled back):`, e);
+    return error('Failed to update application status. Please try again.', 500);
   }
 
-  await logAdminAction(env, adminId, 'update_application_status', 'application', appId, { old_status: oldStatus, new_status: status, notes: sanitizedNotes }, request);
+  console.info(`[apply:update:${traceId}] Application ${appId.substring(0, 8)} status ${oldStatus} → ${status} by ${trimmedAdminId.substring(0, 8)} (${adminRecord.role})`);
+  await logAdminAction(env, trimmedAdminId, 'update_application_status', 'application', appId, { old_status: oldStatus, new_status: status, notes: sanitizedNotes }, request);
 
-  if (status === 'accepted') {
-    // Generate admission code for account claim
-    admissionCode = crypto.randomUUID().split('-')[0].toUpperCase() + crypto.randomUUID().split('-')[0].toUpperCase();
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  // RC-7: Use a shared mutable result ref so runAdmissionPostAccept can populate it
+  // before runNotifications reads it — avoids a sequential await that would add latency,
+  // while still guaranteeing the reg_no is available when instructor emails are dispatched.
+  const sharedResult: { uid: string | null; registration_number: string | null } = { uid: null, registration_number: null };
 
-    await executeWithMonitoring(
-      env.PLATFORM_CONTEXT!.db.prepare(
-        `UPDATE users SET role = 'student', admission_code = ?, admission_code_expires_at = ?, updated_at = datetime('now') WHERE id = ?`
-      ).bind(admissionCode, expiresAt, app.user_id),
-      'promote_user_to_student'
-    );
-
-    // Use optimized admission pipeline in the background
+  const runAdmissionPostAccept = async () => {
     try {
-      if (ctx) {
-        ctx.waitUntil((async () => {
-          await executeAdmissionPipelineOptimized(env.PLATFORM_CONTEXT!.db, {
-            applicationId: appId,
-            userId: app.user_id,
-            actorId: adminId,
-            program: app.program,
-          }, env.PLATFORM_CONTEXT!.document);
-          await dispatchPendingJobs(env);
-        })().catch(e => console.error('[lifecycle] Admission pipeline background error:', e)));
-      } else {
-        const result = await executeAdmissionPipelineOptimized(env.PLATFORM_CONTEXT!.db, {
+      if (status === 'accepted') {
+        const result = await executeAdmissionPipelineOptimized(db, {
           applicationId: appId,
           userId: app.user_id,
-          actorId: adminId,
+          actorId: trimmedAdminId,
           program: app.program,
         }, env.PLATFORM_CONTEXT!.document);
-        pipelineResult = { uid: result.uid, registration_number: result.regNo };
-        await dispatchPendingJobs(env);
+        // Populate shared ref so runNotifications can access the data
+        sharedResult.uid = result.uid;
+        sharedResult.registration_number = result.regNo;
+        pipelineResult = sharedResult;
+        await dispatchPendingJobs(env).catch(e => console.error(`[apply:update:${traceId}] Provisioning dispatch failed:`, e));
       }
     } catch (e) {
-      console.error('[lifecycle] Admission pipeline error:', e);
+      console.error(`[apply:update:${traceId}] Admission post-accept pipeline error:`, e);
     }
+  };
+
+  const runNotifications = async () => {
+    const dispatchPromises: Promise<unknown>[] = [];
+
+    if (isValidEmail(app.email)) {
+      const studentTraceContext = { traceId, action: 'status_update', role: 'student', application_id: appId };
+      if (status === 'accepted' && admissionCode) {
+        dispatchPromises.push(
+          safeDispatchEmail(env, ctx, {
+            to: app.email,
+            subject: '🎉 BMI University — You\'ve Been Accepted! Complete Your Account Setup',
+            html: accountSetupPromptEmail(app.first_name, app.program, admissionCode),
+            templateName: 'account_setup_prompt',
+            traceId,
+            context: studentTraceContext,
+          })
+        );
+      }
+
+      dispatchPromises.push(
+        safeDispatchEmail(env, ctx, {
+          to: app.email,
+          subject: `BMI University — Application Update: ${status.replace('_', ' ').toUpperCase()}`,
+          html: statusUpdateEmail(app.first_name, status, app.program, sanitizedNotes || undefined, admissionCode),
+          templateName: 'status_update',
+          traceId,
+          context: studentTraceContext,
+        })
+      );
+    }
+
+    if (env.ADMIN_EMAIL && isValidEmail(env.ADMIN_EMAIL) && env.ADMIN_EMAIL !== adminRecord.email) {
+      dispatchPromises.push(
+        safeDispatchEmail(env, ctx, {
+          to: env.ADMIN_EMAIL,
+          subject: `[Admin] Application Status: ${app.first_name} → ${status.replace('_', ' ').toUpperCase()}`,
+          html: buildEmailLayout('Application Status Update', `
+            <h2 style="color: #0f172a;">Application Status Change</h2>
+            <p style="color: #475569; line-height: 1.6;">
+              <strong>${adminRecord.first_name || 'An admin'}</strong> (${adminRecord.role}) updated the application status for <strong>${app.first_name}</strong>.
+            </p>
+            <div style="background: #f8fafc; border-left: 4px solid #d4af37; padding: 16px; margin: 20px 0; border-radius: 4px;">
+              <p style="margin: 8px 0;"><strong>Applicant:</strong> ${app.first_name} (${app.email})</p>
+              <p style="margin: 8px 0;"><strong>Program:</strong> ${app.program}</p>
+              <p style="margin: 8px 0;"><strong>Previous Status:</strong> ${oldStatus.replace('_', ' ')}</p>
+              <p style="margin: 8px 0;"><strong>New Status:</strong> <span style="font-weight: bold; color: ${status === 'accepted' ? '#22c55e' : status === 'rejected' ? '#ef4444' : '#0f172a'};">${status.replace('_', ' ')}</span></p>
+              <p style="margin: 8px 0;"><strong>Application ID:</strong> ${appId.substring(0, 8).toUpperCase()}...</p>
+              ${sanitizedNotes ? `<p style="margin: 8px 0;"><strong>Reviewer Notes:</strong> ${sanitizedNotes}</p>` : ''}
+            </div>
+            <p style="color: #475569; font-size: 13px;">Review full application details in the UMS admin dashboard.</p>
+          `),
+          templateName: 'admin_status_change_notice',
+          traceId,
+          context: { traceId, action: 'status_update_copy', role: 'admin', application_id: appId, changed_by: trimmedAdminId },
+        })
+      );
+    }
+
+    if (status === 'accepted') {
+      const instructorMatches = await db.prepare(
+        `SELECT DISTINCT u.email, u.first_name, u.last_name
+         FROM courses c
+         JOIN instructors i ON c.instructor_id = i.id
+         JOIN users u ON i.user_id = u.id
+         WHERE c.program_id = (SELECT id FROM programs WHERE name = ? LIMIT 1)
+         AND u.email IS NOT NULL AND u.email != ''`
+      ).bind(app.program).all<{ email: string; first_name: string | null; last_name: string | null }>();
+
+      if (instructorMatches?.results?.length) {
+        for (const instructor of instructorMatches.results) {
+          if (instructor.email && isValidEmail(instructor.email)) {
+            const instructorName = [instructor.first_name, instructor.last_name].filter(Boolean).join(' ') || 'Instructor';
+            dispatchPromises.push(
+              safeDispatchEmail(env, ctx, {
+                to: instructor.email,
+                subject: `[Faculty] New Student Admitted to ${app.program}`,
+                html: buildEmailLayout('New Student Admission Notice', `
+                  <h2 style="color: #0f172a;">Dear ${instructorName},</h2>
+                  <p style="color: #475569; line-height: 1.6;">
+                    A new student has been admitted to the <strong>${app.program}</strong> program and will be joining your upcoming courses.
+                  </p>
+                  <div style="background: #f0fdf4; border-left: 4px solid #22c55e; padding: 16px; margin: 20px 0; border-radius: 4px;">
+                    <p style="margin: 8px 0; color: #166534;"><strong>Student Name:</strong> ${app.first_name}</p>
+                    <p style="margin: 8px 0; color: #166534;"><strong>Contact:</strong> ${app.email}</p>
+                    <p style="margin: 8px 0; color: #166534;"><strong>Program:</strong> ${app.program}</p>
+                    ${sharedResult.registration_number ? `<p style="margin: 8px 0; color: #166534;"><strong>Student Reg No:</strong> ${sharedResult.registration_number}</p>` : ''}
+                  </div>
+                  <p style="color: #475569; line-height: 1.6;">
+                    Student LMS enrollment, email provisioning, and course registration are being processed. You will see the student appear in your class rosters within 24 hours. Please update your syllabi and prepare welcome materials.
+                  </p>
+                  <p style="color: #64748b; font-size: 13px;">
+                    If you have questions about this student's placement, contact the Registrar's Office at <a href="mailto:bmiuniversity8@gmail.com" style="color: #d4af37;">bmiuniversity8@gmail.com</a>.
+                  </p>
+                `),
+                templateName: 'instructor_new_student_notice',
+                traceId,
+                context: { traceId, action: 'accepted_faculty_notice', role: 'instructor', application_id: appId, program: app.program },
+              })
+            );
+          }
+        }
+      }
+    }
+
+    try {
+      await dispatchWebhook(env, 'application.status_changed', {
+        application_id: appId,
+        old_status: oldStatus,
+        new_status: status,
+        program: app.program,
+        user_id: app.user_id,
+        changed_at: new Date().toISOString(),
+        changed_by: trimmedAdminId,
+        trace_id: traceId,
+      });
+    } catch (e) {
+      console.warn(`[apply:update:${traceId}] Webhook status_changed dispatch failed (non-critical):`, e);
+    }
+
+    await Promise.allSettled(dispatchPromises);
+  };
+
+  // RC-7: Run pipeline first (populates sharedResult.registration_number), then notifications.
+  // Both are async but notifications wait for pipeline to resolve via sequential await inside waitUntil.
+  const runAll = async () => {
+    await runAdmissionPostAccept();
+    await runNotifications();
+  };
+
+  if (ctx) {
+    ctx.waitUntil(runAll());
+  } else {
+    await runAll();
   }
-
-  // Send notification email
-  ctx.waitUntil(
-    sendEmail(env, {
-      to: app.email,
-      subject: `BMI University — Application Update: ${status.replace('_', ' ').toUpperCase()}`,
-      html: statusUpdateEmail(app.first_name, status, app.program, sanitizedNotes || undefined, admissionCode),
-    })
-  );
-
-  // Fire outbound webhook — non-blocking, errors handled internally
-  ctx.waitUntil(
-    dispatchWebhook(env, 'application.status_changed', {
-      application_id: appId,
-      old_status: oldStatus,
-      new_status: status,
-      program: app.program,
-      user_id: app.user_id,
-      changed_at: new Date().toISOString(),
-    }).catch(() => {})
-  );
 
   return ok({
     application_id: appId,
     old_status: oldStatus,
     new_status: status,
+    trace_id: traceId,
     ...(pipelineResult ? { admission: pipelineResult } : {}),
   });
 }

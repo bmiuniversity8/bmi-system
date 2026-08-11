@@ -1,7 +1,9 @@
 import { Env, ok, error, typedJson } from '../lib/types';
 import { ExecutionContext } from '@cloudflare/workers-types';
-import { sendEmail, buildEmailLayout } from '../lib/email';
+import { sendEmail, buildEmailLayout, isValidEmail, documentReadyEmail } from '../lib/email';
 import { runUnifiedProvisioning } from '../lib/unified-provisioner';
+import { dispatchPendingJobs } from '../lib/provisioning';
+import { getPortalUrl } from '../lib/config';
 
 export type RegStep = 'personal_details' | 'address' | 'program' | 'modules' | 'fees' | 'confirm';
 
@@ -139,8 +141,9 @@ export async function handleGetRegistrationStatus(_req: Request, env: Env, userI
 }
 
 export async function handleCompleteRegistration(_req: Request, env: Env, userId: string, ctx?: ExecutionContext): Promise<Response> {
+  const db = env.PLATFORM_CONTEXT!.db;
   try {
-    const existing = await env.PLATFORM_CONTEXT!.db.prepare(
+    const existing = await db.prepare(
       `SELECT value FROM metadata WHERE id = ? AND key = 'registration_data'`
     ).bind(userId).first<{ value: string }>();
 
@@ -150,9 +153,6 @@ export async function handleCompleteRegistration(_req: Request, env: Env, userId
     const missingStep = STEP_ORDER.find(s => currentData[s] === undefined);
     if (missingStep) return error(`Step ${missingStep} is not yet completed`, 400);
 
-    const db = env.PLATFORM_CONTEXT!.db;
-    
-    // Fetch user details
     const userRow = await db.prepare(
       `SELECT u.email, u.first_name, u.last_name, s.reg_no, p.uid
        FROM users u
@@ -160,14 +160,17 @@ export async function handleCompleteRegistration(_req: Request, env: Env, userId
        LEFT JOIN persons p ON u.person_id = p.id
        WHERE u.id = ?`
     ).bind(userId).first<{ email: string; first_name: string; last_name: string; reg_no: string | null; uid: string | null }>();
-    
+
     if (!userRow) return error('User not found', 404);
+
+    if (userRow.email && !isValidEmail(userRow.email)) {
+      console.warn('[registration] Invalid email on file for user', userId, ':', userRow.email);
+    }
 
     const now = new Date().toISOString();
     const programId = currentData.program?.program_id;
     const programName = currentData.program?.program_name || '';
-    // Let the unified provisioner handle UID verification, reg_no generation,
-    // program linking, document generation, and provisioning job creation.
+
     const result = await runUnifiedProvisioning(db, {
       source: 'portal',
       userId,
@@ -181,43 +184,103 @@ export async function handleCompleteRegistration(_req: Request, env: Env, userId
       existingRegNo: userRow.reg_no || undefined,
     }, env.PLATFORM_CONTEXT!.document);
 
-    // Enrollments: process after provisioning so student record and UID validity are confirmed
     const courses = currentData.modules?.selected_course_ids || [];
-    for (const courseId of courses) {
-      await db.prepare(
-        `INSERT OR IGNORE INTO enrollments (id, student_id, course_id, status) VALUES (?, ?, ?, 'enrolled')`
-      ).bind(crypto.randomUUID(), userId, courseId).run();
-    }
+
+    // ACID transaction: enrollments + metadata completion flag
+    await db.transaction(async (tx) => {
+      for (const courseId of courses) {
+        await tx.prepare(
+          // ON CONFLICT DO NOTHING is standard SQL (SQLite >= 3.24 / PostgreSQL) — portable across D1 and Neon
+          `INSERT INTO enrollments (id, student_id, course_id, status) VALUES (?, ?, ?, 'enrolled') ON CONFLICT DO NOTHING`
+        ).bind(crypto.randomUUID(), userId, courseId).run();
+      }
+
+      await tx.prepare(
+        `UPDATE metadata SET value = ? WHERE id = ? AND key = 'registration_data'`
+      ).bind(JSON.stringify({ ...currentData, _completed_at: now }), userId).run();
+    });
 
     const finalRegNo = result.regNo || userRow.reg_no;
 
-    // Mark registration wizard as complete in metadata
-    await db.prepare(
-      `UPDATE metadata SET value = ? WHERE id = ? AND key = 'registration_data'`
-    ).bind(JSON.stringify({ ...currentData, _completed_at: now }), userId).run();
+    const runPostRegistrationTasks = async () => {
+      const tasks: Promise<unknown>[] = [];
 
-    // Send welcome email
-    if (userRow.email) {
-      ctx?.waitUntil(sendEmail(env, {
-        to: userRow.email,
-        subject: 'BMI University — Registration Complete',
-        html: buildEmailLayout('Registration Complete', `
-          <h2 style="color: #0f172a;">Congratulations, ${userRow.first_name}!</h2>
-          <p style="color: #475569; line-height: 1.6;">
-            Your registration at BMI University has been successfully completed.
-          </p>
-          <div style="background:#f8fafc;border-left:4px solid #d4af37;padding:16px;margin:20px 0;border-radius:4px;">
-            <p><strong>Registration Number:</strong> ${finalRegNo || 'Pending'}</p>
-            <p><strong>Programme:</strong> ${programName || 'N/A'}</p>
-          </div>
-          <p style="color: #475569; line-height: 1.6;">
-            Our systems are currently provisioning your student email, ID card, and enrolling you into the LMS. You will receive separate emails as these become available.
-          </p>
-          <p style="color: #475569; line-height: 1.6;">
-            You can now access your courses, view your timetable, and begin your academic journey.
-          </p>
-        `),
-      }).catch(e => console.error('[registration] Welcome email failed:', e)));
+      tasks.push(
+        dispatchPendingJobs(env).catch(e => console.error('[provisioning] Post-reg dispatch failed:', e))
+      );
+
+      if (userRow.email && isValidEmail(userRow.email)) {
+        tasks.push(
+          sendEmail(env, {
+            to: userRow.email,
+            subject: 'BMI University — Registration Complete',
+            html: buildEmailLayout('Registration Complete', `
+              <h2 style="color: #0f172a;">Congratulations, ${userRow.first_name}!</h2>
+              <p style="color: #475569; line-height: 1.6;">
+                Your registration at BMI University has been successfully completed.
+              </p>
+              <div style="background:#f8fafc;border-left:4px solid #d4af37;padding:16px;margin:20px 0;border-radius:4px;">
+                <p><strong>Registration Number:</strong> ${finalRegNo || 'Pending'}</p>
+                <p><strong>Programme:</strong> ${programName || 'N/A'}</p>
+              </div>
+              <p style="color: #475569; line-height: 1.6;">
+                Our systems are currently provisioning your student email, ID card, and enrolling you into the LMS. You will receive separate emails as these become available.
+              </p>
+              <p style="color: #475569; line-height: 1.6;">
+                You can now access your courses, view your timetable, and begin your academic journey.
+              </p>
+            `),
+          }).catch(e => console.error('[registration] Welcome email failed:', e))
+        );
+
+        if (result.documentsGenerated) {
+          tasks.push(
+            sendEmail(env, {
+              to: userRow.email,
+              subject: 'BMI University — Your Admission Letter',
+              html: documentReadyEmail(userRow.first_name, 'admission_letter'),
+            }).catch(e => console.error('[registration] Admission letter email failed:', e)),
+            sendEmail(env, {
+              to: userRow.email,
+              subject: 'BMI University — Your Student ID Card',
+              html: documentReadyEmail(userRow.first_name, 'id_card'),
+            }).catch(e => console.error('[registration] ID card email failed:', e))
+          );
+        }
+
+        if (courses.length > 0) {
+          tasks.push(
+            sendEmail(env, {
+              to: userRow.email,
+              subject: 'BMI University — Course Enrollment Confirmation',
+              html: buildEmailLayout('Enrollment Confirmed', `
+                <h2 style="color: #0f172a;">Hi ${userRow.first_name},</h2>
+                <p style="color: #475569; line-height: 1.6;">
+                  You have been enrolled in <strong>${courses.length} course${courses.length === 1 ? '' : 's'}</strong> for your ${programName || 'programme'}.
+                </p>
+                <div style="background:#f0fdf4;border-left:4px solid #22c55e;padding:16px;margin:20px 0;border-radius:4px;">
+                  <p style="margin:0;color:#15803d;"><strong>Courses enrolled:</strong> ${courses.length} module${courses.length === 1 ? '' : 's'}</p>
+                </div>
+                <p style="color: #475569; line-height: 1.6;">
+                  Log in to the student portal to view your timetable, access learning materials, and track your progress.
+                </p>
+                <a href="${getPortalUrl(env)}/student/academics"
+                   style="display: inline-block; background: #22c55e; color: #fff; padding: 12px 28px; border-radius: 6px; text-decoration: none; font-weight: bold; margin-top: 12px;">
+                  View My Courses
+                </a>
+              `),
+            }).catch(e => console.error('[registration] Enrollment confirm email failed:', e))
+          );
+        }
+      }
+
+      await Promise.allSettled(tasks);
+    };
+
+    if (ctx) {
+      ctx.waitUntil(runPostRegistrationTasks());
+    } else {
+      await runPostRegistrationTasks();
     }
 
     return ok({ message: 'Registration completed successfully' });

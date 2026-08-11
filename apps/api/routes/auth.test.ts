@@ -23,8 +23,22 @@ vi.mock('../lib/jwt', () => ({
 }));
 
 vi.mock('../lib/email', () => ({
-  sendEmail: vi.fn().mockResolvedValue(undefined),
+  sendEmail: vi.fn().mockResolvedValue(true),
   buildEmailLayout: vi.fn().mockReturnValue('<html></html>'),
+  emailVerificationEmail: vi.fn().mockReturnValue('<html></html>'),
+  welcomeEmail: vi.fn().mockReturnValue('<html></html>'),
+  accountActivationConfirmationEmail: vi.fn().mockReturnValue('<html></html>'),
+  registrationRejectionEmail: vi.fn().mockReturnValue('<html></html>'),
+  accountSetupPromptEmail: vi.fn().mockReturnValue('<html></html>'),
+  applicationSubmittedEmail: vi.fn().mockReturnValue('<html></html>'),
+  statusUpdateEmail: vi.fn().mockReturnValue('<html></html>'),
+  invoiceCreatedEmail: vi.fn().mockReturnValue('<html></html>'),
+  lmsEnrollmentEmail: vi.fn().mockReturnValue('<html></html>'),
+  documentReadyEmail: vi.fn().mockReturnValue('<html></html>'),
+  onboardingStepCompletedEmail: vi.fn().mockReturnValue('<html></html>'),
+  safeDispatchEmail: vi.fn().mockResolvedValue(undefined),
+  isValidEmail: vi.fn().mockReturnValue(true),
+  generateTraceId: vi.fn().mockReturnValue('test-trace-id'),
 }));
 
 vi.mock('../lib/totp', () => ({
@@ -43,6 +57,8 @@ vi.mock('../lib/config', () => ({
 
 vi.mock('../lib/db', () => ({
   createCoreDb: vi.fn(),
+  setRequestContext: vi.fn().mockResolvedValue(undefined),
+  isNeon: vi.fn().mockReturnValue(false),
 }));
 
 // ─── Import after mocks ────────────────────────────────────────────────────────

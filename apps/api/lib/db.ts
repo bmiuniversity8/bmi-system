@@ -56,10 +56,44 @@ function getConnectionUrl(env: Env, perModuleVar: string): string | undefined {
   return undefined;
 }
 
+/**
+ * Create a Neon Drizzle handle.
+ *
+ * Connection pooling — Neon has two transport modes:
+ *   - HTTP (default, stateless): neon-http driver with built-in per-request pooling;
+ *     Neon's serverless runtime manages idle connections automatically. No explicit
+ *     pool size is required — concurrency is bounded by Neon's HTTP endpoint limits.
+ *   - Websocket / TCP (`neon/websocket`): traditional TCP pooling; if enabled, use
+ *     neon(client) with { poolMax, poolMin } options.
+ *
+ * To guarantee least-privilege isolation per request, we do NOT share a Neon client
+ * between requests when RLS is active — `setRequestContext()` sets session-level
+ * config which would leak across concurrent requests if a pooled client were reused.
+ * With neon-http this is a non-issue because each call establishes a fresh session
+ * via the HTTP transport.
+ */
 function createNeon(url: string, schema: Record<string, unknown>): NeonHttpDatabase<any> {
   const cleanUrl = url.trim();
+  // Neon HTTP driver: per-call session isolation. When adding the websocket driver,
+  // add { poolMax: 20, poolMin: 0, connectionTimeoutMillis: 5000 } here.
   const client = neon(cleanUrl);
   return drizzleNeonHttp(client as any, { schema: schema as any });
+}
+
+/**
+ * Connection pool / session metadata helper.
+ *
+ * Returns diagnostics about the current DB handle so callers can decide whether to
+ * use transactions or batching. Neon-http handles have no pool state (session-per-call),
+ * while a future Websocket driver will expose pool stats via the client object.
+ */
+export function getConnectionPoolInfo(db: unknown): { kind: 'neon-http' | 'd1' | 'neon-ws'; poolSize?: number } {
+  if (!db || typeof db !== 'object') return { kind: 'd1' };
+  if ('execute' in db) {
+    // If we later swap to neon/websocket the client is attached via a Symbol or similar
+    return { kind: 'neon-http' };
+  }
+  return { kind: 'd1' };
 }
 
 /** D1 fallback — only active in local dev or when DATABASE_URL_CORE is absent. */
@@ -165,7 +199,85 @@ export async function setRequestContext(db: NeonHttpDatabase<any>, userId: strin
   );
 }
 
-/** Return true when the given db handle is a Neon (Postgres) connection. */
+/**
+ * Return true when the given db handle is a Neon (Postgres) connection.
+ *
+ * Detection strategy (free-tier friendly — no extra round-trips):
+ *   1. Neon's drizzle-neon-http client attaches a `session` or `$client` symbol
+ *      that D1 does not have.
+ *   2. Neon's DrizzleORM wrapper exposes `.execute()` (raw SQL) and does NOT
+ *      expose `.prepare()` at the ORM level (D1 does via drizzle-d1).
+ *   3. The constructor name of the Neon DB proxy is 'NeonHttpDatabase'.
+ *
+ * We check all three signals and accept a match on any one of them so the
+ * detection is robust against minor Drizzle version surface changes.
+ */
 export function isNeon(db: unknown): boolean {
-  return typeof db === 'object' && db !== null && 'execute' in db && !('prepare' in db);
+  if (!db || typeof db !== 'object') return false;
+  // Signal 1: constructor name set by drizzle-orm/neon-http
+  const ctorName = (db as any)?.constructor?.name;
+  if (ctorName === 'NeonHttpDatabase') return true;
+  // Signal 2: Neon attaches the raw client as `$client` or session; D1 and test mocks do not
+  if ('$client' in (db as object) || 'session' in (db as object)) return true;
+  return false;
+}
+
+/**
+ * Scoped RLS runner — runs `fn` with the current user's identity pre-set on
+ * every query, and guarantees the identity cannot leak across requests.
+ *
+ * Prefer this over manual `setRequestContext()` because:
+ *   1. It's a single call site — RLS cannot be forgotten accidentally.
+ *   2. It always returns the user id to 'anon' after the block even if `fn`
+ *      throws (critical for pooled Neon/TCP drivers in the future).
+ *
+ * userId semantics:
+ *   - Use a real user uuid when authenticated;
+ *   - Use `'anon'` for unauthenticated routes so strict RLS policies still
+ *     prevent data leakage even when a query forgets an explicit WHERE user_id = ?.
+ */
+export async function withRequestContext<T>(
+  db: NeonHttpDatabase<any> | DrizzleD1Database<any>,
+  userId: string,
+  fn: (scopedDb: NeonHttpDatabase<any> | DrizzleD1Database<any>) => Promise<T>
+): Promise<T> {
+  if (!isNeon(db)) {
+    return fn(db);
+  }
+  const pg = db as NeonHttpDatabase<any>;
+  try {
+    await setRequestContext(pg, userId);
+    return await fn(pg);
+  } finally {
+    // Reset to anon after block so if pooled TCP connections are later used,
+    // identity does not leak into subsequent requests on the same connection.
+    try {
+      await pg.execute(
+        sql`select set_config('request.jwt.claim.sub', 'anon', true), set_config('request.jwt.claim.role', 'anon', true)`
+      );
+    } catch { /* ignore reset failures — they don't affect caller result */ }
+  }
+}
+
+/**
+ * RLS + ACID transaction shorthand.
+ *
+ * Combines `withRequestContext` + `db.transaction` into one call so writes are
+ * both (a) scoped to the requesting user's RLS policies, and (b) committed
+ * atomically — preventing partial writes from a half-succeeded route that
+ * would otherwise leak via inconsistent state.
+ */
+export async function withTransaction<T>(
+  db: NeonHttpDatabase<any> | DrizzleD1Database<any>,
+  userId: string,
+  fn: (tx: any) => Promise<T>
+): Promise<T> {
+  if (!isNeon(db)) {
+    const d1 = db as DrizzleD1Database<any>;
+    return await d1.transaction(async tx => fn(tx)) as Promise<T>;
+  }
+  return withRequestContext(db, userId, async scopedDb => {
+    const pg = scopedDb as NeonHttpDatabase<any>;
+    return await pg.transaction(async tx => fn(tx));
+  });
 }

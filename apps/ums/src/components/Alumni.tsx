@@ -17,10 +17,11 @@ import {
   UserCheck,
   Mail,
   Filter,
-  CheckCircle2
+  CheckCircle2,
 } from "lucide-react";
 import { getAIResponse } from "../services/aiService";
 import { useDataStore } from "../stores/dataStore";
+import { useAlumniProfilesQuery, useAlumniEventsQuery, useDonationsQuery } from "../hooks/api/useAlumniCampus";
 
 interface AlumniMember {
   id: string;
@@ -37,74 +38,44 @@ interface AlumniMember {
 
 const Alumni: React.FC = () => {
   const students = useDataStore((s) => s.students);
-  const [alumni, setAlumni] = useState<AlumniMember[]>(() => {
-    const saved = localStorage.getItem("bmi_data_alumni");
-    return saved
-      ? JSON.parse(saved)
-      : [
-          {
-            id: "ALM-101",
-            name: "Dr. Jane Okumu",
-            classYear: "2018",
-            course: "B.Ed. Educational Leadership",
-            occupation: "High School Principal & Researcher",
-            location: "Nairobi, Kenya",
-            achievements:
-              "National Best Teacher Award 2022 winner for ICT integration in secondary STEM education.",
-            email: "j.okumu@alumni.bmi.edu",
-            linkedIn: "https://linkedin.com/in/jane-okumu",
-            isHallOfFame: true,
-          },
-          {
-            id: "ALM-102",
-            name: "Eng. Kevin Omondi",
-            classYear: "2019",
-            course: "Diploma in ICT Architecture",
-            occupation: "Senior Cloud Architect at Safaricom",
-            location: "London, UK",
-            achievements:
-              "Pioneered regional cloud infrastructure for high-throughput fintech and banking applications.",
-            email: "k.omondi@alumni.bmi.edu",
-            linkedIn: "https://linkedin.com/in/kevin-omondi",
-            isHallOfFame: false,
-          },
-          {
-            id: "ALM-103",
-            name: "Rev. Peter Kamau",
-            classYear: "2015",
-            course: "B.A. Systematic Theology",
-            occupation: "Senior Pastor & Author",
-            location: "Houston, USA",
-            achievements:
-              'Published "Modern Faith" - a best-selling theological critique on ethics in modern digital society.',
-            email: "p.kamau@alumni.bmi.edu",
-            isHallOfFame: true,
-          },
-          {
-            id: "ALM-104",
-            name: "Sarah Wilson",
-            classYear: "2021",
-            course: "B.A. Business Administration",
-            occupation: "Strategic Tech Consultant",
-            location: "Cape Town, SA",
-            achievements:
-              'Founded "Youth in Tech" non-profit initiative reaching 5,000+ underprivileged students.',
-            email: "s.wilson@alumni.bmi.edu",
-            linkedIn: "https://linkedin.com/in/sarah-wilson",
-            isHallOfFame: false,
-          },
-        ];
-  });
+  const { data: apiAlumniProfiles } = useAlumniProfilesQuery();
+  const [alumni, setAlumni] = useState<AlumniMember[]>([]);
 
-  const [activeTab, setActiveTab] = useState<"Registry" | "Events" | "Donations">("Registry");
+  useEffect(() => {
+    if (apiAlumniProfiles) {
+      setAlumni(
+        apiAlumniProfiles.map((p) => ({
+          id: String(p.id),
+          name: p.name,
+          classYear: String(p.graduationYear),
+          course: p.program,
+          occupation: p.currentRole || "Alumnus",
+          location: "Not specified",
+          achievements: "No narrative generated.",
+          email: p.email,
+          isHallOfFame: false,
+        }))
+      );
+    }
+  }, [apiAlumniProfiles]);
+
+  const [activeTab, setActiveTab] = useState<
+    "Registry" | "Events" | "Donations"
+  >("Registry");
   const [searchTerm, setSearchTerm] = useState("");
-  const [events] = useState([{id: 1, title: "Annual Alumni Gala", date: "2024-12-01", location: "Grand Hall", capacity: 500}]);
-  const [donations] = useState([{id: 1, alumniId: "ALM-101", amount: "5000", purpose: "Scholarship Fund", donatedAt: "2024-05-15"}]);
+  
+  const { data: apiEvents } = useAlumniEventsQuery();
+  const events = apiEvents ?? [];
+  
+  const { data: apiDonations } = useDonationsQuery();
+  const donations = apiDonations ?? [];
   const [yearFilter, setYearFilter] = useState("All Years");
   const [hallOfFameOnly, setHallOfFameOnly] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [generatingForId, setGeneratingForId] = useState<string | null>(null);
-  const [editingAlumnus, setEditingAlumnus] = useState<AlumniMember | null>(null);
+  const [editingAlumnus, setEditingAlumnus] = useState<AlumniMember | null>(
+    null,
+  );
   const [toast, setToast] = useState<{ show: boolean; msg: string }>({
     show: false,
     msg: "",
@@ -122,10 +93,7 @@ const Alumni: React.FC = () => {
     isHallOfFame: false,
   });
 
-  // Save to local storage whenever alumni state updates
-  useEffect(() => {
-    localStorage.setItem("bmi_data_alumni", JSON.stringify(alumni));
-  }, [alumni]);
+  // Save to local storage is disabled in favor of API fetching
 
   // Sync Logic: Integrate students marked as 'Graduated' into the Alumni database
   const syncGraduatedStudents = () => {
@@ -133,7 +101,9 @@ const Alumni: React.FC = () => {
     const newAlumniFromSync: AlumniMember[] = [];
 
     graduatedStudents.forEach((s) => {
-      const existing = alumni.find((a) => a.id === `ALM-${s.id}` || a.email === s.email);
+      const existing = alumni.find(
+        (a) => a.id === `ALM-${s.id}` || a.email === s.email,
+      );
       if (!existing) {
         newAlumniFromSync.push({
           id: `ALM-${s.id}`,
@@ -142,7 +112,8 @@ const Alumni: React.FC = () => {
           course: s.program || "Degree Program",
           occupation: "Graduated Alumnus — Record Verified",
           location: s.email || "Institutional Directory",
-          achievements: "Graduated with honors. Academic record verified by registrar.",
+          achievements:
+            "Graduated with honors. Academic record verified by registrar.",
           email: s.email || `alumni.${s.id}@bmi.edu`,
           isHallOfFame: false,
         });
@@ -151,9 +122,13 @@ const Alumni: React.FC = () => {
 
     if (newAlumniFromSync.length > 0) {
       setAlumni((prev) => [...prev, ...newAlumniFromSync]);
-      showToast(`${newAlumniFromSync.length} graduated student(s) synced to Alumni Registry.`);
+      showToast(
+        `${newAlumniFromSync.length} graduated student(s) synced to Alumni Registry.`,
+      );
     } else {
-      showToast("Alumni Registry is already up to date with all graduated students.");
+      showToast(
+        "Alumni Registry is already up to date with all graduated students.",
+      );
     }
   };
 
@@ -168,7 +143,9 @@ const Alumni: React.FC = () => {
   }, [alumni]);
 
   const stats = useMemo(() => {
-    const locations = new Set(alumni.map((a) => a.location.split(",").pop()?.trim()).filter(Boolean));
+    const locations = new Set(
+      alumni.map((a) => a.location.split(",").pop()?.trim()).filter(Boolean),
+    );
     return {
       total: alumni.length,
       hallOfFame: alumni.filter((a) => a.isHallOfFame).length,
@@ -185,7 +162,8 @@ const Alumni: React.FC = () => {
         member.occupation.toLowerCase().includes(term) ||
         member.location.toLowerCase().includes(term);
 
-      const matchesYear = yearFilter === "All Years" || member.classYear === yearFilter;
+      const matchesYear =
+        yearFilter === "All Years" || member.classYear === yearFilter;
       const matchesHallOfFame = !hallOfFameOnly || member.isHallOfFame;
 
       return matchesSearch && matchesYear && matchesHallOfFame;
@@ -219,12 +197,19 @@ const Alumni: React.FC = () => {
 
     if (editingAlumnus) {
       setAlumni((prev) =>
-        prev.map((a) => (a.id === editingAlumnus.id ? ({ ...a, ...formData } as AlumniMember) : a))
+        prev.map((a) =>
+          a.id === editingAlumnus.id
+            ? ({ ...a, ...formData } as AlumniMember)
+            : a,
+        ),
       );
       showToast("Alumnus record updated successfully!");
     } else {
       const newId = `ALM-${Math.floor(Math.random() * 900) + 100}`;
-      setAlumni((prev) => [{ ...formData, id: newId } as AlumniMember, ...prev]);
+      setAlumni((prev) => [
+        { ...formData, id: newId } as AlumniMember,
+        ...prev,
+      ]);
       showToast("New Alumnus record registered!");
     }
     setIsModalOpen(false);
@@ -238,7 +223,9 @@ const Alumni: React.FC = () => {
 
       if (narrative) {
         setAlumni((prev) =>
-          prev.map((a) => (a.id === member.id ? { ...a, achievements: narrative.trim() } : a))
+          prev.map((a) =>
+            a.id === member.id ? { ...a, achievements: narrative.trim() } : a,
+          ),
         );
         showToast(`AI impact narrative generated for ${member.name}!`);
       }
@@ -252,20 +239,36 @@ const Alumni: React.FC = () => {
   const toggleHallOfFame = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setAlumni((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, isHallOfFame: !a.isHallOfFame } : a))
+      prev.map((a) =>
+        a.id === id ? { ...a, isHallOfFame: !a.isHallOfFame } : a,
+      ),
     );
   };
 
   const deleteMember = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (window.confirm("Are you sure you want to remove this record from the Global Alumni Registry?")) {
+    if (
+      window.confirm(
+        "Are you sure you want to remove this record from the Global Alumni Registry?",
+      )
+    ) {
       setAlumni((prev) => prev.filter((a) => a.id !== id));
       showToast("Alumnus record removed.");
     }
   };
 
   const handleExportCSV = () => {
-    const headers = ["ID", "Full Name", "Class Year", "Course Degree", "Occupation / Title", "Location", "Email", "LinkedIn", "Hall of Fame"];
+    const headers = [
+      "ID",
+      "Full Name",
+      "Class Year",
+      "Course Degree",
+      "Occupation / Title",
+      "Location",
+      "Email",
+      "LinkedIn",
+      "Hall of Fame",
+    ];
     const rows = filteredAlumni.map((a) => [
       a.id,
       `"${a.name}"`,
@@ -274,15 +277,20 @@ const Alumni: React.FC = () => {
       `"${a.occupation}"`,
       `"${a.location}"`,
       `"${a.email}"`,
-      `"${a.linkedIn || ''}"`,
-      a.isHallOfFame ? "YES" : "NO"
+      `"${a.linkedIn || ""}"`,
+      a.isHallOfFame ? "YES" : "NO",
     ]);
 
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
+    const csvContent =
+      "data:text/csv;charset=utf-8," +
+      [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `alumni_network_export_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute(
+      "download",
+      `alumni_network_export_${new Date().toISOString().slice(0, 10)}.csv`,
+    );
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -302,7 +310,8 @@ const Alumni: React.FC = () => {
             </h1>
           </div>
           <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mt-1">
-            Track graduate career progress, honor Hall of Fame inductees, and connect institutional alumni globally.
+            Track graduate career progress, honor Hall of Fame inductees, and
+            connect institutional alumni globally.
           </p>
         </div>
 
@@ -333,9 +342,15 @@ const Alumni: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div className="bg-white dark:bg-[#1a1a1a] p-4 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 border-l-4 border-l-[#2E004F] flex items-center justify-between">
           <div>
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Alumni Network</p>
-            <p className="text-2xl font-black text-gray-900 dark:text-white mt-0.5">{stats.total.toLocaleString()}</p>
-            <p className="text-[10px] text-gray-500 mt-1">Verified institutional graduates</p>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+              Total Alumni Network
+            </p>
+            <p className="text-2xl font-black text-gray-900 dark:text-white mt-0.5">
+              {stats.total.toLocaleString()}
+            </p>
+            <p className="text-[10px] text-gray-500 mt-1">
+              Verified institutional graduates
+            </p>
           </div>
           <div className="p-3 bg-purple-50 dark:bg-purple-950/40 text-[#2E004F] dark:text-[#FFD700] rounded-xl">
             <GraduationCap size={24} />
@@ -344,9 +359,15 @@ const Alumni: React.FC = () => {
 
         <div className="bg-white dark:bg-[#1a1a1a] p-4 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 border-l-4 border-l-amber-500 flex items-center justify-between">
           <div>
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Hall of Fame Inductees</p>
-            <p className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-0.5">{stats.hallOfFame}</p>
-            <p className="text-[10px] text-gray-500 mt-1">Recognized for national/global impact</p>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+              Hall of Fame Inductees
+            </p>
+            <p className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-0.5">
+              {stats.hallOfFame}
+            </p>
+            <p className="text-[10px] text-gray-500 mt-1">
+              Recognized for national/global impact
+            </p>
           </div>
           <div className="p-3 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-xl">
             <Star size={24} />
@@ -355,9 +376,15 @@ const Alumni: React.FC = () => {
 
         <div className="bg-white dark:bg-[#1a1a1a] p-4 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 border-l-4 border-l-emerald-500 flex items-center justify-between">
           <div>
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Global Reach</p>
-            <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5">{stats.globalReach} Regions</p>
-            <p className="text-[10px] text-gray-500 mt-1">Career footprint across nations</p>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+              Global Reach
+            </p>
+            <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5">
+              {stats.globalReach} Regions
+            </p>
+            <p className="text-[10px] text-gray-500 mt-1">
+              Career footprint across nations
+            </p>
           </div>
           <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-xl">
             <Globe size={24} />
@@ -385,207 +412,242 @@ const Alumni: React.FC = () => {
       {activeTab === "Registry" && (
         <>
           {/* Cohort Tabs & Filter Bar */}
-      <div className="bg-white dark:bg-[#1a1a1a] p-3.5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm mb-6 space-y-3">
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
-          <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 mr-2 flex items-center gap-1 shrink-0">
-            <Filter size={12} /> Cohort:
-          </span>
-          {years.map((y) => (
-            <button
-              key={y}
-              onClick={() => setYearFilter(y)}
-              className={`px-3 py-1 rounded-lg text-xs font-bold uppercase transition-all whitespace-nowrap shrink-0 ${
-                yearFilter === y
-                  ? "bg-[#2E004F] text-[#FFD700] shadow-xs"
-                  : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
-              }`}
-            >
-              {y === "All Years" ? "All Cohorts" : `Class of ${y}`}
-            </button>
-          ))}
-        </div>
+          <div className="bg-white dark:bg-[#1a1a1a] p-3.5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm mb-6 space-y-3">
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+              <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 mr-2 flex items-center gap-1 shrink-0">
+                <Filter size={12} /> Cohort:
+              </span>
+              {years.map((y) => (
+                <button
+                  key={y}
+                  onClick={() => setYearFilter(y)}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold uppercase transition-all whitespace-nowrap shrink-0 ${
+                    yearFilter === y
+                      ? "bg-[#2E004F] text-[#FFD700] shadow-xs"
+                      : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+                  }`}
+                >
+                  {y === "All Years" ? "All Cohorts" : `Class of ${y}`}
+                </button>
+              ))}
+            </div>
 
-        <div className="flex flex-col md:flex-row items-center justify-between gap-3 pt-2 border-t border-gray-100 dark:border-gray-800">
-          <div className="relative flex-1 w-full">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-            <input
-              type="text"
-              placeholder="Search by name, degree, occupation, or city..."
-              className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#FFD700] dark:text-white"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+            <div className="flex flex-col md:flex-row items-center justify-between gap-3 pt-2 border-t border-gray-100 dark:border-gray-800">
+              <div className="relative flex-1 w-full">
+                <Search
+                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
+                  size={16}
+                />
+                <input
+                  type="text"
+                  placeholder="Search by name, degree, occupation, or city..."
+                  className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#FFD700] dark:text-white"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+
+              <button
+                onClick={() => setHallOfFameOnly(!hallOfFameOnly)}
+                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider border transition-all ${
+                  hallOfFameOnly
+                    ? "bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800 shadow-xs"
+                    : "bg-gray-50 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700 hover:bg-gray-100"
+                }`}
+              >
+                <Star
+                  size={14}
+                  className={
+                    hallOfFameOnly ? "fill-current text-amber-500" : ""
+                  }
+                />
+                Hall of Fame Only
+              </button>
+            </div>
           </div>
 
-          <button
-            onClick={() => setHallOfFameOnly(!hallOfFameOnly)}
-            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider border transition-all ${
-              hallOfFameOnly
-                ? "bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800 shadow-xs"
-                : "bg-gray-50 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700 hover:bg-gray-100"
-            }`}
-          >
-            <Star size={14} className={hallOfFameOnly ? "fill-current text-amber-500" : ""} />
-            Hall of Fame Only
-          </button>
-        </div>
-      </div>
+          {/* Alumni Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {filteredAlumni.map((member) => (
+              <div
+                key={member.id}
+                className={`bg-white dark:bg-[#1a1a1a] rounded-xl border p-5 flex flex-col justify-between shadow-sm hover:shadow-md transition-all relative overflow-hidden group ${
+                  member.isHallOfFame
+                    ? "border-amber-300 dark:border-amber-700/80 ring-1 ring-amber-400/20"
+                    : "border-gray-200 dark:border-gray-800"
+                }`}
+              >
+                {member.isHallOfFame && (
+                  <div className="absolute top-0 right-0 bg-gradient-to-l from-amber-400 to-amber-500 text-gray-900 text-[9px] font-black uppercase px-2.5 py-0.5 rounded-bl-lg shadow-sm flex items-center gap-1">
+                    <Star size={10} className="fill-current" /> Hall of Fame
+                  </div>
+                )}
 
-      {/* Alumni Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {filteredAlumni.map((member) => (
-          <div
-            key={member.id}
-            className={`bg-white dark:bg-[#1a1a1a] rounded-xl border p-5 flex flex-col justify-between shadow-sm hover:shadow-md transition-all relative overflow-hidden group ${
-              member.isHallOfFame
-                ? "border-amber-300 dark:border-amber-700/80 ring-1 ring-amber-400/20"
-                : "border-gray-200 dark:border-gray-800"
-            }`}
-          >
-            {member.isHallOfFame && (
-              <div className="absolute top-0 right-0 bg-gradient-to-l from-amber-400 to-amber-500 text-gray-900 text-[9px] font-black uppercase px-2.5 py-0.5 rounded-bl-lg shadow-sm flex items-center gap-1">
-                <Star size={10} className="fill-current" /> Hall of Fame
+                <div>
+                  <div className="flex items-start gap-3.5 mb-4">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#2E004F] to-purple-900 text-[#FFD700] flex items-center justify-center font-black text-xl shadow-md shrink-0">
+                      {(member.name || "?").charAt(0)}
+                    </div>
+                    <div className="flex-1 min-w-0 pr-12">
+                      <h3 className="text-base font-black text-gray-900 dark:text-white truncate">
+                        {member.name}
+                      </h3>
+                      <div className="text-[10px] font-bold text-purple-700 dark:text-purple-300 uppercase truncate">
+                        {member.course}
+                      </div>
+                      <div className="text-[10px] text-gray-400 font-mono mt-0.5">
+                        Class of {member.classYear} • {member.id}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 mb-4 text-xs">
+                    <div className="flex items-center gap-2 font-bold text-gray-800 dark:text-gray-200">
+                      <Briefcase
+                        size={14}
+                        className="text-amber-500 shrink-0"
+                      />
+                      <span className="truncate">{member.occupation}</span>
+                    </div>
+                    <div className="flex items-center gap-2 font-medium text-gray-500 dark:text-gray-400">
+                      <MapPin size={14} className="text-blue-500 shrink-0" />
+                      <span className="truncate">{member.location}</span>
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-50 dark:bg-gray-900/60 p-3 rounded-lg border border-gray-100 dark:border-gray-800 text-xs italic text-gray-600 dark:text-gray-300 relative group/story mb-4">
+                    <p className="line-clamp-3">"{member.achievements}"</p>
+                    <button
+                      onClick={() => generateNarrative(member)}
+                      disabled={generatingForId === member.id}
+                      className="absolute bottom-2 right-2 p-1.5 bg-white dark:bg-gray-800 rounded-md shadow-sm opacity-0 group-hover/story:opacity-100 transition-all text-[#2E004F] dark:text-[#FFD700] hover:bg-purple-50"
+                      title="Generate AI career narrative statement"
+                    >
+                      {generatingForId === member.id ? (
+                        <Loader2 size={12} className="animate-spin" />
+                      ) : (
+                        <Bot size={12} />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={(e) => toggleHallOfFame(member.id, e)}
+                      className={`p-1.5 rounded-lg transition-colors ${
+                        member.isHallOfFame
+                          ? "text-amber-500 bg-amber-50 dark:bg-amber-950/40"
+                          : "text-gray-400 hover:text-amber-500 hover:bg-gray-100 dark:hover:bg-gray-800"
+                      }`}
+                      title="Toggle Hall of Fame"
+                    >
+                      <Star
+                        size={16}
+                        className={member.isHallOfFame ? "fill-current" : ""}
+                      />
+                    </button>
+                    <button
+                      onClick={() => handleOpenModal(member)}
+                      className="p-1.5 text-gray-400 hover:text-[#2E004F] dark:hover:text-[#FFD700] hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                      title="Edit Record"
+                    >
+                      <Edit size={16} />
+                    </button>
+                    <button
+                      onClick={(e) => deleteMember(member.id, e)}
+                      className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors"
+                      title="Remove Record"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+
+                  <a
+                    href={`mailto:${member.email}`}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-[11px] font-bold text-[#2E004F] dark:text-[#FFD700] bg-purple-50 dark:bg-purple-950/40 hover:bg-purple-100 border border-purple-200 dark:border-purple-800 rounded-lg transition-colors"
+                  >
+                    <Mail size={12} /> Email
+                  </a>
+                </div>
+              </div>
+            ))}
+
+            {filteredAlumni.length === 0 && (
+              <div className="col-span-full py-16 text-center text-gray-400 font-bold text-xs">
+                No alumni records match current search filters.
               </div>
             )}
-
-            <div>
-              <div className="flex items-start gap-3.5 mb-4">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#2E004F] to-purple-900 text-[#FFD700] flex items-center justify-center font-black text-xl shadow-md shrink-0">
-                  {(member.name || "?").charAt(0)}
-                </div>
-                <div className="flex-1 min-w-0 pr-12">
-                  <h3 className="text-base font-black text-gray-900 dark:text-white truncate">
-                    {member.name}
-                  </h3>
-                  <div className="text-[10px] font-bold text-purple-700 dark:text-purple-300 uppercase truncate">
-                    {member.course}
-                  </div>
-                  <div className="text-[10px] text-gray-400 font-mono mt-0.5">
-                    Class of {member.classYear} • {member.id}
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-2 mb-4 text-xs">
-                <div className="flex items-center gap-2 font-bold text-gray-800 dark:text-gray-200">
-                  <Briefcase size={14} className="text-amber-500 shrink-0" />
-                  <span className="truncate">{member.occupation}</span>
-                </div>
-                <div className="flex items-center gap-2 font-medium text-gray-500 dark:text-gray-400">
-                  <MapPin size={14} className="text-blue-500 shrink-0" />
-                  <span className="truncate">{member.location}</span>
-                </div>
-              </div>
-
-              <div className="bg-gray-50 dark:bg-gray-900/60 p-3 rounded-lg border border-gray-100 dark:border-gray-800 text-xs italic text-gray-600 dark:text-gray-300 relative group/story mb-4">
-                <p className="line-clamp-3">"{member.achievements}"</p>
-                <button
-                  onClick={() => generateNarrative(member)}
-                  disabled={generatingForId === member.id}
-                  className="absolute bottom-2 right-2 p-1.5 bg-white dark:bg-gray-800 rounded-md shadow-sm opacity-0 group-hover/story:opacity-100 transition-all text-[#2E004F] dark:text-[#FFD700] hover:bg-purple-50"
-                  title="Generate AI career narrative statement"
-                >
-                  {generatingForId === member.id ? (
-                    <Loader2 size={12} className="animate-spin" />
-                  ) : (
-                    <Bot size={12} />
-                  )}
-                </button>
-              </div>
-            </div>
-
-            <div className="pt-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-xs">
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={(e) => toggleHallOfFame(member.id, e)}
-                  className={`p-1.5 rounded-lg transition-colors ${
-                    member.isHallOfFame
-                      ? "text-amber-500 bg-amber-50 dark:bg-amber-950/40"
-                      : "text-gray-400 hover:text-amber-500 hover:bg-gray-100 dark:hover:bg-gray-800"
-                  }`}
-                  title="Toggle Hall of Fame"
-                >
-                  <Star size={16} className={member.isHallOfFame ? "fill-current" : ""} />
-                </button>
-                <button
-                  onClick={() => handleOpenModal(member)}
-                  className="p-1.5 text-gray-400 hover:text-[#2E004F] dark:hover:text-[#FFD700] hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-                  title="Edit Record"
-                >
-                  <Edit size={16} />
-                </button>
-                <button
-                  onClick={(e) => deleteMember(member.id, e)}
-                  className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors"
-                  title="Remove Record"
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-
-              <a
-                href={`mailto:${member.email}`}
-                className="inline-flex items-center gap-1 px-3 py-1.5 text-[11px] font-bold text-[#2E004F] dark:text-[#FFD700] bg-purple-50 dark:bg-purple-950/40 hover:bg-purple-100 border border-purple-200 dark:border-purple-800 rounded-lg transition-colors"
-              >
-                <Mail size={12} /> Email
-              </a>
-            </div>
           </div>
-        ))}
-
-        {filteredAlumni.length === 0 && (
-          <div className="col-span-full py-16 text-center text-gray-400 font-bold text-xs">
-            No alumni records match current search filters.
-          </div>
-        )}
-      </div>
-
-      </>
+        </>
       )}
 
       {activeTab === "Events" && (
         <div className="bg-white dark:bg-[#1a1a1a] rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
-            <div className="p-4 border-b border-gray-200 dark:border-gray-800">
-                <h3 className="text-lg font-bold">Alumni Events</h3>
-            </div>
-            <table className="w-full text-left text-sm">
-              <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
-                <tr><th className="p-4">Title</th><th className="p-4">Date</th><th className="p-4">Location</th><th className="p-4">Capacity</th></tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                {events.map((e) => (
-                  <tr key={e.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                    <td className="p-4 font-bold">{e.title}</td>
-                    <td className="p-4">{new Date(e.date).toLocaleDateString()}</td>
-                    <td className="p-4">{e.location}</td>
-                    <td className="p-4">{e.capacity}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="p-4 border-b border-gray-200 dark:border-gray-800">
+            <h3 className="text-lg font-bold">Alumni Events</h3>
+          </div>
+          <table className="w-full text-left text-sm">
+            <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
+              <tr>
+                <th className="p-4">Title</th>
+                <th className="p-4">Date</th>
+                <th className="p-4">Location</th>
+                <th className="p-4">Capacity</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+              {events.map((e) => (
+                <tr
+                  key={e.id}
+                  className="hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                >
+                  <td className="p-4 font-bold">{e.title}</td>
+                  <td className="p-4">
+                    {new Date(e.date).toLocaleDateString()}
+                  </td>
+                  <td className="p-4">{e.location}</td>
+                  <td className="p-4">{e.attendees}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
       {activeTab === "Donations" && (
         <div className="bg-white dark:bg-[#1a1a1a] rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
-            <div className="p-4 border-b border-gray-200 dark:border-gray-800">
-                <h3 className="text-lg font-bold">Donation Records</h3>
-            </div>
-            <table className="w-full text-left text-sm">
-              <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
-                <tr><th className="p-4">Alumni ID</th><th className="p-4">Amount</th><th className="p-4">Purpose</th><th className="p-4">Date</th></tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                {donations.map((d) => (
-                  <tr key={d.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                    <td className="p-4 font-bold">#{d.alumniId}</td>
-                    <td className="p-4 font-bold text-emerald-600">GHS {parseFloat(d.amount).toFixed(2)}</td>
-                    <td className="p-4">{d.purpose}</td>
-                    <td className="p-4">{new Date(d.donatedAt).toLocaleDateString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="p-4 border-b border-gray-200 dark:border-gray-800">
+            <h3 className="text-lg font-bold">Donation Records</h3>
+          </div>
+          <table className="w-full text-left text-sm">
+            <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
+              <tr>
+                <th className="p-4">Alumni ID</th>
+                <th className="p-4">Amount</th>
+                <th className="p-4">Purpose</th>
+                <th className="p-4">Date</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+              {donations.map((d) => (
+                <tr
+                  key={d.id}
+                  className="hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                >
+                  <td className="p-4 font-bold">#{d.alumniId}</td>
+                  <td className="p-4 font-bold text-emerald-600">
+                    GHS {d.amount.toFixed(2)}
+                  </td>
+                  <td className="p-4">{d.purpose}</td>
+                  <td className="p-4">
+                    {new Date(d.date).toLocaleDateString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
@@ -599,22 +661,31 @@ const Alumni: React.FC = () => {
                   <GraduationCap size={18} />
                 </span>
                 <h3 className="text-base font-black text-gray-900 dark:text-white uppercase tracking-tight">
-                  {editingAlumnus ? "Update Alumni Record" : "Register New Alumni Record"}
+                  {editingAlumnus
+                    ? "Update Alumni Record"
+                    : "Register New Alumni Record"}
                 </h3>
               </div>
-              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-white">
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-white"
+              >
                 <X size={20} />
               </button>
             </div>
 
             <form onSubmit={handleSave} className="space-y-3.5 text-xs">
               <div>
-                <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">Graduate Legal Name *</label>
+                <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
+                  Graduate Legal Name *
+                </label>
                 <input
                   type="text"
                   required
                   value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
                   className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg p-2.5 font-medium focus:ring-2 focus:ring-[#FFD700] outline-none"
                   placeholder="e.g. Dr. Jane Okumu"
                 />
@@ -622,23 +693,31 @@ const Alumni: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">Graduation Class Year *</label>
+                  <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
+                    Graduation Class Year *
+                  </label>
                   <input
                     type="text"
                     required
                     value={formData.classYear}
-                    onChange={(e) => setFormData({ ...formData, classYear: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, classYear: e.target.value })
+                    }
                     className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg p-2 font-medium focus:ring-2 focus:ring-[#FFD700] outline-none"
                     placeholder="2022"
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">Degree Course *</label>
+                  <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
+                    Degree Course *
+                  </label>
                   <input
                     type="text"
                     required
                     value={formData.course}
-                    onChange={(e) => setFormData({ ...formData, course: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, course: e.target.value })
+                    }
                     className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg p-2 font-medium focus:ring-2 focus:ring-[#FFD700] outline-none"
                     placeholder="BSc Computer Science"
                   />
@@ -647,21 +726,29 @@ const Alumni: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">Current Occupation / Role</label>
+                  <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
+                    Current Occupation / Role
+                  </label>
                   <input
                     type="text"
                     value={formData.occupation}
-                    onChange={(e) => setFormData({ ...formData, occupation: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, occupation: e.target.value })
+                    }
                     className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg p-2 font-medium focus:ring-2 focus:ring-[#FFD700] outline-none"
                     placeholder="Senior Architect"
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">Location / City</label>
+                  <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
+                    Location / City
+                  </label>
                   <input
                     type="text"
                     value={formData.location}
-                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, location: e.target.value })
+                    }
                     className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg p-2 font-medium focus:ring-2 focus:ring-[#FFD700] outline-none"
                     placeholder="Nairobi, Kenya"
                   />
@@ -670,21 +757,29 @@ const Alumni: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">Email Address</label>
+                  <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
+                    Email Address
+                  </label>
                   <input
                     type="email"
                     value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, email: e.target.value })
+                    }
                     className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg p-2 font-medium focus:ring-2 focus:ring-[#FFD700] outline-none"
                     placeholder="alumni@example.com"
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">LinkedIn Profile URL</label>
+                  <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
+                    LinkedIn Profile URL
+                  </label>
                   <input
                     type="text"
                     value={formData.linkedIn}
-                    onChange={(e) => setFormData({ ...formData, linkedIn: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, linkedIn: e.target.value })
+                    }
                     className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg p-2 font-medium focus:ring-2 focus:ring-[#FFD700] outline-none"
                     placeholder="https://linkedin.com/in/..."
                   />
@@ -692,11 +787,15 @@ const Alumni: React.FC = () => {
               </div>
 
               <div>
-                <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">Career Achievements / Bio</label>
+                <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
+                  Career Achievements / Bio
+                </label>
                 <textarea
                   rows={2}
                   value={formData.achievements}
-                  onChange={(e) => setFormData({ ...formData, achievements: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, achievements: e.target.value })
+                  }
                   className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg p-2 font-medium focus:ring-2 focus:ring-[#FFD700] outline-none"
                   placeholder="Key career highlights or awards..."
                 ></textarea>
@@ -707,10 +806,15 @@ const Alumni: React.FC = () => {
                   type="checkbox"
                   id="hallOfFameCheck"
                   checked={formData.isHallOfFame}
-                  onChange={(e) => setFormData({ ...formData, isHallOfFame: e.target.checked })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, isHallOfFame: e.target.checked })
+                  }
                   className="w-4 h-4 accent-[#2E004F] rounded cursor-pointer"
                 />
-                <label htmlFor="hallOfFameCheck" className="text-xs font-bold text-gray-800 dark:text-gray-200 cursor-pointer">
+                <label
+                  htmlFor="hallOfFameCheck"
+                  className="text-xs font-bold text-gray-800 dark:text-gray-200 cursor-pointer"
+                >
                   Induct into Institutional Hall of Fame
                 </label>
               </div>

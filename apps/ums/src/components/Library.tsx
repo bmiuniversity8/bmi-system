@@ -29,6 +29,7 @@ import { LibraryItem } from "../types";
 import { getAIResponse } from "../services/aiService";
 import { useDataStore } from "../stores/dataStore";
 import { useLibraryQuery } from "../hooks/useEntityQueries";
+import { useLibraryBorrowingsQuery, useLibraryFinesQuery, useMarkFinePaidMutation } from "../hooks/api/useLibrary";
 
 function extractMetadataFromDoc(
   base64String: string,
@@ -69,8 +70,13 @@ export const Library: React.FC = () => {
   const [typeFilter, setTypeFilter] = useState("All");
   const [viewMode, setViewMode] = useState<"grid" | "list">("list");
   const [activeTab, setActiveTab] = useState<"catalog" | "borrowings" | "fines">("catalog");
-  const [borrowings] = useState([{id: 1, itemTitle: "Introduction to Algorithms", studentId: "STD-101", dueDate: "2024-06-15", status: "Overdue"}]);
-  const [fines, setFines] = useState([{id: 1, studentId: "STD-101", amount: "50", status: "Unpaid", reason: "Overdue Book"}]);
+  
+  const { data: apiBorrowings } = useLibraryBorrowingsQuery();
+  const borrowings = apiBorrowings ?? [];
+  
+  const { data: apiFines } = useLibraryFinesQuery();
+  const fines = apiFines ?? [];
+  const markFinePaidMutation = useMarkFinePaidMutation();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<LibraryItem | null>(null);
   const [viewingResource, setViewingResource] = useState<LibraryItem | null>(
@@ -436,11 +442,11 @@ export const Library: React.FC = () => {
               <tbody>
                 {borrowings.map(b => (
                   <tr key={b.id} className="border-b border-gray-100 dark:border-gray-800">
-                    <td className="px-6 py-5 font-bold">{b.itemTitle}</td>
+                    <td className="px-6 py-5 font-bold">{library.find(x => String(x.id) === String(b.bookId))?.title || `Book ID: ${b.bookId}`}</td>
                     <td className="px-6 py-5">{b.studentId}</td>
                     <td className="px-6 py-5">{b.dueDate}</td>
                     <td className="px-6 py-5">
-                      <span className={`px-2 py-1 text-[9px] font-bold uppercase tracking-widest border ${b.status === "Overdue" ? "bg-red-50 text-red-700 border-red-200" : "bg-green-50 text-green-700 border-green-200"}`}>
+                      <span className={`px-2 py-1 text-[9px] font-bold uppercase tracking-widest border ${b.status === "overdue" ? "bg-red-50 text-red-700 border-red-200" : "bg-green-50 text-green-700 border-green-200"}`}>
                         {b.status}
                       </span>
                     </td>
@@ -465,13 +471,13 @@ export const Library: React.FC = () => {
                     <td className="px-6 py-5 text-red-600 font-bold">GHS {f.amount}</td>
                     <td className="px-6 py-5">{f.reason}</td>
                     <td className="px-6 py-5">
-                      <span className={`px-2 py-1 text-[9px] font-bold uppercase tracking-widest border ${f.status === "Unpaid" ? "bg-red-50 text-red-700 border-red-200" : "bg-green-50 text-green-700 border-green-200"}`}>
-                        {f.status}
+                      <span className={`px-2 py-1 text-[9px] font-bold uppercase tracking-widest border ${!f.paid ? "bg-red-50 text-red-700 border-red-200" : "bg-green-50 text-green-700 border-green-200"}`}>
+                        {f.paid ? "Paid" : "Unpaid"}
                       </span>
                     </td>
                     <td className="px-6 py-5 text-right">
-                      {f.status === "Unpaid" && (
-                        <button onClick={() => setFines(prev => prev.map(x => x.id === f.id ? {...x, status: "Paid"} : x))} className="px-4 py-2 bg-green-100 text-green-700 text-[10px] font-bold uppercase tracking-widest">Mark Paid</button>
+                      {f.paid ? <span className="text-gray-500 font-medium">Paid</span> : (
+                        <button onClick={() => markFinePaidMutation.mutate(f.id)} className="px-4 py-2 bg-green-100 text-green-700 text-[10px] font-bold uppercase tracking-widest">Mark Paid</button>
                       )}
                     </td>
                   </tr>

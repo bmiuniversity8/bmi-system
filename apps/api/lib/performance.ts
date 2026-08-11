@@ -61,12 +61,18 @@ const RESPONSE_TIME_THRESHOLDS = {
 };
 
 /**
- * Wraps a D1 query with performance monitoring
+ * Wraps a D1 / IDatabase prepared statement with performance monitoring.
+ *
+ * Supports `run` (mutation), `all` (many rows), and `first` (single row) so
+ * callers can monitor SELECT queries without losing row data — previously
+ * `method` only accepted 'run' | 'all' and `.first()` callers had no
+ * observability (RC #11: executeWithMonitoring(.first()) silently discarded
+ * row data; SELECT performance was not tracked).
  */
 export async function executeWithMonitoring<T = unknown>(
   query: IPreparedStatement,
   operation: string = 'unknown',
-  method: 'run' | 'all' = 'run'
+  method: 'run' | 'all' | 'first' = 'run'
 ): Promise<{ result: T; metrics: QueryMetrics }> {
   const startTime = performance.now();
   const timestamp = new Date().toISOString();
@@ -81,6 +87,10 @@ export async function executeWithMonitoring<T = unknown>(
       const queryResult = await query.all() as unknown as AllResult;
       result = queryResult as unknown as T;
       rowsAffected = queryResult?.changes ?? queryResult?.meta?.changes;
+    } else if (method === 'first') {
+      const row = await query.first() as unknown as T;
+      result = row;
+      rowsAffected = row ? 1 : 0;
     } else {
       type RunResult = { success: boolean; meta?: { changes?: number }; changes?: number };
       const queryResult = await query.run() as unknown as RunResult;

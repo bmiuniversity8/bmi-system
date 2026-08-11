@@ -1,25 +1,83 @@
 import { and, eq, isNull, sql } from 'drizzle-orm';
+import type { NeonHttpDatabase } from 'drizzle-orm/neon-http';
 import { hashPassword, verifyPassword } from '@bmi/api-middleware';
 import { signJWT, validatePasswordStrength, isCommonPassword } from '../lib/jwt';
 import { ok, error, generateCsrfToken } from '../lib/types';
-import { sendEmail, buildEmailLayout } from '../lib/email';
+import { buildEmailLayout, safeDispatchEmail, isValidEmail, generateTraceId, emailVerificationEmail, accountActivationConfirmationEmail, welcomeEmail } from '../lib/email';
 import { getPortalUrl, getUmsUrl } from '../lib/config';
 import { generateTOTPSecret, verifyTOTP, getTOTPAuthUrl } from '../lib/totp';
 import { getOAuthConfig, exchangeCodeForToken, getUserInfo, type OAuthProvider } from '../lib/sso';
 import { parseBody, RegisterSchema, LoginSchema } from '../lib/schemas';
 import { executeWithMonitoring } from '../lib/performance';
-import { createCoreDb } from '../lib/db';
+import { createCoreDb, setRequestContext, isNeon, type CoreDb } from '../lib/db';
 import { users, emailVerifications, sessions, passwordResetTokens, oauthAccounts, applications } from '../schema/core';
 import type { Env } from '../lib/types';
 
+export interface AuthenticatedContext {
+  userId: string;
+  traceId: string;
+  validated: true;
+}
+
+export async function requireAuthenticatedContext(
+  env: Env,
+  userId: string | undefined,
+  request?: Request
+): Promise<{ ok: true; ctx: AuthenticatedContext; db: CoreDb } | { ok: false; response: Response }> {
+  const traceId = (request?.headers.get('X-Trace-Id') as string | undefined) || generateTraceId();
+
+  if (!userId || typeof userId !== 'string' || userId.trim().length === 0) {
+    console.error(`[auth:guard:${traceId}] Missing or invalid userId parameter — unauthenticated request`);
+    return { ok: false, response: error('Authentication required. Please log in to continue.', 401) };
+  }
+
+  const trimmedUserId = userId.trim();
+  if (trimmedUserId.length < 4 || trimmedUserId.length > 64) {
+    console.error(`[auth:guard:${traceId}] Rejecting suspicious userId format: length=${trimmedUserId.length}`);
+    return { ok: false, response: error('Invalid request context. Please refresh and try again.', 400) };
+  }
+
+  const db = createCoreDb(env);
+
+  try {
+    if (isNeon(db)) {
+      await setRequestContext(db as NeonHttpDatabase<any>, trimmedUserId);
+    }
+
+    const userExists = (await db.select({ id: users.id, role: users.role })
+      .from(users)
+      .where(eq(users.id, trimmedUserId))
+      .execute())[0];
+
+    if (!userExists) {
+      console.error(`[auth:guard:${traceId}] userId does not exist in database: ${trimmedUserId.substring(0, 8)}...`);
+      return { ok: false, response: error('User session is no longer valid. Please log in again.', 401) };
+    }
+
+    return {
+      ok: true,
+      ctx: { userId: trimmedUserId, traceId, validated: true },
+      db,
+    };
+  } catch (dbErr) {
+    const msg = dbErr instanceof Error ? dbErr.message : String(dbErr);
+    console.error(`[auth:guard:${traceId}] Context guard DB error during validation:`, msg);
+    return { ok: false, response: error('Unable to verify request context. Please try again.', 500) };
+  }
+}
+
 export async function handleRegister(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
   const startTime = performance.now();
-  
+
   try {
     const parsed = await parseBody(request, RegisterSchema);
     if (parsed instanceof Response) return parsed;
 
     const { email, password, first_name: cleanFirstName, last_name: cleanLastName, phone } = parsed;
+
+    if (!isValidEmail(email)) {
+      return error('Please provide a valid email address.', 400);
+    }
 
     // Parallelize password validation (CPU-bound operations)
     const [strengthCheck, commonPasswordCheck] = await Promise.all([
@@ -37,6 +95,9 @@ export async function handleRegister(request: Request, env: Env, ctx?: Execution
 
     // Use optimized user lookup with early exit
     const db = createCoreDb(env);
+    if (isNeon(db)) {
+      await setRequestContext(db, 'anon');
+    }
     const existingUser = (await db.select({ id: users.id }).from(users).where(eq(users.email, email.toLowerCase())).limit(1).execute())[0];
 
     if (existingUser) {
@@ -51,71 +112,68 @@ export async function handleRegister(request: Request, env: Env, ctx?: Execution
     const pepper = env.PASSWORD_PEPPER || 'bmi-default-pepper-2026';
     const passwordHash = await hashPassword(password, pepper, env.PBKDF2_ITERATIONS);
 
+    const normalizedEmail = email.toLowerCase();
+    const appId = crypto.randomUUID();
+
     // Registration: insert user, email verification record, and default application
+    // ACID transaction — all inserts succeed or roll back together
     try {
-      await db.insert(users).values({
-        id: userId,
-        email: email.toLowerCase(),
-        password_hash: passwordHash,
-        first_name: cleanFirstName,
-        last_name: cleanLastName,
-        phone: phone || null,
-        role: 'applicant',
-        is_verified: 1, // Auto-verify on registration to prevent email delivery bottlenecks
-      });
-      await db.insert(emailVerifications).values({
-        id: verificationId,
-        user_id: userId,
-        token: verificationToken,
-        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000),
-      });
-      // Auto-create initial application record so applicant appears on Admissions Desk immediately
-      try {
-        await db.insert(applications).values({
-          id: crypto.randomUUID(),
-          user_id: userId,
-          program: 'BA in Biblical Studies',
-          degree_level: 'undergraduate',
-          status: 'submitted',
+      await db.transaction(async (tx) => {
+        await tx.insert(users).values({
+          id: userId,
+          email: normalizedEmail,
+          password_hash: passwordHash,
+          first_name: cleanFirstName,
+          last_name: cleanLastName,
+          phone: phone || null,
+          role: 'applicant',
+          is_verified: 1, // Auto-verify on registration to prevent email delivery bottlenecks
         });
-      } catch (appErr) {
-        console.warn('Initial application record creation skipped:', appErr);
-      }
+        await tx.insert(emailVerifications).values({
+          id: verificationId,
+          user_id: userId,
+          token: verificationToken,
+          expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        });
+        // Auto-create initial application record so applicant appears on Admissions Desk immediately
+        try {
+          await tx.insert(applications).values({
+            id: appId,
+            user_id: userId,
+            program: 'BA in Biblical Studies',
+            degree_level: 'undergraduate',
+            status: 'submitted',
+          });
+        } catch (appErr) {
+          console.warn('Initial application record creation skipped (rollback-safe in tx):', appErr);
+          throw appErr;
+        }
+      });
     } catch (e: any) {
-      console.error('Registration insert failed:', e);
+      console.error('Registration transaction failed:', e);
       return error(`Registration failed: ${e?.message || String(e)}`, 500);
     }
-    // Email: send directly via Resend HTTP API (bypass queue — queue consumer had stale key issues)
-    if (env.RESEND_API_KEY) {
-      const verifyUrl = `${getPortalUrl(env)}/verify?token=${verificationToken}`;
-      const emailWork = sendRegistrationEmailDirect(env, {
-        to: email.toLowerCase(),
-        firstName: cleanFirstName,
-        verifyUrl
-      }).then(result => {
-        if (!result.ok) {
-          console.error('[register] Resend delivery failed:', result.status, result.errorBody);
-        } else {
-          console.info('[register] Verification email delivered to:', email);
-        }
-      }).catch(e => console.error('[register] Email send threw exception:', e));
 
-      if (ctx) {
-        ctx.waitUntil(emailWork);
-      } else {
-        await emailWork;
-      }
+    // Email verification — use the purpose-built template for consistent styling + expiry warning
+    if (env.RESEND_API_KEY) {
+      await safeDispatchEmail(env, ctx, {
+        to: normalizedEmail,
+        subject: 'BMI University — Verify Your Email Address',
+        html: emailVerificationEmail(cleanFirstName, verificationToken, getPortalUrl(env)),
+        templateName: 'email_verification',
+        context: { action: 'register_verify', user_id: userId },
+      });
     } else {
-      console.warn('[register] RESEND_API_KEY not set — skipping verification email for:', email);
+      console.warn('[register] RESEND_API_KEY not set — skipping verification email for:', normalizedEmail);
     }
 
     // Track registration performance
     const duration = performance.now() - startTime;
     if (duration > 500) {
-      console.warn(`Slow registration detected: ${duration}ms for user ${email}`);
+      console.warn(`Slow registration detected: ${duration}ms for user ${normalizedEmail}`);
     }
 
-    return ok({ 
+    return ok({
       message: 'Account created! Please check your email to verify your account before logging in.',
       _perf: { duration_ms: Math.round(duration) }
     });
@@ -125,73 +183,16 @@ export async function handleRegister(request: Request, env: Env, ctx?: Execution
   }
 }
 
-// Direct Resend HTTP send — bypasses queue to guarantee delivery and surface errors
-async function sendRegistrationEmailDirect(env: Env, params: {
-  to: string;
-  firstName: string;
-  verifyUrl: string;
-}): Promise<{ ok: boolean; status?: number; errorBody?: string }> {
-  const html = buildEmailLayout(
-    'Email Verification',
-    `
-    <h2 style="color: #0f172a;">Welcome, ${params.firstName}!</h2>
-    <p style="color: #475569; line-height: 1.6;">
-      Thank you for creating an account at BMI University. Please verify your email address to activate your account.
-    </p>
-    <div style="margin: 32px 0; text-align: center;">
-      <a href="${params.verifyUrl}"
-         style="display: inline-block; background: #d4af37; color: #0f172a; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 16px;">
-        Verify Email Address
-      </a>
-    </div>
-    <p style="color: #94a3b8; font-size: 13px;">
-      Or copy this link:<br>
-      <a href="${params.verifyUrl}" style="color: #d4af37; word-break: break-all;">${params.verifyUrl}</a>
-    </p>
-    <p style="color: #94a3b8; font-size: 13px;">This link expires in 24 hours.</p>
-    <p style="color: #94a3b8; font-size: 12px;">If you did not create this account, you can safely ignore this email.</p>
-    `
-  );
-
-  const senders = [
-    env.RESEND_FROM_EMAIL || 'BMI University <admissions@hkmministries.org>',
-    'onboarding@resend.dev',
-  ];
-
-  for (const from of senders) {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${env.RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ from, to: params.to, subject: 'BMI University — Verify Your Email Address', html }),
-    });
-
-    if (res.ok) {
-      console.info(`[email] Delivered via sender: ${from}`);
-      return { ok: true };
-    }
-
-    const errorBody = await res.text();
-    console.warn(`[email] Sender ${from} rejected (${res.status}): ${errorBody}`);
-
-    if (res.status !== 403 && res.status !== 422) {
-      // Non-domain error (e.g. 429 rate limit, 500 server) — no point retrying with fallback
-      return { ok: false, status: res.status, errorBody };
-    }
-  }
-
-  return { ok: false, status: 422, errorBody: 'All senders rejected' };
-}
-
-export async function handleVerifyEmail(request: Request, env: Env): Promise<Response> {
+export async function handleVerifyEmail(request: Request, env: Env, execCtx?: ExecutionContext): Promise<Response> {
+  const traceId = generateTraceId();
   const url = new URL(request.url);
   const token = url.searchParams.get('token');
 
   if (!token) return error('Verification token is required');
 
   const db = createCoreDb(env);
+  if (isNeon(db)) await setRequestContext(db as NeonHttpDatabase<any>, 'anon');
+
   const verification = (await db.select({
     id: emailVerifications.id,
     user_id: emailVerifications.user_id,
@@ -208,55 +209,116 @@ export async function handleVerifyEmail(request: Request, env: Env): Promise<Res
     return error('Verification token has expired. Please register again.', 410);
   }
 
-  await db.update(emailVerifications)
-    .set({ verified_at: new Date() })
-    .where(eq(emailVerifications.id, verification.id))
-    .execute();
+  let userRecord: { first_name: string | null; email: string | null; is_verified: number | null } | null = null;
 
-  await db.update(users)
-    .set({ is_verified: 1, verification_token: null, updated_at: new Date() })
-    .where(eq(users.id, verification.user_id))
-    .execute();
+  try {
+    userRecord = await db.transaction(async (tx) => {
+      await tx.update(emailVerifications)
+        .set({ verified_at: new Date() })
+        .where(eq(emailVerifications.id, verification.id));
 
+      await tx.update(users)
+        .set({ is_verified: 1, verification_token: null, updated_at: new Date() })
+        .where(eq(users.id, verification.user_id));
+
+      const postUser = (await tx.select({
+        first_name: users.first_name,
+        email: users.email,
+        is_verified: users.is_verified,
+      })
+        .from(users)
+        .where(eq(users.id, verification.user_id))
+        .execute())[0];
+      return postUser || null;
+    });
+  } catch (txErr) {
+    const msg = txErr instanceof Error ? txErr.message : String(txErr);
+    console.error(`[auth:verify:${traceId}] Email verification transaction FAILED — rolling back both updates:`, msg);
+    return error('Unable to complete email verification. Please try again.', 500);
+  }
+
+  if (userRecord?.email && userRecord?.first_name && env.RESEND_API_KEY && isValidEmail(userRecord.email)) {
+    const notificationPromises: Promise<unknown>[] = [];
+
+    notificationPromises.push(
+      safeDispatchEmail(env, execCtx, {
+        to: userRecord.email,
+        subject: 'BMI University — Email Verified Successfully',
+        html: accountActivationConfirmationEmail(userRecord.first_name, userRecord.email),
+        templateName: 'account_activation_confirmation',
+        traceId,
+        context: { action: 'email_verification', user_id: verification.user_id },
+      })
+    );
+
+    notificationPromises.push(
+      safeDispatchEmail(env, execCtx, {
+        to: userRecord.email,
+        subject: 'Welcome to BMI University — Get Started',
+        html: welcomeEmail(userRecord.first_name),
+        templateName: 'welcome_email',
+        traceId,
+        context: { action: 'email_verification_welcome', user_id: verification.user_id },
+      })
+    );
+
+    if (execCtx) {
+      execCtx.waitUntil(Promise.all(notificationPromises).catch(e => console.error(`[auth:verify:${traceId}] Notification dispatch error:`, e)));
+    } else {
+      await Promise.all(notificationPromises).catch(() => { });
+    }
+  }
+
+  console.info(`[auth:verify:${traceId}] Email verification completed for user_id=${verification.user_id.substring(0, 8)}...`);
   return ok({ message: 'Email verified successfully. You can now log in.' });
 }
 
-export async function handleResendVerification(request: Request, env: Env): Promise<Response> {
+export async function handleResendVerification(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
   let body: { email: string };
   try { body = await request.json(); }
   catch { return error('Invalid JSON body'); }
 
   if (!body.email) return error('Email is required');
+  const normalizedEmail = body.email.toLowerCase();
+  if (!isValidEmail(normalizedEmail)) return ok({ message: 'If the account exists, a verification email has been sent.' });
 
   const db = createCoreDb(env);
+  if (isNeon(db)) await setRequestContext(db, 'anon');
+
   const user = (await db.select({
     id: users.id,
     first_name: users.first_name,
     is_verified: users.is_verified,
-  }).from(users).where(eq(users.email, body.email.toLowerCase())).execute())[0];
+  }).from(users).where(eq(users.email, normalizedEmail)).execute())[0];
 
   if (!user) return ok({ message: 'If the account exists, a verification email has been sent.' });
   if (user.is_verified) return ok({ message: 'Email is already verified.' });
 
   const verificationToken = crypto.randomUUID();
-  await db.insert(emailVerifications).values({
-    id: crypto.randomUUID(),
-    user_id: user.id,
-    token: verificationToken,
-    expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000),
-  }).execute();
-
-  await db.update(users)
-    .set({ verification_token: verificationToken })
-    .where(eq(users.id, user.id))
-    .execute();
+  try {
+    await db.transaction(async (tx) => {
+      await tx.insert(emailVerifications).values({
+        id: crypto.randomUUID(),
+        user_id: user.id,
+        token: verificationToken,
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      });
+      await tx.update(users)
+        .set({ verification_token: verificationToken, updated_at: new Date() })
+        .where(eq(users.id, user.id));
+    });
+  } catch (e) {
+    console.error('[auth:resend-verify] DB update failed:', e);
+    return error('Failed to resend verification. Please try again.', 500);
+  }
 
   if (env.RESEND_API_KEY) {
-    const verifyUrl = `${getPortalUrl(env)}/verify?token=${verificationToken}`;
-    await sendEmail(env, {
-      to: body.email.toLowerCase(),
+    await safeDispatchEmail(env, ctx, {
+      to: normalizedEmail,
       subject: 'BMI University — Verify Your Email Address',
-      html: `<p>Click to verify: <a href="${verifyUrl}">${verifyUrl}</a></p>`
+      html: emailVerificationEmail(user.first_name || '', verificationToken, getPortalUrl(env)),
+      templateName: 'email_verification_resend',
+      context: { action: 'resend_verify', user_id: user.id },
     });
   }
 
@@ -353,7 +415,7 @@ export async function handleLogin(request: Request, env: Env): Promise<Response>
   const csrfToken = generateCsrfToken();
 
   const expiresAt = new Date(Date.now() + 60 * 60 * 24 * 7 * 1000).toISOString();
-  
+
   // Create / refresh the session row for this user
   await executeWithMonitoring({
     run: async () => db.insert(sessions)
@@ -382,7 +444,7 @@ export async function handleLogin(request: Request, env: Env): Promise<Response>
 export async function handleRefresh(request: Request, env: Env): Promise<Response> {
   const cookieHeader = request.headers.get('Cookie');
   let token: string | null = null;
-  
+
   if (cookieHeader) {
     const match = cookieHeader.match(/bmi_token=([^;]+)/);
     if (match) token = match[1];
@@ -394,7 +456,7 @@ export async function handleRefresh(request: Request, env: Env): Promise<Respons
 
   const { verifyJWT, signJWT } = await import('../lib/jwt');
   const payload = await verifyJWT(token, env.JWT_SECRET);
-  
+
   if (!payload || !payload.sub) {
     return error('Invalid or expired session', 401);
   }
@@ -432,6 +494,7 @@ export async function handleRefresh(request: Request, env: Env): Promise<Respons
 }
 
 export async function handleLogout(request: Request, env: Env): Promise<Response> {
+  const traceId = generateTraceId();
   const authHeader = request.headers.get('Authorization');
   const cookieHeader = request.headers.get('Cookie');
 
@@ -449,13 +512,22 @@ export async function handleLogout(request: Request, env: Env): Promise<Response
     if (payload) {
       const db = createCoreDb(env);
       const sub = payload.sub as string;
-      await db.update(users)
-        .set({ session_version: sql`${users.session_version} + 1`, updated_at: new Date() })
-        .where(eq(users.id, sub))
-        .execute();
-      await db.delete(sessions)
-        .where(eq(sessions.id, `session:${sub}`))
-        .execute();
+      if (isNeon(db)) await setRequestContext(db as NeonHttpDatabase<any>, sub);
+
+      try {
+        await db.transaction(async (tx) => {
+          await tx.update(users)
+            .set({ session_version: sql`${users.session_version} + 1`, updated_at: new Date() })
+            .where(eq(users.id, sub));
+
+          await tx.delete(sessions)
+            .where(eq(sessions.id, `session:${sub}`));
+        });
+        console.info(`[auth:logout:${traceId}] Logout transaction completed for user_id=${sub.substring(0, 8)}...`);
+      } catch (txErr) {
+        const msg = txErr instanceof Error ? txErr.message : String(txErr);
+        console.error(`[auth:logout:${traceId}] Logout transaction FAILED (session_version + sessions not atomic):`, msg);
+      }
     }
   }
 
@@ -469,8 +541,11 @@ export async function handleLogout(request: Request, env: Env): Promise<Response
   });
 }
 
-export async function handleMe(_request: Request, env: Env, userId: string): Promise<Response> {
-  const db = createCoreDb(env);
+export async function handleMe(request: Request, env: Env, userId: string): Promise<Response> {
+  const guard = await requireAuthenticatedContext(env, userId, request);
+  if (!guard.ok) return guard.response;
+  const { db, ctx } = guard;
+
   const user = (await db.select({
     id: users.id,
     email: users.email,
@@ -479,7 +554,7 @@ export async function handleMe(_request: Request, env: Env, userId: string): Pro
     role: users.role,
     created_at: users.created_at,
     is_verified: users.is_verified,
-  }).from(users).where(eq(users.id, userId)).execute())[0];
+  }).from(users).where(eq(users.id, ctx.userId)).execute())[0];
 
   if (!user) return error('User not found', 404);
 
@@ -487,6 +562,7 @@ export async function handleMe(_request: Request, env: Env, userId: string): Pro
   const response = ok({ ...user, csrf_token: csrfToken });
   const headers = new Headers(response.headers);
   headers.append('Set-Cookie', `csrf_token=${csrfToken}; Path=/; Secure; SameSite=None; Max-Age=${60 * 60 * 24 * 7}`);
+  headers.append('X-Trace-Id', ctx.traceId);
 
   return new Response(response.body, {
     status: 200,
@@ -494,41 +570,46 @@ export async function handleMe(_request: Request, env: Env, userId: string): Pro
   });
 }
 
-export async function handleForgotPassword(request: Request, env: Env): Promise<Response> {
+export async function handleForgotPassword(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
   let body: { email: string };
   try { body = await request.json(); }
   catch { return error('Invalid JSON body'); }
 
   if (!body.email) return error('Email is required');
+  const normalizedEmail = body.email.toLowerCase();
 
   const db = createCoreDb(env);
+  if (isNeon(db)) await setRequestContext(db, 'anon');
+
   const user = (await db.select({
     id: users.id,
     first_name: users.first_name,
     role: users.role,
-  }).from(users).where(eq(users.email, body.email.toLowerCase())).execute())[0];
+  }).from(users).where(eq(users.email, normalizedEmail)).execute())[0];
 
-  // Always return 200 to prevent email enumeration
   if (!user) return ok({ message: 'If the account exists, a password reset email has been sent.' });
 
   const resetToken = crypto.randomUUID();
-  await db.insert(passwordResetTokens).values({
-    id: crypto.randomUUID(),
-    user_id: user.id,
-    token: resetToken,
-    expires_at: new Date(Date.now() + 60 * 60 * 1000),
-  }).execute();
+  try {
+    await db.insert(passwordResetTokens).values({
+      id: crypto.randomUUID(),
+      user_id: user.id,
+      token: resetToken,
+      expires_at: new Date(Date.now() + 60 * 60 * 1000),
+    });
+  } catch (e) {
+    console.error('[auth:forgot] Insert reset token failed:', e);
+    return ok({ message: 'If the account exists, a password reset email has been sent.' });
+  }
 
-  if (env.RESEND_API_KEY) {
-    // Route staff/admin to UMS; students stay on the portal
+  if (env.RESEND_API_KEY && isValidEmail(normalizedEmail)) {
     const isStaffRole = ['admin', 'staff', 'registrar', 'faculty'].includes(user.role);
     const baseUrl = isStaffRole ? getUmsUrl(env) : getPortalUrl(env);
     const resetUrl = `${baseUrl}/reset-password?token=${resetToken}`;
     const systemLabel = isStaffRole ? 'University Management System (UMS)' : 'Student Portal';
 
-    const { buildEmailLayout } = await import('../lib/email');
-    await sendEmail(env, {
-      to: body.email.toLowerCase(),
+    await safeDispatchEmail(env, ctx, {
+      to: normalizedEmail,
       subject: 'BMI University — Password Reset Request',
       html: buildEmailLayout(
         `Password Reset — ${systemLabel}`,
@@ -541,7 +622,7 @@ export async function handleForgotPassword(request: Request, env: Env): Promise<
         <p style="color:#94a3b8;font-size:13px;">Or copy this link into your browser:<br><a href="${resetUrl}" style="color:#d4af37;word-break:break-all;">${resetUrl}</a></p>
         <p style="color:#94a3b8;font-size:13px;">This link expires in <strong>1 hour</strong>. If you didn't request this, you can safely ignore this email.</p>
         `
-      )
+      ),
     });
   }
 
@@ -549,18 +630,20 @@ export async function handleForgotPassword(request: Request, env: Env): Promise<
 }
 
 export async function handleResetPassword(request: Request, env: Env): Promise<Response> {
+  const traceId = generateTraceId();
   let body: { token: string; new_password: string };
   try { body = await request.json(); }
   catch { return error('Invalid JSON body'); }
 
   if (!body.token || !body.new_password) return error('Token and new password are required');
 
-  // Validate password
   const strength = validatePasswordStrength(body.new_password);
   if (!strength.valid) return error(strength.errors.join('; '));
   if (isCommonPassword(body.new_password)) return error('This password is too common. Please choose a stronger password.');
 
   const db = createCoreDb(env);
+  if (isNeon(db)) await setRequestContext(db as NeonHttpDatabase<any>, 'anon');
+
   const resetToken = (await db.select({
     id: passwordResetTokens.id,
     user_id: passwordResetTokens.user_id,
@@ -571,66 +654,85 @@ export async function handleResetPassword(request: Request, env: Env): Promise<R
   if (!resetToken) return error('Invalid or expired reset token', 404);
   if (new Date(resetToken.expires_at) < new Date()) return error('Reset token has expired', 410);
 
-  // Update password
   const passwordHash = await hashPassword(body.new_password, env.PASSWORD_PEPPER, env.PBKDF2_ITERATIONS);
-  await db.update(users)
-    .set({ password_hash: passwordHash, updated_at: new Date() })
-    .where(eq(users.id, resetToken.user_id));
 
-  // Mark token as used
-  await db.update(passwordResetTokens)
-    .set({ used_at: new Date() })
-    .where(eq(passwordResetTokens.id, resetToken.id));
+  try {
+    await db.transaction(async (tx) => {
+      await tx.update(users)
+        .set({ password_hash: passwordHash, updated_at: new Date() })
+        .where(eq(users.id, resetToken.user_id));
 
-  // Increment session_version to instantly invalidate all active JWTs for this user
-  await db.update(users)
-    .set({ session_version: sql`${users.session_version} + 1`, updated_at: new Date() })
-    .where(eq(users.id, resetToken.user_id));
+      await tx.update(passwordResetTokens)
+        .set({ used_at: new Date() })
+        .where(eq(passwordResetTokens.id, resetToken.id));
 
-  // Also clean up the session row
-  await db.delete(sessions)
-    .where(eq(sessions.user_id, resetToken.user_id));
+      await tx.update(users)
+        .set({ session_version: sql`${users.session_version} + 1`, updated_at: new Date() })
+        .where(eq(users.id, resetToken.user_id));
 
+      await tx.delete(sessions)
+        .where(eq(sessions.user_id, resetToken.user_id));
+    });
+  } catch (txErr) {
+    const msg = txErr instanceof Error ? txErr.message : String(txErr);
+    console.error(`[auth:reset:${traceId}] Password reset transaction FAILED — rolling back ALL four writes (password/token/session_version/sessions):`, msg);
+    return error('Unable to complete password reset. Your password has NOT been changed. Please try again.', 500);
+  }
+
+  console.info(`[auth:reset:${traceId}] Password reset completed atomically for user_id=${resetToken.user_id.substring(0, 8)}...`);
   return ok({ message: 'Password reset successfully. You can now log in with your new password.' });
 }
 
-export async function handleMfaSetup(_request: Request, env: Env, userId: string): Promise<Response> {
-  const db = createCoreDb(env);
+export async function handleMfaSetup(request: Request, env: Env, userId: string): Promise<Response> {
+  const guard = await requireAuthenticatedContext(env, userId, request);
+  if (!guard.ok) return guard.response;
+  const { db, ctx } = guard;
+
   const user = (await db.select({
     email: users.email,
     first_name: users.first_name,
     mfa_secret: users.mfa_secret,
     mfa_enabled: users.mfa_enabled,
-  }).from(users).where(eq(users.id, userId)).execute())[0];
+  }).from(users).where(eq(users.id, ctx.userId)).execute())[0];
   if (!user) return error('User not found', 404);
 
   if (user.mfa_enabled) return error('MFA is already enabled', 400);
 
-  // Generate new secret if none exists
   let secret = user.mfa_secret;
   if (!secret) {
     secret = await generateTOTPSecret();
-    await db.update(users)
-      .set({ mfa_secret: secret, updated_at: new Date() })
-      .where(eq(users.id, userId));
+    try {
+      await db.transaction(async (tx) => {
+        await tx.update(users)
+          .set({ mfa_secret: secret, updated_at: new Date() })
+          .where(eq(users.id, ctx.userId));
+      });
+    } catch (txErr) {
+      const msg = txErr instanceof Error ? txErr.message : String(txErr);
+      console.error(`[auth:mfa-setup:${ctx.traceId}] MFA secret write transaction FAILED:`, msg);
+      return error('Failed to save MFA secret. Please try again.', 500);
+    }
   }
 
   const otpAuthUrl = getTOTPAuthUrl(secret, user.email);
-  return ok({ secret, otp_auth_url: otpAuthUrl });
+  return ok({ secret, otp_auth_url: otpAuthUrl, trace_id: ctx.traceId });
 }
 
 export async function handleMfaEnable(request: Request, env: Env, userId: string): Promise<Response> {
+  const guard = await requireAuthenticatedContext(env, userId, request);
+  if (!guard.ok) return guard.response;
+  const { db, ctx } = guard;
+
   let body: { token: string };
   try { body = await request.json(); }
   catch { return error('Invalid JSON body'); }
 
   if (!body.token) return error('Token is required');
 
-  const db = createCoreDb(env);
   const user = (await db.select({
     mfa_secret: users.mfa_secret,
     mfa_enabled: users.mfa_enabled,
-  }).from(users).where(eq(users.id, userId)).execute())[0];
+  }).from(users).where(eq(users.id, ctx.userId)).execute())[0];
   if (!user) return error('User not found', 404);
   if (!user.mfa_secret) return error('MFA not set up. Please call /api/auth/mfa/setup first.', 400);
   if (user.mfa_enabled) return error('MFA is already enabled', 400);
@@ -638,30 +740,51 @@ export async function handleMfaEnable(request: Request, env: Env, userId: string
   const valid = await verifyTOTP(user.mfa_secret, body.token);
   if (!valid) return error('Invalid token', 400);
 
-  await db.update(users)
-    .set({ mfa_enabled: 1, updated_at: new Date() })
-    .where(eq(users.id, userId));
-  return ok({ message: 'MFA enabled successfully' });
+  try {
+    await db.transaction(async (tx) => {
+      await tx.update(users)
+        .set({ mfa_enabled: 1, updated_at: new Date() })
+        .where(eq(users.id, ctx.userId));
+    });
+  } catch (txErr) {
+    const msg = txErr instanceof Error ? txErr.message : String(txErr);
+    console.error(`[auth:mfa-enable:${ctx.traceId}] MFA enable write transaction FAILED:`, msg);
+    return error('Failed to enable MFA. Please try again.', 500);
+  }
+  console.info(`[auth:mfa-enable:${ctx.traceId}] MFA enabled for user_id=${ctx.userId.substring(0, 8)}...`);
+  return ok({ message: 'MFA enabled successfully', trace_id: ctx.traceId });
 }
 
 export async function handleMfaDisable(request: Request, env: Env, userId: string): Promise<Response> {
+  const guard = await requireAuthenticatedContext(env, userId, request);
+  if (!guard.ok) return guard.response;
+  const { db, ctx } = guard;
+
   let body: { password: string };
   try { body = await request.json(); }
   catch { return error('Invalid JSON body'); }
 
   if (!body.password) return error('Password is required');
 
-  const db = createCoreDb(env);
-  const user = (await db.select({ password_hash: users.password_hash }).from(users).where(eq(users.id, userId)).execute())[0];
+  const user = (await db.select({ password_hash: users.password_hash }).from(users).where(eq(users.id, ctx.userId)).execute())[0];
   if (!user) return error('User not found', 404);
 
   const valid = await verifyPassword(body.password, user.password_hash, env.PASSWORD_PEPPER);
   if (!valid) return error('Invalid password', 401);
 
-  await db.update(users)
-    .set({ mfa_enabled: 0, mfa_secret: null, updated_at: new Date() })
-    .where(eq(users.id, userId));
-  return ok({ message: 'MFA disabled successfully' });
+  try {
+    await db.transaction(async (tx) => {
+      await tx.update(users)
+        .set({ mfa_enabled: 0, mfa_secret: null, updated_at: new Date() })
+        .where(eq(users.id, ctx.userId));
+    });
+  } catch (txErr) {
+    const msg = txErr instanceof Error ? txErr.message : String(txErr);
+    console.error(`[auth:mfa-disable:${ctx.traceId}] MFA disable write transaction FAILED:`, msg);
+    return error('Failed to disable MFA. Please try again.', 500);
+  }
+  console.info(`[auth:mfa-disable:${ctx.traceId}] MFA disabled for user_id=${ctx.userId.substring(0, 8)}...`);
+  return ok({ message: 'MFA disabled successfully', trace_id: ctx.traceId });
 }
 
 export async function handleOAuthLogin(_request: Request, env: Env, provider: OAuthProvider): Promise<Response> {

@@ -31,20 +31,8 @@ const GradeAppealReview: React.FC<GradeAppealReviewProps> = ({
   useEffect(() => {
     if (isOpen) {
       // Load appeals from API
-      const mockAppeals: GradeAppeal[] = [
-        {
-          id: 'APP-001',
-          gradeId: 'GRD-001',
-          studentId: 'STU-001',
-          courseId: 'CRS-101',
-          reason: 'Grading Error',
-          explanation: 'I believe there was a calculation error in my final grade. My midterm score was 85% and final exam was 90%, but my final grade shows as B instead of A-.',
-          status: AppealStatus.SUBMITTED,
-          submittedAt: new Date().toISOString(),
-          originalGrade: 'B',
-        },
-      ];
-      setAppeals(mockAppeals);
+      // API not yet implemented - show empty state instead of mock data
+      setAppeals([]);
     }
   }, [isOpen]);
 

@@ -134,25 +134,10 @@ const Staff: React.FC = () => {
   const { data: apiLeaveRequests } = useLeaveRequestsQuery();
   const updateLeaveRequest = useUpdateLeaveRequest();
 
-  // Fallback mock data shown when backend endpoint not yet available
-  const [mockLeaveRequests, setMockLeaveRequests] = useState([
-    {id: 1, staffId: "EMP-001", startDate: "2024-06-01", endDate: "2024-06-15", reason: "Medical", status: "pending" as const},
-    {id: 2, staffId: "EMP-003", startDate: "2024-06-10", endDate: "2024-06-12", reason: "Family event", status: "pending" as const},
-    {id: 3, staffId: "EMP-007", startDate: "2024-05-20", endDate: "2024-05-22", reason: "Conference", status: "approved" as const},
-  ]);
-
-  const leaveRequests = apiLeaveRequests ?? mockLeaveRequests;
-  const setLeaveRequests = setMockLeaveRequests;
+  const leaveRequests = apiLeaveRequests ?? [];
 
   const handleLeaveAction = (id: number, status: 'approved' | 'rejected') => {
-    if (apiLeaveRequests) {
-      // Real API available — call the backend
-      updateLeaveRequest.mutate({ id, status });
-    } else {
-      // No API yet — update local mock state
-      // @ts-expect-error leave request status uses a wider union
-      setLeaveRequests((prev) => (prev as any).map((r: any) => r.id === request.id ? { ...r, status: "approved" as any } : r));
-    }
+    updateLeaveRequest.mutate({ id, status });
   };
 
   const filteredStaff = useMemo(() => {

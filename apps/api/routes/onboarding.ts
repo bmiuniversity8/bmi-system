@@ -1,14 +1,17 @@
 import { ok, error } from '../lib/types';
 import type { Env } from '../lib/types';
-import { createCoreDb } from '../lib/db';
-import { documents, applications, invoices } from '../schema/core';
+import type { ExecutionContext } from '@cloudflare/workers-types';
+import { createCoreDb, isNeon, setRequestContext } from '../lib/db';
+import { documents, applications, invoices, users } from '../schema/core';
 import { enrollments, studentHolds } from '../schema/academic';
+import { sendEmail, buildEmailLayout, onboardingStepCompletedEmail, isValidEmail } from '../lib/email';
 import { eq, and } from 'drizzle-orm';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
-export async function handleGetOnboardingStatus(_request: Request, env: Env, userId: string): Promise<Response> {
+export async function handleGetOnboardingStatus(_request: Request, env: Env, userId: string, _ctx?: ExecutionContext): Promise<Response> {
   const db = createCoreDb(env);
+  if (isNeon(db)) await setRequestContext(db, userId);
 
   // Check if they uploaded an ID document
   const idDoc = (await db.select({ id: documents.id })
@@ -83,12 +86,13 @@ function detectMimeType(bytes: Uint8Array): string | null {
   return null;
 }
 
-export async function handleUploadStudentDocument(request: Request, env: Env, userId: string): Promise<Response> {
+export async function handleUploadStudentDocument(request: Request, env: Env, userId: string, ctx?: ExecutionContext): Promise<Response> {
   const url = new URL(request.url);
   const docType = url.searchParams.get('doc_type');
   if (!docType) return error('doc_type is required', 400);
 
   const db = createCoreDb(env);
+  if (isNeon(db)) await setRequestContext(db, userId);
 
   const app = (await db.select({ id: applications.id })
     .from(applications)
@@ -121,7 +125,7 @@ export async function handleUploadStudentDocument(request: Request, env: Env, us
 
   const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').substring(0, 200);
   const ext = safeFileName.split('.').pop()?.toLowerCase() || 'bin';
-  
+
   const r2Key = `documents/${userId}/profile/${docType}-${crypto.randomUUID()}.${ext}`;
 
   await env.PLATFORM_CONTEXT!.storage.upload({
@@ -132,25 +136,75 @@ export async function handleUploadStudentDocument(request: Request, env: Env, us
   });
 
   const docId = crypto.randomUUID();
-  await db.insert(documents).values({
-    id: docId,
-    application_id: applicationId,
-    user_id: userId,
-    doc_type: docType,
-    file_name: safeFileName,
-    r2_key: r2Key,
-    mime_type: detectedMime,
-    file_size_bytes: file.size,
+  let holdJustCleared = false;
+
+  // ACID: insert document + clear document hold atomically so a partial write
+  // (doc inserted without hold cleared) never leaves the student stuck.
+  await db.transaction(async (tx) => {
+    await tx.insert(documents).values({
+      id: docId,
+      application_id: applicationId,
+      user_id: userId,
+      doc_type: docType,
+      file_name: safeFileName,
+      r2_key: r2Key,
+      mime_type: detectedMime,
+      file_size_bytes: file.size,
+    });
+
+    if (docType === 'id_document') {
+      const holdUpdateRes = await tx.update(studentHolds)
+        .set({ is_active: 0, resolved_at: new Date() })
+        .where(and(
+          eq(studentHolds.student_id, userId),
+          eq(studentHolds.hold_type, 'document'),
+          eq(studentHolds.is_active, 1)
+        ));
+      const updateRes: any = holdUpdateRes;
+      holdJustCleared = ((updateRes?.rowCount ?? updateRes?.rowsAffected ?? 0) as number) > 0;
+    }
   });
 
-  if (docType === 'id_document') {
-    await db.update(studentHolds)
-      .set({ is_active: 0, resolved_at: new Date() })
-      .where(and(
-        eq(studentHolds.student_id, userId),
-        eq(studentHolds.hold_type, 'document'),
-        eq(studentHolds.is_active, 1)
-      ));
+  // RC #6: Send an onboarding progress notification after uploading an ID document
+  // (which clears the document hold and unlocks course registration).
+  if (docType === 'id_document' || holdJustCleared) {
+    const user = (await db.select({ first_name: users.first_name, email: users.email })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1)
+      .execute())[0];
+
+    if (user && user.email && isValidEmail(user.email)) {
+      const runNotify = async () => {
+        await sendEmail(env, {
+          to: user.email,
+          subject: holdJustCleared
+            ? 'BMI University — Document Hold Cleared'
+            : 'BMI University — ID Document Received',
+          html: holdJustCleared
+            ? onboardingStepCompletedEmail(user.first_name!, 'id_verification', 'Your ID document has been verified and the document hold has been removed.')
+            : buildEmailLayout('Document Received', `
+                <h2 style="color: #0f172a;">Hi ${user.first_name},</h2>
+                <p style="color: #475569; line-height: 1.6;">
+                  We've received your ID document upload (<strong>${safeFileName}</strong>).
+                </p>
+                ${holdJustCleared ? `
+                <div style="background:#f0fdf4;border-left:4px solid #22c55e;padding:16px;margin:20px 0;border-radius:4px;">
+                  <p style="margin:0;color:#15803d;font-weight:bold;">Good news! Your document hold has been cleared.</p>
+                  <p style="margin:8px 0 0;color:#15803d;">You can now proceed with course registration.</p>
+                </div>` : ''}
+                <p style="color: #475569; line-height: 1.6;">
+                  Log in to the student portal to continue your onboarding process.
+                </p>
+              `),
+        }).catch(e => console.error('[onboarding] ID doc upload email failed:', e));
+      };
+      if (ctx) {
+        ctx.waitUntil(runNotify());
+      } else {
+        await runNotify();
+      }
+    }
   }
 
   return ok({ document_id: docId, file_name: safeFileName, doc_type: docType });

@@ -65,17 +65,7 @@ export class GradeDeadlineService {
     } catch (e) {
       console.error('Failed to set deadline API', e);
     }
-
-    const deadline: DeadlineConfig = {
-      ...config,
-      id: `DL-${Date.now()}`,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    // eslint-disable-next-line no-console
-    console.log('[GradeDeadline] Set deadline (mock fallback):', deadline);
-    return deadline;
+    throw new Error('Failed to set deadline API');
   }
 
   /**
@@ -189,21 +179,7 @@ export class GradeDeadlineService {
     } catch (e) {
       console.error('Failed to get missing grades API', e);
     }
-    
-    // Mock data fallback
-    return [
-      {
-        courseId: 'CRS-101',
-        courseCode: 'THEO101',
-        courseName: 'Systematic Theology I',
-        instructorId: 'INS-001',
-        instructorName: 'Dr. Samuel Kiptoo',
-        instructorEmail: 's.kiptoo@bmi.edu',
-        enrolledStudents: 30,
-        submittedGrades: 25,
-        missingGrades: 5,
-      },
-    ];
+    return [];
   }
 
   /**
