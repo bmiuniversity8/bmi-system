@@ -117,7 +117,7 @@ export const api = {
 
     mfaEnable: (token: string) =>
       request<{ message: string }>('/auth/mfa/enable', { method: 'POST', body: JSON.stringify({ token }) }),
-      
+
     claim: (admissionCode: string, password: string) =>
       request<{ message: string }>('/auth/claim', { method: 'POST', body: JSON.stringify({ admissionCode, password }) }),
   },
@@ -249,7 +249,7 @@ export const api = {
     dropCourse: (course_id: string) => request<{ success: boolean; message: string }>(`/student/courses/${course_id}/drop`, { method: 'POST' }),
     getTranscript: () => request<{ classes: any[]; gpa: string | null }>('/student/transcript'),
     getSettings: () => request<{ directory_release: number; communications_opt_in: number; photo?: string | null }>('/student/settings'),
-    updateSettings: (settings: { directory_release: boolean; communications_opt_in: boolean }) => 
+    updateSettings: (settings: { directory_release: boolean; communications_opt_in: boolean }) =>
       request<{ success: boolean; message: string }>('/student/settings', {
         method: 'PUT',
         body: JSON.stringify(settings)
@@ -260,7 +260,7 @@ export const api = {
         body: JSON.stringify({ photo })
       }),
     getSupportTickets: () => request<any[]>('/student/support'),
-    createSupportTicket: (subject: string, description: string) => 
+    createSupportTicket: (subject: string, description: string) =>
       request<{ success: boolean; message: string; ticket_id: string }>('/student/support', {
         method: 'POST',
         body: JSON.stringify({ subject, description })
@@ -270,10 +270,10 @@ export const api = {
   registration: {
     getStatus: () => request<any>('/registration/status'),
     getModules: () => request<any[]>('/registration/modules'),
-    getPrograms: () => 
+    getPrograms: () =>
       request<{ items: { id: string; name: string; code: string; level: string; degree_type: string }[]; total: number }>('/v1/programs')
         .then(r => r.items ?? []),
-    saveStep: (stepKey: string, data: any) => 
+    saveStep: (stepKey: string, data: any) =>
       request<any>(`/registration/${stepKey}`, {
         method: 'POST',
         body: JSON.stringify(data)
@@ -304,6 +304,8 @@ export interface Application {
   first_name?: string;
   last_name?: string;
   email?: string;
+  application_number?: string;
+  reviewer_notes?: string | null;
 }
 
 export interface DocumentMeta {
@@ -347,6 +349,8 @@ export interface Course {
   credits: number;
   term: string;
   capacity: number;
+  semester?: string;
+  name?: string;
 }
 
 export interface AuditLog {
