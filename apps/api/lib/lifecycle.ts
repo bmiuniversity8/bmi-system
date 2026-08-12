@@ -251,7 +251,7 @@ export async function runAdmissionPipeline(
 
         await db.prepare(
           `INSERT INTO students (user_id, reg_no, admission_date, program, status, created_at, updated_at)
-           VALUES (?, ?, ?, ?, 'Active', ?, ?)`
+           VALUES (?, ?, ?, ?, 'Admitted', ?, ?)`
         ).bind(userId, placeholderRegNo, now.split('T')[0], program, now, now).run();
       }
 

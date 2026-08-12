@@ -2,73 +2,17 @@ import { ok, error } from '../lib/types';
 import type { Env } from '../lib/types';
 import type { ExecutionContext } from '@cloudflare/workers-types';
 import { createCoreDb, isNeon, setRequestContext } from '../lib/db';
-import { documents, applications, invoices, users } from '../schema/core';
-import { enrollments, studentHolds } from '../schema/academic';
+import { documents, applications, users } from '../schema/core';
+import { studentHolds } from '../schema/academic';
 import { safeDispatchEmail, buildEmailLayout, onboardingStepCompletedEmail, isValidEmail } from '../lib/email';
 import { eq, and } from 'drizzle-orm';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
-export async function handleGetOnboardingStatus(_request: Request, env: Env, userId: string, _ctx?: ExecutionContext): Promise<Response> {
-  const db = createCoreDb(env);
-  if (isNeon(db)) await setRequestContext(db, userId);
+import { handleGetRegistrationProgress } from './enrollment';
 
-  // Check if they uploaded an ID document
-  const idDoc = (await db.select({ id: documents.id })
-    .from(documents)
-    .where(and(eq(documents.user_id, userId), eq(documents.doc_type, 'id_document')))
-    .limit(1)
-    .execute())[0];
-  const hasUploadedID = !!idDoc;
-
-  // Check if they have enrolled in any class
-  const enrollment = (await db.select({ id: enrollments.id })
-    .from(enrollments)
-    .where(eq(enrollments.student_id, userId))
-    .limit(1)
-    .execute())[0];
-  const hasRegisteredClasses = !!enrollment;
-
-  // Check if they have paid at least one invoice
-  const invoice = (await db.select({ id: invoices.id })
-    .from(invoices)
-    .where(and(eq(invoices.student_id, userId), eq(invoices.status, 'paid')))
-    .limit(1)
-    .execute())[0];
-  const hasPaidInvoice = !!invoice;
-
-  const tasks = [
-    {
-      id: 'upload_id',
-      title: 'Upload Student ID Photo',
-      completed: hasUploadedID,
-      locked: false,
-      actionUrl: '/student/documents'
-    },
-    {
-      id: 'register_classes',
-      title: 'Register for Classes',
-      completed: hasRegisteredClasses,
-      locked: !hasUploadedID, // Locked until ID is uploaded
-      actionUrl: '/student/academics'
-    },
-    {
-      id: 'pay_invoice',
-      title: 'Pay Initial Tuition & Fees',
-      completed: hasPaidInvoice,
-      locked: !hasRegisteredClasses, // Locked until classes are registered
-      actionUrl: '/student/finances'
-    }
-  ];
-
-  const total = tasks.length;
-  const completed = tasks.filter(t => t.completed).length;
-
-  return ok({
-    tasks,
-    progress: Math.round((completed / total) * 100),
-    isComplete: completed === total
-  });
+export async function handleGetOnboardingStatus(request: Request, env: Env, userId: string, _ctx?: ExecutionContext): Promise<Response> {
+  return handleGetRegistrationProgress(request, env, userId);
 }
 
 const MAGIC_BYTES: Record<string, Uint8Array[]> = {

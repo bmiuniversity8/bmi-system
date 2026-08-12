@@ -62,7 +62,7 @@ export async function handleSubmitApplication(request: Request, env: Env, userId
   const db = env.PLATFORM_CONTEXT!.db;
 
   const [existingApp, maxApps, deadline] = await Promise.all([
-    db.prepare('SELECT COUNT(*) as count FROM applications WHERE user_id = ? AND status NOT IN (\'rejected\')').bind(userId).first<{ count: number }>(),
+    db.prepare('SELECT COUNT(*) as count FROM applications WHERE user_id = ? AND status NOT IN (\'rejected\', \'draft\')').bind(userId).first<{ count: number }>(),
     db.prepare('SELECT value FROM app_config WHERE key = \'max_applications_per_user\'').first<{ value: string }>(),
     db.prepare('SELECT value FROM app_config WHERE key = \'application_deadline\'').first<{ value: string }>()
   ]);
@@ -74,7 +74,7 @@ export async function handleSubmitApplication(request: Request, env: Env, userId
 
   const maxAppsConfig = maxApps?.value;
   if (maxAppsConfig) {
-    const totalCountResult = await db.prepare('SELECT COUNT(*) as count FROM applications WHERE user_id = ?').bind(userId).first<{ count: number }>();
+    const totalCountResult = await db.prepare('SELECT COUNT(*) as count FROM applications WHERE user_id = ? AND status NOT IN (\'draft\')').bind(userId).first<{ count: number }>();
     const totalApps = totalCountResult?.count || 0;
 
     if (totalApps >= parseInt(maxAppsConfig)) {
@@ -88,6 +88,13 @@ export async function handleSubmitApplication(request: Request, env: Env, userId
     if (new Date() > deadlineDate) {
       return error('The application deadline has passed.', 403);
     }
+  }
+
+  // Clean up any existing auto-created or manual draft applications before creating the submitted record
+  try {
+    await db.prepare('DELETE FROM applications WHERE user_id = ? AND status = \'draft\'').bind(userId).run();
+  } catch (e) {
+    console.warn('[apply] Clean up existing draft application skipped:', e);
   }
 
   const appId = crypto.randomUUID();
@@ -771,11 +778,18 @@ export async function handleAdminCreateApplication(
 
   // Check for an existing non-rejected application
   const existing = await db.prepare(
-    `SELECT COUNT(*) as count FROM applications WHERE user_id = ? AND status NOT IN ('rejected')`
+    `SELECT COUNT(*) as count FROM applications WHERE user_id = ? AND status NOT IN ('rejected', 'draft')`
   ).bind(userId).first<{ count: number }>();
 
   if ((existing?.count ?? 0) > 0) {
     return error('An active application already exists for this email address.', 409);
+  }
+
+  // Clean up any existing draft application before creating the admin application
+  try {
+    await db.prepare("DELETE FROM applications WHERE user_id = ? AND status = 'draft'").bind(userId).run();
+  } catch (e) {
+    console.warn('[apply] Clean up existing draft application skipped:', e);
   }
 
   const appId = crypto.randomUUID();

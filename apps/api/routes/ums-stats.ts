@@ -50,12 +50,13 @@ export async function handleCatalogTerms(_request: Request, env: Env): Promise<R
 export async function handleStudentStatsOverview(_request: Request, env: Env): Promise<Response> {
   const total     = (await env.PLATFORM_CONTEXT!.db.prepare(`SELECT COUNT(*) as c FROM students`).first<{c:number}>())?.c || 0;
   const active    = (await env.PLATFORM_CONTEXT!.db.prepare(`SELECT COUNT(*) as c FROM students WHERE status='Active'`).first<{c:number}>())?.c || 0;
+  const admitted  = (await env.PLATFORM_CONTEXT!.db.prepare(`SELECT COUNT(*) as c FROM students WHERE status='Admitted'`).first<{c:number}>())?.c || 0;
   const inactive  = (await env.PLATFORM_CONTEXT!.db.prepare(`SELECT COUNT(*) as c FROM students WHERE status='Inactive'`).first<{c:number}>())?.c || 0;
   const graduated = (await env.PLATFORM_CONTEXT!.db.prepare(`SELECT COUNT(*) as c FROM students WHERE status='Graduated'`).first<{c:number}>())?.c || 0;
   const applicants= (await env.PLATFORM_CONTEXT!.db.prepare(`SELECT COUNT(*) as c FROM students WHERE status='Applicant'`).first<{c:number}>())?.c || 0;
   const suspended = (await env.PLATFORM_CONTEXT!.db.prepare(`SELECT COUNT(*) as c FROM students WHERE status='Suspended'`).first<{c:number}>())?.c || 0;
   const byGender  = await env.PLATFORM_CONTEXT!.db.prepare(`SELECT gender, COUNT(*) as count FROM students s INNER JOIN users u ON s.user_id=u.id GROUP BY gender`).all();
-  return ok({ total, active, inactive, graduated, applicants, suspended, byGender: byGender.results });
+  return ok({ total, active, admitted, inactive, graduated, applicants, suspended, byGender: byGender.results });
 }
 
 export async function handleStaffStatsOverview(_request: Request, env: Env): Promise<Response> {

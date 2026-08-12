@@ -135,14 +135,14 @@ export async function handleRegister(request: Request, env: Env, ctx?: Execution
           token: verificationToken,
           expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000),
         });
-        // Auto-create initial application record so applicant appears on Admissions Desk immediately
+        // Auto-create initial application record as draft so applicant has a record without blocking formal submission
         try {
           await tx.insert(applications).values({
             id: appId,
             user_id: userId,
             program: 'BA in Biblical Studies',
             degree_level: 'undergraduate',
-            status: 'submitted',
+            status: 'draft',
           });
         } catch (appErr) {
           console.warn('Initial application record creation skipped (rollback-safe in tx):', appErr);

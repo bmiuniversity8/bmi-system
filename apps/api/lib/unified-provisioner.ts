@@ -151,15 +151,16 @@ export async function runUnifiedProvisioning(
       } else {
         const placeholderRegNo = (regNo && !regNo.startsWith('STD')) ? regNo : `PENDING-${input.userId.slice(0, 8).toUpperCase()}`;
         const admissionDate = input.admissionDate || now.split('T')[0];
-
+        const initialStatus = input.source === 'portal' ? 'Active' : 'Admitted';
         await db.prepare(
           `INSERT INTO students (user_id, reg_no, admission_date, program, status, gender, date_of_birth, nationality, photo, study_center_id, created_at, updated_at)
-           VALUES (?, ?, ?, ?, 'Active', ?, ?, ?, ?, ?, ?, ?)`
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         ).bind(
           input.userId,
           placeholderRegNo,
           admissionDate,
           input.programName || '',
+          initialStatus,
           input.gender || null,
           input.dateOfBirth || null,
           input.nationality || null,

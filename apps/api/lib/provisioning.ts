@@ -210,9 +210,9 @@ async function executeJob(env: Env, job: ProvisioningJob): Promise<void> {
 
       await ctx.db.transaction(async (tx) => {
         await tx.prepare(
-          `INSERT INTO invoices (id, user_id, amount, description, due_date, status, created_at)
-           VALUES (?, ?, ?, ?, datetime('now', '+30 days'), 'pending', datetime('now'))`
-        ).bind(invoiceId, studentRow.user_id, invoiceAmount, invoiceDesc).run();
+          `INSERT INTO invoices (id, student_id, uid, amount, due_date, status, created_at)
+           VALUES (?, ?, ?, ?, datetime('now', '+30 days'), 'unpaid', datetime('now'))`
+        ).bind(invoiceId, studentRow.user_id, uid, invoiceAmount).run();
 
         await tx.prepare(
           `INSERT OR IGNORE INTO lifecycle_events

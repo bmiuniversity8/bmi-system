@@ -233,8 +233,12 @@ export async function handleCompleteRegistration(_req: Request, env: Env, userId
 
     const courses = currentData.modules?.selected_course_ids || [];
 
-    // ACID transaction: enrollments + metadata completion flag
+    // ACID transaction: enrollments + student status update + metadata completion flag
     await db.transaction(async (tx) => {
+      await tx.prepare(
+        `UPDATE students SET status = 'Active', updated_at = ? WHERE user_id = ?`
+      ).bind(now, userId).run();
+
       for (const courseId of courses) {
         await tx.prepare(
           // ON CONFLICT DO NOTHING is standard SQL (SQLite >= 3.24 / PostgreSQL) — portable across D1 and Neon
