@@ -7,6 +7,8 @@ import {
   programCurriculum,
   programCourses,
   enrollments,
+  students,
+  programFees,
 } from '../schema/academic';
 import {
   studentPrograms,
@@ -18,7 +20,6 @@ import {
   invoices,
   courses,
 } from '../schema/core';
-import { programFees } from '../schema/academic';
 import { eq, and, count, lte, gte } from 'drizzle-orm';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -404,7 +405,12 @@ export async function handleGetRegistrationProgress(_req: Request, env: Env, use
     .where(and(eq(documents.user_id, userId), eq(documents.doc_type, 'id_document')))
     .limit(1)
     .execute())[0];
-  const hasUploadedId = !!idDoc;
+  const studentPhoto = (await db.select({ photo: students.photo })
+    .from(students)
+    .where(eq(students.user_id, userId))
+    .limit(1)
+    .execute())[0];
+  const hasUploadedId = !!idDoc || !!studentPhoto?.photo;
 
   const currentTerm = await getActiveTerm(db);
 
@@ -451,6 +457,8 @@ export async function handleGetRegistrationProgress(_req: Request, env: Env, use
     .execute())[0];
   const hasPaid = !!invoice;
 
+  const hasOrientationCompleted = holds.some(h => h.hold_type === 'orientation' && !h.is_active);
+
   const tasks = [
     {
       id: 'upload_id',
@@ -464,7 +472,7 @@ export async function handleGetRegistrationProgress(_req: Request, env: Env, use
     {
       id: 'orientation',
       title: 'Complete Online Orientation',
-      completed: !holds.some(h => h.hold_type === 'orientation' && h.is_active),
+      completed: hasOrientationCompleted,
       locked: !hasUploadedId,
       hold_type: 'orientation',
       hold_active: holds.some(h => h.hold_type === 'orientation' && h.is_active),
@@ -473,8 +481,8 @@ export async function handleGetRegistrationProgress(_req: Request, env: Env, use
     {
       id: 'course_selection',
       title: 'Course Registration',
-      completed: !holds.some(h => h.hold_type === 'course_selection' && h.is_active),
-      locked: holds.some(h => h.hold_type === 'orientation' && h.is_active),
+      completed: hasActiveEnrollments,
+      locked: !hasOrientationCompleted,
       sub_tasks: [
         { id: 'enroll_mandatory', title: 'Auto-Enroll in Mandatory Courses', completed: hasEnrolledMandatory },
         { id: 'select_electives', title: 'Select Elective Courses', completed: hasSelectedElectives },

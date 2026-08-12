@@ -85,7 +85,7 @@ describe('Enrollment Flow', () => {
         { id: 'h4', hold_type: 'payment', reason: 'Payment', is_active: 0, created_at: '2026-01-01', resolved_at: '2026-01-02' },
       ];
       const drizzle = makeDrizzleMock(
-        [{ id: 'doc-1' }, { id: 'term-1', name: 'Spring 2026', academic_year: '2026' }, { cnt: 3 }, { cnt: 1 }, { cnt: 4 }, { id: 'inv-1' }],
+        [{ id: 'doc-1' }, { photo: 'photo.jpg' }, { id: 'term-1', name: 'Spring 2026', academic_year: '2026' }, { cnt: 3 }, { cnt: 1 }, { cnt: 4 }, { id: 'inv-1' }],
         [allHolds]
       );
       vi.mocked(createCoreDb).mockReturnValue(drizzle);
