@@ -10,7 +10,6 @@
 
 import { error } from '../lib/types';
 import type { Env } from '../lib/types';
-import { PROGRAMS } from '../lib/programs';
 
 const CACHE_HEADERS = {
   'Cache-Control': 'public, max-age=300, stale-while-revalidate=600',
@@ -28,13 +27,52 @@ function cachedOk<T>(data: T): Response {
   });
 }
 
-/** GET /api/public/programs — full program catalog with live seat availability */
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Returns a normalized { level → seats } map summed per-program for capacity/availability. */
+async function buildProgramSeatMap(env: Env): Promise<Map<string, { capacity: number; enrolled: number }>> {
+  // Aggregate seat counts per program via the program_id foreign key on courses
+  const courseCounts = await env.PLATFORM_CONTEXT!.db.prepare(
+    `SELECT c.program_id,
+            SUM(c.capacity)                                                   AS capacity,
+            COUNT(CASE WHEN e.status = 'enrolled' THEN 1 END)                AS enrolled
+     FROM courses c
+     LEFT JOIN enrollments e ON e.course_id = c.id
+     WHERE c.is_active = 1
+     GROUP BY c.program_id`,
+  ).all<{ program_id: string | null; capacity: number | null; enrolled: number | null }>();
+
+  const seatMap = new Map<string, { capacity: number; enrolled: number }>();
+  for (const row of courseCounts.results) {
+    if (!row.program_id) continue;
+    seatMap.set(row.program_id, {
+      capacity: row.capacity ?? 0,
+      enrolled: row.enrolled ?? 0,
+    });
+  }
+  return seatMap;
+}
+
+// ── Public Handlers ──────────────────────────────────────────────────────────
+
+/**
+ * GET /api/public/programs — full program catalog with live seat availability.
+ *
+ * SOURCE OF TRUTH: the database `programs` table (single source of truth).
+ * Previously this endpoint projected from a hardcoded PROGRAMS constant in
+ * @bmi/shared; it now queries programs + departments + faculties via SQL so
+ * adding/archiving a program in the DB is instantly reflected here (within
+ * the 5-min public cache).
+ *
+ * Optional query params:
+ *   - level: 'undergraduate' | 'graduate' | 'doctorate' | 'certificate'
+ */
 export async function handlePublicPrograms(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
   const url = new URL(request.url);
-  const level = url.searchParams.get('level'); // optional filter
+  const level = url.searchParams.get('level');
 
   const cacheUrl = new URL(request.url);
-  cacheUrl.search = ''; // Strip search params so caching is at the endpoint level
+  cacheUrl.search = '';
   const cacheKey = new Request(cacheUrl.toString(), request);
   const cache = caches.default;
 
@@ -42,9 +80,7 @@ export async function handlePublicPrograms(request: Request, env: Env, ctx?: Exe
   const cachedRes = await cache.match(cacheKey);
   if (cachedRes) {
     if (!level) return cachedRes;
-    
-    // Filter the cached response manually
-    type ProgramItem = { level: string; [key: string]: unknown };
+    type ProgramItem = { level: string;[key: string]: unknown };
     const body = await cachedRes.clone().json<{ success: boolean; data: ProgramItem[] }>();
     const filtered = body.data.filter(p => p.level === level);
     return new Response(JSON.stringify({ success: true, data: filtered }), {
@@ -53,39 +89,65 @@ export async function handlePublicPrograms(request: Request, env: Env, ctx?: Exe
     });
   }
 
-  // Get course capacity vs enrollment counts from DB
-  const courseCounts = await env.PLATFORM_CONTEXT!.db.prepare(
-    `SELECT c.code, c.capacity,
-            COUNT(CASE WHEN e.status = 'enrolled' THEN 1 END) AS enrolled
-     FROM courses c
-     LEFT JOIN enrollments e ON e.course_id = c.id
-     GROUP BY c.id`,
-  ).all<{ code: string; capacity: number; enrolled: number }>();
+  const [programRows, seatMap] = await Promise.all([
+    env.PLATFORM_CONTEXT!.db.prepare(
+      `SELECT p.id, p.name, p.code, p.level, p.description, p.icon,
+              p.total_credit_hours AS credits, p.duration_years, p.mode_of_study,
+              d.name  AS department,
+              f.name  AS faculty,
+              f.id    AS faculty_id,
+              d.id    AS department_id
+       FROM programs p
+       LEFT JOIN departments d ON d.id = p.department_id
+       LEFT JOIN faculties   f ON f.id = d.faculty_id
+       WHERE p.is_active = 1
+       ORDER BY
+         CASE p.level
+           WHEN 'undergraduate' THEN 1
+           WHEN 'graduate'      THEN 2
+           WHEN 'doctorate'     THEN 3
+           WHEN 'certificate'   THEN 4
+           ELSE 5
+         END,
+         p.name`,
+    ).all<{
+      id: string; name: string; code: string; level: string;
+      description: string | null; icon: string | null;
+      credits: number; duration_years: number; mode_of_study: string;
+      department: string | null; faculty: string | null;
+      department_id: string | null; faculty_id: string | null;
+    }>(),
+    buildProgramSeatMap(env),
+  ]);
 
-  const seatMap = new Map<string, number>();
-  for (const row of courseCounts.results) {
-    seatMap.set(row.code, Math.max(0, row.capacity - (row.enrolled ?? 0)));
-  }
-
-  let programs = PROGRAMS.map((p) => ({
-    id: p.label,
-    code: p.label,
-    label: p.label,
-    level: p.level,
-    description: p.description,
-    credits: 120, // default — courses table doesn't have per-program credits yet
-    term: 'Fall 2026',
-    available_seats: seatMap.get(p.label) ?? null,
-  }));
+  let programs = programRows.results.map((row) => {
+    const seats = seatMap.get(row.id);
+    const availableSeats = seats ? Math.max(0, seats.capacity - seats.enrolled) : null;
+    return {
+      id: row.id,
+      code: row.code,
+      label: row.name,
+      name: row.name,
+      level: row.level,
+      description: row.description,
+      icon: row.icon,
+      credits: row.credits,
+      duration_years: row.duration_years,
+      mode_of_study: row.mode_of_study,
+      department: row.department,
+      department_id: row.department_id,
+      faculty: row.faculty,
+      faculty_id: row.faculty_id,
+      available_seats: availableSeats,
+    };
+  });
 
   const responseToCache = cachedOk(programs);
-  
-  // Cache the full program catalog using Cache API
+
   if (ctx) {
     ctx.waitUntil(cache.put(cacheKey, responseToCache.clone()));
   } else {
-    // Local dev without ExecutionContext may not cleanly support put
-    await cache.put(cacheKey, responseToCache.clone()).catch(() => {});
+    await cache.put(cacheKey, responseToCache.clone()).catch(() => { });
   }
 
   if (level) {
@@ -94,6 +156,26 @@ export async function handlePublicPrograms(request: Request, env: Env, ctx?: Exe
   }
 
   return responseToCache;
+}
+
+/** GET /api/public/faculties — public list of active faculties (for marketing & dropdowns). */
+export async function handlePublicFaculties(_request: Request, env: Env): Promise<Response> {
+  const { results } = await env.PLATFORM_CONTEXT!.db.prepare(
+    `SELECT id, name, code, description FROM faculties WHERE is_active = 1 ORDER BY name`,
+  ).all();
+  return cachedOk(results);
+}
+
+/** GET /api/public/departments — public list of active departments. Optional ?facultyId= filter. */
+export async function handlePublicDepartments(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  const facultyId = url.searchParams.get('facultyId');
+  let query = `SELECT id, name, code, faculty_id, description FROM departments WHERE is_active = 1`;
+  const bindings: unknown[] = [];
+  if (facultyId) { query += ` AND faculty_id = ?`; bindings.push(facultyId); }
+  query += ` ORDER BY name`;
+  const { results } = await env.PLATFORM_CONTEXT!.db.prepare(query).bind(...bindings).all();
+  return cachedOk(results);
 }
 
 /** GET /api/public/stats — aggregate counts, no PII */

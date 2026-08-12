@@ -64,7 +64,7 @@ const CourseModal: React.FC<CourseModalProps> = ({
     onClose();
   };
 
-  const faculties = ["Theology", "ICT", "Business", "Education", "General"];
+  const faculties = ["Faculty of Theology and Ministry", "Faculty of Christian Education"];
   const levels = ["Undergraduate", "Postgraduate", "Diploma", "Certificate"];
   const statuses = ["Published", "Draft", "Archived"];
 

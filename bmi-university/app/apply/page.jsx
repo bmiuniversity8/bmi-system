@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { PROGRAMS, PORTAL_URL } from "@bmi/shared";
+import { PROGRAMS as FALLBACK_PROGRAMS, PORTAL_URL, API_WORKER_URL } from "@bmi/shared";
 
 export default function ApplyPage() {
   const [form, setForm] = useState({
@@ -11,6 +11,29 @@ export default function ApplyPage() {
     email: "",
     program: "",
   });
+
+  // ── DB-as-SSOT: load programs list from the canonical /api/public/programs endpoint.
+  //    Fallback to the bundled list so first paint + unit tests work without a network call.
+  const [programs, setPrograms] = useState(FALLBACK_PROGRAMS);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_WORKER_URL}/api/public/programs`, { cache: 'force-cache' });
+        if (!res.ok) return;
+        const body = await res.json();
+        if (!body?.success || !Array.isArray(body.data)) return;
+        if (cancelled) return;
+        setPrograms(body.data.map(p => ({
+          label: p.label ?? p.name,
+          level: p.level,
+          description: p.description,
+          icon: p.icon ?? undefined,
+        })));
+      } catch { /* silently keep fallback */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -116,27 +139,27 @@ export default function ApplyPage() {
 
             <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
               <label htmlFor="program" style={{ fontSize: "0.9rem", fontWeight: 600, color: "#334155" }}>Program of Interest *</label>
-                <select
-                  id="program"
-                  required
-                  value={form.program}
-                  onChange={(e) => update("program", e.target.value)}
-                  style={{ padding: "0.8rem 1rem", borderRadius: "8px", border: "1px solid #cbd5e1", outline: "none", fontSize: "1rem", background: "#fff" }}
-                >
-                  <option value="">Select a Program</option>
-                  {[
-                    { label: "Bachelor's Degrees", level: "undergraduate" },
-                    { label: "Master's Degrees", level: "graduate" },
-                    { label: "Doctorate Degrees", level: "doctorate" },
-                    { label: "Graduate Certificates", level: "certificate" },
-                  ].map((group) => (
-                    <optgroup key={group.level} label={group.label}>
-                      {PROGRAMS.filter((p) => p.level === group.level).map((p) => (
-                        <option key={p.label} value={p.label}>{p.label}</option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
+              <select
+                id="program"
+                required
+                value={form.program}
+                onChange={(e) => update("program", e.target.value)}
+                style={{ padding: "0.8rem 1rem", borderRadius: "8px", border: "1px solid #cbd5e1", outline: "none", fontSize: "1rem", background: "#fff" }}
+              >
+                <option value="">Select a Program</option>
+                {[
+                  { label: "Bachelor's Degrees", level: "undergraduate" },
+                  { label: "Master's Degrees", level: "graduate" },
+                  { label: "Doctorate Degrees", level: "doctorate" },
+                  { label: "Graduate Certificates", level: "certificate" },
+                ].map((group) => (
+                  <optgroup key={group.level} label={group.label}>
+                    {programs.filter((p) => p.level === group.level).map((p) => (
+                      <option key={p.label} value={p.label}>{p.label}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
             </div>
 
             <div id="form-error" style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginTop: "1rem" }}>

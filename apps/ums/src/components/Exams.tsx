@@ -4,7 +4,7 @@ import {
   Calendar,
   Clock,
   GraduationCap,
-  
+
   AlertTriangle,
   Search,
   Plus,
@@ -12,7 +12,7 @@ import {
   ChevronRight,
   Printer,
   Download,
-  
+
   FileText,
   ShieldCheck,
   UserCheck,
@@ -21,7 +21,14 @@ import {
   Layout,
   ClipboardList,
 } from "lucide-react";
-import { PROGRAMS } from "@bmi/shared";
+import { PROGRAMS as FALLBACK_PROGRAMS, API_WORKER_URL } from "@bmi/shared";
+
+const _viteApiUrl = (import.meta as any).env?.VITE_API_URL as string | undefined;
+const _isDev = (import.meta as any).env?.DEV as boolean | undefined;
+const API_BASE = (_viteApiUrl && _viteApiUrl.trim() !== ''
+  ? _viteApiUrl
+  : (_isDev ? 'http://127.0.0.1:8787' : API_WORKER_URL)
+) + '/api';
 import ImportModal from "./ImportModal";
 import GradeEntryModal, { GradeFormData } from "./grading/GradeEntryModal";
 import { GradingScaleType } from "../grading/types";
@@ -79,6 +86,29 @@ const Exams: React.FC = () => {
   const [isLoadingGrades, setIsLoadingGrades] = useState(false);
   const [isSavingGrade, setIsSavingGrade] = useState(false);
 
+  // ── DB-as-SSOT: hydrate program picker from the canonical /public/programs endpoint.
+  //    Fallback ensures the component renders immediately without a live API connection.
+  const [programs, setPrograms] = useState(FALLBACK_PROGRAMS);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/public/programs`, { cache: 'force-cache' });
+        if (!res.ok) return;
+        const body = await res.json();
+        if (!body?.success || !Array.isArray(body.data)) return;
+        if (cancelled) return;
+        setPrograms(body.data.map((p: any) => ({
+          label: p.label ?? p.name,
+          level: p.level,
+          description: p.description,
+          icon: p.icon ?? undefined,
+        })));
+      } catch { /* silently keep fallback */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   // Load grades from database on component mount
   useEffect(() => {
     const loadGrades = async () => {
@@ -91,7 +121,8 @@ const Exams: React.FC = () => {
         } else {
           setSavedGrades([]);
         }
-      } catch { setSavedGrades([]);
+      } catch {
+        setSavedGrades([]);
       } finally {
         setIsLoadingGrades(false);
       }
@@ -108,7 +139,7 @@ const Exams: React.FC = () => {
 
       if (!student || !course) {
         throw new Error("Student or course not found");
-       }
+      }
 
       // Reconstruct assessment components and calculate total score
       const assessmentComponents = data.components.map((cs) => ({
@@ -129,7 +160,7 @@ const Exams: React.FC = () => {
       const caComponents = data.components.filter(
         (cs) => cs.componentType !== "Final_Exam"
       );
-      const caScore = caComponents.length > 0 
+      const caScore = caComponents.length > 0
         ? caComponents.reduce((sum, cs) => sum + (cs.score / cs.maxScore) * cs.weight, 0)
         : undefined;
 
@@ -160,7 +191,7 @@ const Exams: React.FC = () => {
     } catch (error) { // eslint-disable-next-line no-console
       console.error("Error saving grade:", error);
       alert("An error occurred while saving the grade.");
-     } finally {
+    } finally {
       setIsSavingGrade(false);
     }
   };
@@ -188,19 +219,19 @@ const Exams: React.FC = () => {
     },
     {
       id: "EX-902",
-      course: "Introduction to Web Dev",
-      code: "CS101",
+      course: "Old Testament Survey I",
+      code: "BIBL101",
       date: "2024-06-14",
       time: "02:00 PM",
-      venue: "Lab 204",
+      venue: "Bethlehem Hall",
       proctor: "Prof. Mwangi",
       status: "Papers Processing",
       level: "Degree",
     },
     {
       id: "EX-903",
-      course: "Counseling Ethics",
-      code: "MDIV550",
+      course: "Marriage & Family Counseling",
+      code: "COUN501",
       date: "2024-06-15",
       time: "11:00 AM",
       venue: "Room 12B",
@@ -211,10 +242,10 @@ const Exams: React.FC = () => {
     {
       id: "EX-904",
       course: "Biblical Hermeneutics",
-      code: "THEO200",
+      code: "THEO103",
       date: "2024-06-18",
       time: "08:30 AM",
-      venue: "Bethlehem Hall",
+      venue: "Chapel Auditorium",
       proctor: "Dr. Jane Okumu",
       status: "Scheduled",
       level: "Diploma",
@@ -236,7 +267,7 @@ const Exams: React.FC = () => {
       id: "GR-002",
       student: "Beatrice Wanjiku",
       studentId: "BMI-2023-012",
-      course: "Intro to ICT",
+      course: "New Testament Survey I",
       midterm: 75,
       final: 82,
       status: "Verified",
@@ -246,7 +277,7 @@ const Exams: React.FC = () => {
       id: "GR-003",
       student: "Caleb Rotich",
       studentId: "BMI-2023-045",
-      course: "Biblical Greek",
+      course: "Biblical Hermeneutics",
       midterm: 92,
       final: 95,
       status: "Verified",
@@ -256,7 +287,7 @@ const Exams: React.FC = () => {
       id: "GR-004",
       student: "Diana Waweru",
       studentId: "BMI-2022-088",
-      course: "Strategic Business",
+      course: "Organizational Leadership for Ministry",
       midterm: 62,
       final: 55,
       status: "Flagged",
@@ -276,7 +307,7 @@ const Exams: React.FC = () => {
       id: "GR-006",
       student: "Faith Chepkirui",
       studentId: "BMI-2023-055",
-      course: "Education Pedagogy",
+      course: "Doctoral Research in Christian Education",
       midterm: 85,
       final: 88,
       status: "Verified",
@@ -327,7 +358,7 @@ const Exams: React.FC = () => {
     });
 
     // Imported exams are obsolete since they are saved directly to DB now
-//     const _fromImport: GradeRecord[] = [];
+    //     const _fromImport: GradeRecord[] = [];
 
     // Convert saved database grades to grade records
     const fromDatabase: GradeRecord[] = savedGrades.map((grade) => {
@@ -406,7 +437,7 @@ const Exams: React.FC = () => {
             className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-none text-xs font-bold uppercase outline-none focus:border-[#4B0082] dark:text-white"
           >
             <option>All Programs</option>
-            {PROGRAMS.map((program) => (
+            {programs.map((program) => (
               <option key={program.label} value={program.label}>
                 {program.label}
               </option>
@@ -483,11 +514,10 @@ const Exams: React.FC = () => {
         </div>
         <button
           onClick={() => setActiveTab("schedule")}
-          className={`px-6 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2 ${
-            activeTab === "schedule"
-              ? "bg-[#4B0082] text-white shadow-lg shadow-purple-500/20 scale-105 border border-purple-500/50"
-              : "bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-[#4B0082]"
-          }`}
+          className={`px-6 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === "schedule"
+            ? "bg-[#4B0082] text-white shadow-lg shadow-purple-500/20 scale-105 border border-purple-500/50"
+            : "bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-[#4B0082]"
+            }`}
         >
           <Calendar
             size={12}
@@ -499,11 +529,10 @@ const Exams: React.FC = () => {
         </button>
         <button
           onClick={() => setActiveTab("grading")}
-          className={`px-6 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2 ${
-            activeTab === "grading"
-              ? "bg-[#4B0082] text-white shadow-lg shadow-purple-500/20 scale-105 border border-purple-500/50"
-              : "bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-[#4B0082]"
-          }`}
+          className={`px-6 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === "grading"
+            ? "bg-[#4B0082] text-white shadow-lg shadow-purple-500/20 scale-105 border border-purple-500/50"
+            : "bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-[#4B0082]"
+            }`}
         >
           <ClipboardList
             size={12}
@@ -541,11 +570,10 @@ const Exams: React.FC = () => {
                 <button
                   key={level}
                   onClick={() => setAcademicLevelFilter(level)}
-                  className={`px-8 py-3 rounded-none text-[10px] font-black uppercase tracking-widest transition-all duration-300 border transform ${
-                    academicLevelFilter === level
-                      ? `${activeClass} shadow-xl scale-105 -translate-y-1`
-                      : `bg-white dark:bg-gray-800 text-gray-400 border-gray-100 dark:border-gray-700 hover:-translate-y-1 hover:shadow-lg ${hoverClass} dark:hover:text-white`
-                  }`}
+                  className={`px-8 py-3 rounded-none text-[10px] font-black uppercase tracking-widest transition-all duration-300 border transform ${academicLevelFilter === level
+                    ? `${activeClass} shadow-xl scale-105 -translate-y-1`
+                    : `bg-white dark:bg-gray-800 text-gray-400 border-gray-100 dark:border-gray-700 hover:-translate-y-1 hover:shadow-lg ${hoverClass} dark:hover:text-white`
+                    }`}
                 >
                   {level}
                 </button>
@@ -696,13 +724,12 @@ const Exams: React.FC = () => {
                               Status
                             </p>
                             <span
-                              className={`px-3 py-1 text-[9px] font-black uppercase tracking-widest border inline-block ${
-                                exam.status === "Completed"
-                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                  : exam.status === "Scheduled"
-                                    ? "bg-blue-50 text-blue-700 border-blue-200"
-                                    : "bg-amber-50 text-amber-700 border-amber-200"
-                              }`}
+                              className={`px-3 py-1 text-[9px] font-black uppercase tracking-widest border inline-block ${exam.status === "Completed"
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                : exam.status === "Scheduled"
+                                  ? "bg-blue-50 text-blue-700 border-blue-200"
+                                  : "bg-amber-50 text-amber-700 border-amber-200"
+                                }`}
                             >
                               {exam.status}
                             </span>
@@ -914,39 +941,39 @@ const Exams: React.FC = () => {
         editData={
           editingGrade
             ? {
-                id: editingGrade.id.startsWith("DB-")
-                  ? editingGrade.id.replace("DB-", "")
-                  : undefined,
-                studentId: editingGrade.studentId,
-                studentName: editingGrade.student,
-                admissionNo: editingGrade.studentId,
-                courseCode: editingGrade.id.startsWith("DB-")
-                  ? savedGrades.find(
-                      (g) => g.id === editingGrade.id.replace("DB-", ""),
-                    )?.courseCode ||
-                    editingGrade.course
-                      .split(" ")
-                      .map((w) => w[0])
-                      .join("")
-                  : editingGrade.course
-                      .split(" ")
-                      .map((w) => w[0])
-                      .join(""),
-                courseName: editingGrade.course,
-                credits: 3,
-                components: [],
-                gradingScaleType: GradingScaleType.US_4_0,
-                academicYear: editingGrade.id.startsWith("DB-")
-                  ? savedGrades.find(
-                      (g) => g.id === editingGrade.id.replace("DB-", ""),
-                    )?.academicYear || "2024"
-                  : "2024",
-                semester: editingGrade.id.startsWith("DB-")
-                  ? savedGrades.find(
-                      (g) => g.id === editingGrade.id.replace("DB-", ""),
-                    )?.semester || "Fall"
-                  : "Fall",
-              }
+              id: editingGrade.id.startsWith("DB-")
+                ? editingGrade.id.replace("DB-", "")
+                : undefined,
+              studentId: editingGrade.studentId,
+              studentName: editingGrade.student,
+              admissionNo: editingGrade.studentId,
+              courseCode: editingGrade.id.startsWith("DB-")
+                ? savedGrades.find(
+                  (g) => g.id === editingGrade.id.replace("DB-", ""),
+                )?.courseCode ||
+                editingGrade.course
+                  .split(" ")
+                  .map((w) => w[0])
+                  .join("")
+                : editingGrade.course
+                  .split(" ")
+                  .map((w) => w[0])
+                  .join(""),
+              courseName: editingGrade.course,
+              credits: 3,
+              components: [],
+              gradingScaleType: GradingScaleType.US_4_0,
+              academicYear: editingGrade.id.startsWith("DB-")
+                ? savedGrades.find(
+                  (g) => g.id === editingGrade.id.replace("DB-", ""),
+                )?.academicYear || "2024"
+                : "2024",
+              semester: editingGrade.id.startsWith("DB-")
+                ? savedGrades.find(
+                  (g) => g.id === editingGrade.id.replace("DB-", ""),
+                )?.semester || "Fall"
+                : "Fall",
+            }
             : null
         }
       />

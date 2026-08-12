@@ -16,7 +16,14 @@ import {
   GraduationCap
 } from "lucide-react";
 import { admissionsService, Application, StatusLogEntry } from "../services/admissionsService";
-import { PROGRAMS } from "@bmi/shared";
+import { PROGRAMS as FALLBACK_PROGRAMS, API_WORKER_URL } from "@bmi/shared";
+
+const _viteApiUrl = (import.meta as any).env?.VITE_API_URL as string | undefined;
+const _isDev = (import.meta as any).env?.DEV as boolean | undefined;
+const API_BASE = (_viteApiUrl && _viteApiUrl.trim() !== ''
+  ? _viteApiUrl
+  : (_isDev ? 'http://127.0.0.1:8787' : API_WORKER_URL)
+) + '/api';
 
 const STATUS_COLORS: Record<string, string> = {
   draft: "bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700",
@@ -53,6 +60,29 @@ export default function Admissions() {
   // Selection & Bulk
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
+  // ── DB-as-SSOT: hydrate program picker from the canonical /public/programs endpoint.
+  //    Fallback ensures the component renders immediately without a live API connection.
+  const [programs, setPrograms] = useState(FALLBACK_PROGRAMS);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/public/programs`, { cache: 'force-cache' });
+        if (!res.ok) return;
+        const body = await res.json();
+        if (!body?.success || !Array.isArray(body.data)) return;
+        if (cancelled) return;
+        setPrograms(body.data.map((p: any) => ({
+          label: p.label ?? p.name,
+          level: p.level,
+          description: p.description,
+          icon: p.icon ?? undefined,
+        })));
+      } catch { /* silently keep fallback */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   // New Applicant Modal
   const [showAddModal, setShowAddModal] = useState(false);
   const [newFormData, setNewFormData] = useState({
@@ -60,8 +90,8 @@ export default function Admissions() {
     last_name: "",
     email: "",
     phone: "",
-    program: PROGRAMS[0]?.label || "BA in Biblical Studies",
-    degree_level: PROGRAMS[0]?.level || "undergraduate",
+    program: programs[0]?.label || "BA in Biblical Studies",
+    degree_level: programs[0]?.level || "undergraduate",
     high_school: "",
     gpa: "3.8",
     address: "",
@@ -169,8 +199,8 @@ export default function Admissions() {
         last_name: "",
         email: "",
         phone: "",
-        program: PROGRAMS[0]?.label || "BA in Biblical Studies",
-        degree_level: PROGRAMS[0]?.level || "undergraduate",
+        program: programs[0]?.label || "BA in Biblical Studies",
+        degree_level: programs[0]?.level || "undergraduate",
         high_school: "",
         gpa: "3.8",
         address: "",
@@ -375,11 +405,10 @@ export default function Admissions() {
             <button
               key={s || "all"}
               onClick={() => setFilter(s)}
-              className={`px-3 py-1 rounded-md transition-all ${
-                filter === s
-                  ? "bg-[#2E004F] text-[#FFD700] shadow-sm"
-                  : "text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-700"
-              }`}
+              className={`px-3 py-1 rounded-md transition-all ${filter === s
+                ? "bg-[#2E004F] text-[#FFD700] shadow-sm"
+                : "text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-700"
+                }`}
             >
               {s ? s.replace("_", " ") : "ALL"}
             </button>
@@ -461,9 +490,8 @@ export default function Admissions() {
                   return (
                     <tr
                       key={app.id}
-                      className={`hover:bg-purple-50/30 dark:hover:bg-gray-800/40 transition-colors ${
-                        isChecked ? "bg-purple-50/50 dark:bg-purple-950/20" : ""
-                      }`}
+                      className={`hover:bg-purple-50/30 dark:hover:bg-gray-800/40 transition-colors ${isChecked ? "bg-purple-50/50 dark:bg-purple-950/20" : ""
+                        }`}
                     >
                       <td className="px-4 py-4 text-center">
                         <button onClick={() => toggleSelect(app.id)} className="text-gray-400 hover:text-gray-600">
@@ -610,11 +638,10 @@ export default function Admissions() {
               <div className="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800 shadow-xs">
                 <h3 className="text-xs font-black text-[#2E004F] dark:text-purple-300 uppercase tracking-wider mb-3 flex items-center justify-between">
                   <span className="flex items-center gap-1.5"><FileCheck size={16} /> Submitted Documentation Checklist</span>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                    (appDetails?.documents?.length || 0) > 0
-                      ? "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800"
-                      : "text-amber-600 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800"
-                  }`}>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${(appDetails?.documents?.length || 0) > 0
+                    ? "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800"
+                    : "text-amber-600 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800"
+                    }`}>
                     {appDetails?.documents?.length || 0} Document{(appDetails?.documents?.length === 1) ? "" : "s"} On File
                   </span>
                 </h3>
@@ -649,21 +676,19 @@ export default function Admissions() {
                         <div className="flex items-center gap-1">
                           <button
                             onClick={() => setDocChecklist(prev => ({ ...prev, [doc.key]: "verified" }))}
-                            className={`px-2 py-1 text-[10px] font-bold rounded cursor-pointer ${
-                              status === "verified"
-                                ? "bg-emerald-600 text-white shadow-xs"
-                                : "bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
-                            }`}
+                            className={`px-2 py-1 text-[10px] font-bold rounded cursor-pointer ${status === "verified"
+                              ? "bg-emerald-600 text-white shadow-xs"
+                              : "bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                              }`}
                           >
                             Verified
                           </button>
                           <button
                             onClick={() => setDocChecklist(prev => ({ ...prev, [doc.key]: "flagged" }))}
-                            className={`px-2 py-1 text-[10px] font-bold rounded cursor-pointer ${
-                              status === "flagged"
-                                ? "bg-rose-600 text-white shadow-xs"
-                                : "bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
-                            }`}
+                            className={`px-2 py-1 text-[10px] font-bold rounded cursor-pointer ${status === "flagged"
+                              ? "bg-rose-600 text-white shadow-xs"
+                              : "bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                              }`}
                           >
                             Flag
                           </button>
@@ -733,10 +758,10 @@ export default function Admissions() {
                         disabled={updating}
                         onClick={() => handleUpdateStatus(status)}
                         className={`flex-1 py-2.5 px-4 rounded-lg text-xs font-black uppercase tracking-wider text-white shadow-md transition-all active:scale-95
-                          ${status === 'accepted' ? 'bg-emerald-600 hover:bg-emerald-700' : 
-                            status === 'rejected' ? 'bg-rose-600 hover:bg-rose-700' : 
-                            status === 'waitlisted' ? 'bg-purple-700 hover:bg-purple-800' :
-                            'bg-[#2E004F] hover:bg-purple-950'}`}
+                          ${status === 'accepted' ? 'bg-emerald-600 hover:bg-emerald-700' :
+                            status === 'rejected' ? 'bg-rose-600 hover:bg-rose-700' :
+                              status === 'waitlisted' ? 'bg-purple-700 hover:bg-purple-800' :
+                                'bg-[#2E004F] hover:bg-purple-950'}`}
                       >
                         {updating ? 'Processing...' : status === 'accepted' ? 'Approve Admission' : status === 'rejected' ? 'Decline Application' : 'Mark ' + status.replace('_', ' ')}
                       </button>
@@ -827,7 +852,7 @@ export default function Admissions() {
                   <select
                     value={newFormData.program}
                     onChange={(e) => {
-                      const selectedProg = PROGRAMS.find(p => p.label === e.target.value);
+                      const selectedProg = programs.find(p => p.label === e.target.value);
                       setNewFormData({
                         ...newFormData,
                         program: e.target.value,
@@ -836,7 +861,7 @@ export default function Admissions() {
                     }}
                     className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg p-2 font-medium focus:ring-2 focus:ring-[#FFD700] outline-none"
                   >
-                    {PROGRAMS.map((p) => (
+                    {programs.map((p) => (
                       <option key={p.label} value={p.label}>
                         {p.label}
                       </option>

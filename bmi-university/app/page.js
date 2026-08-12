@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { PROGRAMS } from "@/lib/programs";
+import { PROGRAMS as FALLBACK_PROGRAMS, API_WORKER_URL } from "@bmi/shared";
 
 const slides = [
   { bg: "/images/home-hero/home-hero-1-graduation.jpg", tagline: "Empowering Christ-Centered Leaders" },
@@ -12,14 +12,38 @@ const slides = [
   { bg: "/images/home-hero/home-hero-4-library.jpg",    tagline: "Developing Leaders for Global Impact" },
 ];
 
-const bachelors = PROGRAMS.filter(p => p.level === 'undergraduate').map(p => ({ title: p.label, desc: p.description }));
-const masters = PROGRAMS.filter(p => p.level === 'graduate').map(p => ({ title: p.label, desc: p.description }));
-const doctorates = PROGRAMS.filter(p => p.level === 'doctorate').map(p => ({ title: p.label, desc: p.description }));
-
 export default function HomePage() {
   const [current, setCurrent] = useState(0);
   const [activeTab, setActiveTab] = useState("bachelors");
   const intervalRef = useRef(null);
+
+  // ── DB-as-SSOT: load programs from the public programs API.
+  //    FALLBACK_PROGRAMS ensures first paint is instant (and tests pass),
+  //    then state is hydrated from the authoritative DB-backed endpoint.
+  const [programs, setPrograms] = useState(FALLBACK_PROGRAMS);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_WORKER_URL}/api/public/programs`, { cache: 'force-cache' });
+        if (!res.ok) return;
+        const body = await res.json();
+        if (!body?.success || !Array.isArray(body.data)) return;
+        if (cancelled) return;
+        setPrograms(body.data.map(p => ({
+          label: p.label ?? p.name,
+          level: p.level,
+          description: p.description,
+          icon: p.icon ?? undefined,
+        })));
+      } catch { /* silently keep fallback */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const bachelors = useMemo(() => programs.filter(p => p.level === 'undergraduate').map(p => ({ title: p.label, desc: p.description })), [programs]);
+  const masters   = useMemo(() => programs.filter(p => p.level === 'graduate').map(p => ({ title: p.label, desc: p.description })), [programs]);
+  const doctorates= useMemo(() => programs.filter(p => p.level === 'doctorate').map(p => ({ title: p.label, desc: p.description })), [programs]);
 
   useEffect(() => {
     intervalRef.current = setInterval(() => {

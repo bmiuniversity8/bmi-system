@@ -85,6 +85,8 @@ export const programs = pgTable('programs', {
   duration_years: integer('duration_years').notNull(),
   total_credit_hours: integer('total_credit_hours').notNull(),
   mode_of_study: text('mode_of_study').notNull(),
+  description: text('description'),
+  icon: text('icon'),
   career_code: text('career_code'),
   isced_code: text('isced_code'),
   is_active: integer('is_active').notNull().default(1),
@@ -93,8 +95,10 @@ export const programs = pgTable('programs', {
 }, (t) => [
   uniqueIndex('programs_code_unique').on(t.code),
   index('idx_programs_department').on(t.department_id),
+  index('idx_programs_level').on(t.level),
   index('idx_programs_career').on(t.career_code),
   index('idx_programs_isced').on(t.isced_code),
+  index('idx_programs_active').on(t.is_active),
 ]);
 
 export const courses = pgTable('courses', {

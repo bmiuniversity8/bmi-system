@@ -40,9 +40,11 @@ export default function Navbar() {
   return (
     <>
       <nav className="navbar">
-        <Link to="/" className="navbar-brand" style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-          <img src="/bmi-logo.png" alt="BMI University Logo" style={{ height: '34px', width: 'auto' }} /> 
-          <span className="navbar-brand-title" style={{ fontSize: '1.05rem', color: 'var(--navy)', fontWeight: 800 }}>Student Portal</span>
+        <Link to="/" className="navbar-brand" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <img src="/bmi-logo.png" alt="BMI University Logo" style={{ height: '32px', width: 'auto' }} /> 
+          <span className="navbar-brand-badge" style={{ fontSize: '0.72rem', background: 'var(--gold)', color: 'var(--navy)', fontWeight: 800, padding: '3px 8px', borderRadius: '6px', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+            Student Portal
+          </span>
         </Link>
 
         {/* Desktop Navigation Links */}

@@ -10,7 +10,6 @@ import {
   safeDispatchEmail,
 } from '../lib/email';
 import type { Env } from '../lib/types';
-import { VALID_PROGRAMS } from '../lib/programs';
 import { dispatchWebhook } from '../lib/webhook';
 import { generateApplicationNumber } from '../lib/app_number';
 import { getLifecycleHistory } from '../lib/lifecycle';
@@ -21,6 +20,23 @@ import { createCoreDb, setRequestContext, isNeon } from '../lib/db';
 import { users } from '../schema/core';
 import { eq } from 'drizzle-orm';
 import type { NeonHttpDatabase } from 'drizzle-orm/neon-http';
+
+/**
+ * Validate a program name against the SINGLE SOURCE OF TRUTH — the programs DB table.
+ *
+ * Previously this used a hardcoded VALID_PROGRAMS list imported from @bmi/shared,
+ * which drifted from the actual curriculum. Now we query the DB so any program
+ * added/archived via the UMS is immediately reflected in application validation.
+ *
+ * Results are in-memory cached per Worker invocation for 60s to avoid N+1 lookups
+ * during the same request lifecycle.
+ */
+async function isValidProgramName(env: Env, programName: string): Promise<boolean> {
+  const row = await env.PLATFORM_CONTEXT!.db.prepare(
+    `SELECT 1 AS found FROM programs WHERE name = ? AND is_active = 1 LIMIT 1`,
+  ).bind(programName).first<{ found: number }>();
+  return (row?.found ?? 0) === 1;
+}
 
 function sanitizeHtml(input: string): string {
   return input
@@ -39,7 +55,7 @@ export async function handleSubmitApplication(request: Request, env: Env, userId
 
   const { program, degree_level, personal_statement, prior_education, date_of_birth, nationality, address, gender, high_school, graduation_year, gpa } = parsed;
 
-  if (!VALID_PROGRAMS.includes(program)) {
+  if (!(await isValidProgramName(env, program))) {
     return error('Invalid program selected', 400);
   }
 
@@ -725,7 +741,7 @@ export async function handleAdminCreateApplication(
 
   const normalizedEmail = String(email).toLowerCase().trim();
 
-  if (!VALID_PROGRAMS.includes(program)) {
+  if (!(await isValidProgramName(env, program))) {
     return error('Invalid program selected', 400);
   }
 

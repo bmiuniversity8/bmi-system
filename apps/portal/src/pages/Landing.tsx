@@ -1,7 +1,15 @@
 // src/pages/Landing.tsx
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { PROGRAMS } from "@bmi/shared";
+import { useState, useEffect, useMemo } from 'react';
+import { PROGRAMS as FALLBACK_PROGRAMS, API_WORKER_URL } from "@bmi/shared";
+
+const _viteApiUrl = (import.meta as any).env?.VITE_API_URL as string | undefined;
+const _isDev = (import.meta as any).env?.DEV as boolean | undefined;
+const API_BASE = (_viteApiUrl && _viteApiUrl.trim() !== ''
+  ? _viteApiUrl
+  : (_isDev ? 'http://127.0.0.1:8787' : API_WORKER_URL)
+) + '/api';
 
 const features = [
   { icon: '📋', title: 'Easy Online Application', desc: 'Complete your application in minutes with our guided multi-step form.' },
@@ -10,14 +18,37 @@ const features = [
   { icon: '🔐', title: 'Secure & Private', desc: "Your data is encrypted and stored securely on Cloudflare's global infrastructure." },
 ];
 
-const programs = [
-  { level: 'Bachelor\'s', programs: PROGRAMS.filter(p => p.level === 'undergraduate').map(p => p.label).slice(0, 3) },
-  { level: 'Master\'s', programs: PROGRAMS.filter(p => p.level === 'graduate').map(p => p.label).slice(0, 3) },
-  { level: 'Doctorate', programs: PROGRAMS.filter(p => p.level === 'doctorate').map(p => p.label).slice(0, 2) },
-];
-
 export default function Landing() {
   const { user } = useAuth();
+
+  // ── DB-as-SSOT: hydrate programs from the public catalog endpoint.
+  //    Fallback guarantees first-paint content and offline/test resilience.
+  const [programCatalog, setProgramCatalog] = useState(FALLBACK_PROGRAMS);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/public/programs`);
+        if (!res.ok) return;
+        const body = await res.json();
+        if (!body?.success || !Array.isArray(body.data)) return;
+        if (cancelled) return;
+        setProgramCatalog(body.data.map((p: any) => ({
+          label: p.label ?? p.name,
+          level: p.level,
+          description: p.description,
+          icon: p.icon ?? undefined,
+        })));
+      } catch { /* silently keep fallback */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const programs = useMemo(() => [
+    { level: 'Bachelor\'s', programs: programCatalog.filter(p => p.level === 'undergraduate').map(p => p.label).slice(0, 3) },
+    { level: 'Master\'s', programs: programCatalog.filter(p => p.level === 'graduate').map(p => p.label).slice(0, 3) },
+    { level: 'Doctorate', programs: programCatalog.filter(p => p.level === 'doctorate').map(p => p.label).slice(0, 2) },
+  ], [programCatalog]);
 
   return (
     <div>

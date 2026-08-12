@@ -4,17 +4,24 @@
  * 100% Open Source - Unique Creative Design
  */
 
-import React, { useState, useMemo, useCallback } from 'react';
-import { 
-  Search, Printer, Download, Mail, ShieldCheck, 
-  Sparkles, FileText, 
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import {
+  Search, Printer, Download, Mail, ShieldCheck,
+  Sparkles, FileText,
   MapPin, Phone, Globe
 } from 'lucide-react';
-import { PORTAL_URL, MARKETING_URL, ADMISSIONS_EMAIL, PROGRAMS } from '@bmi/shared';
+import { PORTAL_URL, MARKETING_URL, ADMISSIONS_EMAIL, PROGRAMS as FALLBACK_PROGRAMS, API_WORKER_URL } from '@bmi/shared';
 import { Student } from '../types';
 import { documentService } from '../services/documentService';
 import { getHtml2Pdf } from '../services/pdfService';
 import type { AdmissionLetter as AdmissionLetterType, DocumentSecurityFeatures } from '../types/documents';
+
+const _viteApiUrl = (import.meta as any).env?.VITE_API_URL as string | undefined;
+const _isDev = (import.meta as any).env?.DEV as boolean | undefined;
+const API_BASE = (_viteApiUrl && _viteApiUrl.trim() !== ''
+  ? _viteApiUrl
+  : (_isDev ? 'http://127.0.0.1:8787' : API_WORKER_URL)
+) + '/api';
 
 interface AdmissionLetterProps {
   students: Student[];
@@ -35,8 +42,32 @@ export const AdmissionLetter: React.FC<AdmissionLetterProps> = ({ students, logo
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedLetter, setGeneratedLetter] = useState<AdmissionLetterType | null>(null);
   const [securityFeatures, setSecurityFeatures] = useState<DocumentSecurityFeatures | null>(null);
+
+  // ── DB-as-SSOT: hydrate program picker from the canonical /public/programs endpoint.
+  //    Fallback ensures the form renders immediately without a live API connection.
+  const [programs, setPrograms] = useState(FALLBACK_PROGRAMS);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/public/programs`, { cache: 'force-cache' });
+        if (!res.ok) return;
+        const body = await res.json();
+        if (!body?.success || !Array.isArray(body.data)) return;
+        if (cancelled) return;
+        setPrograms(body.data.map((p: any) => ({
+          label: p.label ?? p.name,
+          level: p.level,
+          description: p.description,
+          icon: p.icon ?? undefined,
+        })));
+      } catch { /* silently keep fallback */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   const [letterConfig, setLetterConfig] = useState({
-    program: PROGRAMS[0].label, // Default to first program
+    program: programs[0].label, // Default to first program
     faculty: 'School of Science and Technology',
     semester: 'Fall 2024',
     reference: '',
@@ -101,7 +132,7 @@ export const AdmissionLetter: React.FC<AdmissionLetterProps> = ({ students, logo
       setShowLetter(true);
     } catch (error) { // eslint-disable-next-line no-console
       console.error('Letter generation failed:', error);
-     } finally {
+    } finally {
       setIsGenerating(false);
     }
   };
@@ -118,7 +149,7 @@ export const AdmissionLetter: React.FC<AdmissionLetterProps> = ({ students, logo
 
     try {
       const html2pdf = await getHtml2Pdf();
-      
+
       const opt = {
         margin: 0,
         filename: `ADMISSION_LETTER_${generatedLetter.studentId}_${generatedLetter.studentName.replace(/\s/g, '_')}.pdf`.toUpperCase(),
@@ -126,11 +157,11 @@ export const AdmissionLetter: React.FC<AdmissionLetterProps> = ({ students, logo
         html2canvas: { scale: 2, useCORS: true, logging: false },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
       };
-      
+
       await html2pdf().set(opt).from(element).save();
     } catch (error) { // eslint-disable-next-line no-console
       console.error('PDF generation failed:', error);
-     }
+    }
   };
 
   return (
@@ -182,9 +213,8 @@ export const AdmissionLetter: React.FC<AdmissionLetterProps> = ({ students, logo
               <div
                 key={student.id}
                 onClick={() => setSelectedStudent(student)}
-                className={`bg-white rounded-xl p-4 cursor-pointer transition-all hover:shadow-lg border-2 ${
-                  selectedStudent?.id === student.id ? 'border-emerald-500 shadow-lg' : 'border-slate-100 hover:border-slate-200'
-                }`}
+                className={`bg-white rounded-xl p-4 cursor-pointer transition-all hover:shadow-lg border-2 ${selectedStudent?.id === student.id ? 'border-emerald-500 shadow-lg' : 'border-slate-100 hover:border-slate-200'
+                  }`}
               >
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-bold shadow-md">
@@ -213,7 +243,7 @@ export const AdmissionLetter: React.FC<AdmissionLetterProps> = ({ students, logo
                     onChange={(e) => setLetterConfig({ ...letterConfig, program: e.target.value })}
                     className={THEME.input}
                   >
-                    {PROGRAMS.map((program) => (
+                    {programs.map((program) => (
                       <option key={program.label} value={program.label}>
                         {program.label}
                       </option>
@@ -292,7 +322,7 @@ export const AdmissionLetter: React.FC<AdmissionLetterProps> = ({ students, logo
               {/* Letter Document */}
               <div id="modern-admission-letter" className="bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-200">
                 <div className="h-2 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600" />
-                
+
                 <div className="p-10">
                   {/* Header */}
                   <div className="flex items-center justify-between mb-8 pb-6 border-b-2 border-slate-100">
@@ -316,8 +346,8 @@ export const AdmissionLetter: React.FC<AdmissionLetterProps> = ({ students, logo
 
                   {/* Date */}
                   <div className="text-right mb-8">
-                    <p className="text-sm text-slate-600">{new Date().toLocaleDateString('en-US', { 
-                      year: 'numeric', month: 'long', day: 'numeric' 
+                    <p className="text-sm text-slate-600">{new Date().toLocaleDateString('en-US', {
+                      year: 'numeric', month: 'long', day: 'numeric'
                     })}</p>
                   </div>
 
@@ -339,9 +369,9 @@ export const AdmissionLetter: React.FC<AdmissionLetterProps> = ({ students, logo
                   {/* Letter Body */}
                   <div className="space-y-4 text-slate-700 leading-relaxed">
                     <p className="font-bold text-slate-900">Dear {generatedLetter.studentName.split(' ')[0]},</p>
-                    
+
                     <p>
-                      We are delighted to inform you that your application for admission to BMI University has been 
+                      We are delighted to inform you that your application for admission to BMI University has been
                       carefully reviewed, and it is with great pleasure that we offer you a place in our prestigious institution.
                     </p>
 
@@ -357,18 +387,18 @@ export const AdmissionLetter: React.FC<AdmissionLetterProps> = ({ students, logo
                     </div>
 
                     <p>
-                      This offer is contingent upon your acceptance and fulfillment of all registration requirements 
-                      by the specified deadline. We believe that your academic journey at BMI University will be 
+                      This offer is contingent upon your acceptance and fulfillment of all registration requirements
+                      by the specified deadline. We believe that your academic journey at BMI University will be
                       transformative, and we look forward to welcoming you to our vibrant academic community.
                     </p>
 
                     <p>
-                      Please confirm your acceptance of this offer by completing the enclosed acceptance form and 
+                      Please confirm your acceptance of this offer by completing the enclosed acceptance form and
                       returning it along with the required documentation within 30 days of receipt of this letter.
                     </p>
 
                     <p>
-                      Congratulations on this significant achievement. We are excited to have you join us and 
+                      Congratulations on this significant achievement. We are excited to have you join us and
                       look forward to supporting your academic and personal growth.
                     </p>
                   </div>
@@ -383,7 +413,7 @@ export const AdmissionLetter: React.FC<AdmissionLetterProps> = ({ students, logo
                         <p className="text-sm text-slate-600">Director of Admissions</p>
                         <p className="text-xs text-slate-500">BMI University</p>
                       </div>
-                      
+
                       <div className="text-right">
                         <div className="w-14 h-14 bg-white rounded-lg shadow-md p-1 border border-slate-100 mb-2">
                           <img src={securityFeatures.qrCodeDataUrl} alt="QR" className="w-full h-full" />
@@ -402,7 +432,7 @@ export const AdmissionLetter: React.FC<AdmissionLetterProps> = ({ students, logo
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="h-2 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600" />
               </div>
             </div>

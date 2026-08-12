@@ -1,12 +1,36 @@
 "use client";
 import Link from "next/link";
-import { PROGRAMS } from "@/lib/programs";
+import { useState, useEffect, useMemo } from "react";
+import { PROGRAMS as FALLBACK_PROGRAMS, API_WORKER_URL } from "@bmi/shared";
 
 export default function Academics() {
-  const bachelors = PROGRAMS.filter(p => p.level === 'undergraduate').map(p => ({ title: p.label, desc: p.description, icon: p.icon }));
-  const masters = PROGRAMS.filter(p => p.level === 'graduate').map(p => ({ title: p.label, desc: p.description, icon: p.icon }));
-  const doctorates = PROGRAMS.filter(p => p.level === 'doctorate').map(p => ({ title: p.label, desc: p.description, icon: p.icon }));
-  const certificates = PROGRAMS.filter(p => p.level === 'certificate').map(p => ({ title: p.label, desc: p.description, icon: p.icon }));
+  // ── DB-as-SSOT: load programs from the authoritative public endpoint.
+  //    Fallback ensures instant first paint and keeps tests green.
+  const [programs, setPrograms] = useState(FALLBACK_PROGRAMS);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_WORKER_URL}/api/public/programs`, { cache: 'force-cache' });
+        if (!res.ok) return;
+        const body = await res.json();
+        if (!body?.success || !Array.isArray(body.data)) return;
+        if (cancelled) return;
+        setPrograms(body.data.map(p => ({
+          label: p.label ?? p.name,
+          level: p.level,
+          description: p.description,
+          icon: p.icon ?? undefined,
+        })));
+      } catch { /* silently keep fallback */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const bachelors = useMemo(() => programs.filter(p => p.level === 'undergraduate').map(p => ({ title: p.label, desc: p.description, icon: p.icon })), [programs]);
+  const masters = useMemo(() => programs.filter(p => p.level === 'graduate').map(p => ({ title: p.label, desc: p.description, icon: p.icon })), [programs]);
+  const doctorates = useMemo(() => programs.filter(p => p.level === 'doctorate').map(p => ({ title: p.label, desc: p.description, icon: p.icon })), [programs]);
+  const certificates = useMemo(() => programs.filter(p => p.level === 'certificate').map(p => ({ title: p.label, desc: p.description, icon: p.icon })), [programs]);
 
   const renderCards = (programs) =>
     programs.map((p, i) => (

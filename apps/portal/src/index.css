@@ -718,7 +718,4 @@ input, select, textarea, button { font-family: inherit; }
   .mobile-hamburger-btn {
     display: flex !important;
   }
-  .navbar-brand-title {
-    display: none !important;
-  }
 }

@@ -2,8 +2,15 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../hooks/useAuth';
-import { PROGRAMS } from '@bmi/shared';
+import { PROGRAMS as FALLBACK_PROGRAMS, API_WORKER_URL } from '@bmi/shared';
 import { z } from 'zod';
+
+const _viteApiUrl = (import.meta as any).env?.VITE_API_URL as string | undefined;
+const _isDev = (import.meta as any).env?.DEV as boolean | undefined;
+const API_BASE = (_viteApiUrl && _viteApiUrl.trim() !== ''
+  ? _viteApiUrl
+  : (_isDev ? 'http://127.0.0.1:8787' : API_WORKER_URL)
+) + '/api';
 
 const STEPS = ['Program', 'Personal Info', 'Background', 'Statement', 'Review & Submit'];
 const STORAGE_KEY = 'bmi_apply_form';
@@ -103,7 +110,7 @@ export default function Apply() {
 
     const now = Date.now();
     const timeSinceLastSave = now - lastSavedAt.current;
-    
+
     // Ensure we don't hit the API more than once every 30 seconds
     const delay = Math.max(30000 - timeSinceLastSave, 2000);
 
@@ -115,15 +122,15 @@ export default function Apply() {
         current_step: step,
         application_data: form
       })
-      .then(() => {
-        lastSavedAt.current = Date.now();
-        setDraftStatus('saved');
-        setTimeout(() => setDraftStatus('idle'), 3000);
-      })
-      .catch(err => {
-        console.warn('Background draft save failed:', err);
-        setDraftStatus('error');
-      });
+        .then(() => {
+          lastSavedAt.current = Date.now();
+          setDraftStatus('saved');
+          setTimeout(() => setDraftStatus('idle'), 3000);
+        })
+        .catch(err => {
+          console.warn('Background draft save failed:', err);
+          setDraftStatus('error');
+        });
     }, delay);
 
     return () => {
@@ -132,6 +139,29 @@ export default function Apply() {
   }, [form, step]);
 
   const update = useCallback((field: string, value: string | number) => setForm((f: any) => ({ ...f, [field]: value })), []);
+
+  // ── DB-as-SSOT: hydrate program picker from the canonical /public/programs endpoint.
+  //    Fallback ensures the form renders immediately and tests pass without a live API.
+  const [programs, setPrograms] = useState(FALLBACK_PROGRAMS);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/public/programs`);
+        if (!res.ok) return;
+        const body = await res.json();
+        if (!body?.success || !Array.isArray(body.data)) return;
+        if (cancelled) return;
+        setPrograms(body.data.map((p: any) => ({
+          label: p.label ?? p.name,
+          level: p.level,
+          description: p.description,
+          icon: p.icon ?? undefined,
+        })));
+      } catch { /* silently keep fallback */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const selectProgram = (p: { label: string; level: string }) => {
     update('program', p.label);
@@ -148,7 +178,7 @@ export default function Apply() {
 
   const handleSubmit = async () => {
     setError('');
-    
+
     const validation = SubmitApplicationSchema.safeParse(form);
     if (!validation.success) {
       setError('Please fix the errors in the form before submitting.');
@@ -246,7 +276,7 @@ export default function Apply() {
               <h2 style={{ marginBottom: '0.5rem' }}>Choose Your Program</h2>
               <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>Select the degree program you wish to apply to.</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                {PROGRAMS.map((p) => (
+                {programs.map((p) => (
                   <div key={p.label}
                     onClick={() => selectProgram(p)}
                     role="button"
@@ -278,7 +308,7 @@ export default function Apply() {
               <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
                 Please provide your personal details.
               </p>
-              
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', background: 'var(--bg)', padding: '1.25rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', marginBottom: '0.5rem' }}>
                 <div><strong>Name:</strong> {user?.first_name} {user?.last_name}</div>
                 <div><strong>Email:</strong> {user?.email}</div>
@@ -289,7 +319,7 @@ export default function Apply() {
                   <label className="form-label" htmlFor="date_of_birth">Date of Birth</label>
                   <input type="date" id="date_of_birth" className="form-input" value={form.date_of_birth || ''} onChange={e => update('date_of_birth', e.target.value)} />
                 </div>
-                
+
                 <div className="form-group">
                   <label className="form-label" htmlFor="gender">Gender</label>
                   <select id="gender" className="form-input" value={form.gender || ''} onChange={e => update('gender', e.target.value)}>
@@ -317,12 +347,12 @@ export default function Apply() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
               <h2 style={{ marginBottom: '0.25rem' }}>Educational Background</h2>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Tell us about your prior education and academic history.</p>
-              
+
               <div className="form-group">
                 <label className="form-label" htmlFor="high_school">High School</label>
                 <input type="text" id="high_school" className="form-input" value={form.high_school || ''} onChange={e => update('high_school', e.target.value)} placeholder="Name of High School" />
               </div>
-              
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
                 <div className="form-group">
                   <label className="form-label" htmlFor="graduation_year">Graduation Year</label>
