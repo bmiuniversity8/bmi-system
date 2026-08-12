@@ -14,6 +14,7 @@ vi.mock('../../lib/api', () => ({
     registration: {
       getStatus: vi.fn(),
       getModules: vi.fn(),
+      getPrograms: vi.fn(),
       saveStep: vi.fn(),
       complete: vi.fn(),
     },
@@ -25,6 +26,7 @@ describe('RegistrationWizard Page', () => {
     vi.clearAllMocks();
     vi.mocked(api.registration.getStatus).mockResolvedValue({ current_data: {}, completed_steps: [], next_step: 'personal_details', registration_complete: false });
     vi.mocked(api.registration.getModules).mockResolvedValue([]);
+    vi.mocked(api.registration.getPrograms).mockResolvedValue([]);
     vi.mocked(api.registration.saveStep).mockResolvedValue({ message: 'saved' });
     vi.mocked(api.registration.complete).mockResolvedValue({ message: 'completed' });
   });

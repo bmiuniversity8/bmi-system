@@ -70,6 +70,11 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
   const [validation, setValidation] = useState<Record<string, string>>({});
 
+  const formRef = useRef(form);
+  useEffect(() => {
+    formRef.current = form;
+  }, [form]);
+
   // Keep form in sync if params arrive after mount (e.g. client-side navigation)
   useEffect(() => {
     if (prefillEmail || prefillFirstName || prefillLastName) {
@@ -123,32 +128,30 @@ export default function Register() {
   const debounceTimers = useRef<Record<string, number>>({});
 
   const update = useCallback((field: string, value: string) => {
-    setForm(f => {
-      const newForm = { ...f, [field]: value };
-      
-      // Clear existing debounce timer
-      if (debounceTimers.current[field]) {
-        clearTimeout(debounceTimers.current[field]);
-      }
+    setForm(f => ({ ...f, [field]: value }));
+    const newForm = { ...formRef.current, [field]: value };
+    
+    // Clear existing debounce timer
+    if (debounceTimers.current[field]) {
+      clearTimeout(debounceTimers.current[field]);
+    }
 
-      // Debounce email and password validation for better UX
-      if (field === 'email' || field === 'password') {
-        debounceTimers.current[field] = setTimeout(() => {
-          const err = validateField(field, value, newForm);
-          setValidation(v => ({ ...v, [field]: err }));
-          
-          // Also re-validate confirm password if password changes
-          if (field === 'password' && newForm.confirm_password) {
-            setValidation(v => ({ ...v, confirm_password: validateField('confirm_password', newForm.confirm_password, newForm) }));
-          }
-        }, 500) as any;
-      } else {
-        const err = validateField(field, value, newForm);
+    // Debounce email and password validation for better UX
+    if (field === 'email' || field === 'password') {
+      debounceTimers.current[field] = setTimeout(() => {
+        const latestForm = formRef.current;
+        const err = validateField(field, latestForm[field as keyof typeof form], latestForm);
         setValidation(v => ({ ...v, [field]: err }));
-      }
-
-      return newForm;
-    });
+        
+        // Also re-validate confirm password if password changes
+        if (field === 'password' && latestForm.confirm_password) {
+          setValidation(v => ({ ...v, confirm_password: validateField('confirm_password', latestForm.confirm_password, latestForm) }));
+        }
+      }, 500) as any;
+    } else {
+      const err = validateField(field, value, newForm);
+      setValidation(v => ({ ...v, [field]: err }));
+    }
   }, [validateField]);
 
   const getPasswordStrength = (pw: string): { label: string; color: string; score: number } => {

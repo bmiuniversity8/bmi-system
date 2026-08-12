@@ -1,5 +1,4 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import Apply from './Apply';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -12,6 +11,7 @@ vi.mock('../lib/api', () => ({
   api: {
     applications: {
       submit: vi.fn(),
+      saveDraft: vi.fn().mockResolvedValue({ message: 'draft saved' }),
     },
   },
 }));
@@ -65,7 +65,6 @@ describe('Apply Page (Portal)', () => {
 
     (api.applications.submit as any).mockResolvedValue({ success: true, data: { id: 'app-123' } });
 
-    const user = userEvent.setup();
     renderWithRouter();
     
     // Select a program
@@ -81,7 +80,7 @@ describe('Apply Page (Portal)', () => {
     
     // We are on Background. Add text to prior education
     const bgInput = screen.getByLabelText(/Prior Education & Academic History \*/i);
-    await user.type(bgInput, 'I attended high school and got my diploma in 2020.');
+    fireEvent.change(bgInput, { target: { value: 'I attended high school and got my diploma in 2020.' } });
     
     // Continue to step 4
     fireEvent.click(screen.getByRole('button', { name: /Continue/i }));
@@ -89,7 +88,7 @@ describe('Apply Page (Portal)', () => {
     
     // Add text to personal statement
     const statementInput = screen.getByLabelText(/Personal Statement \*/i);
-    await user.type(statementInput, 'This is my personal statement. It must be at least one hundred characters long to pass the validation check in the Apply form. Here is some additional text to ensure the length requirement is satisfied.');
+    fireEvent.change(statementInput, { target: { value: 'This is my personal statement. It must be at least one hundred characters long to pass the validation check in the Apply form. Here is some additional text to ensure the length requirement is satisfied.' } });
     
     // Continue to step 5
     fireEvent.click(screen.getByRole('button', { name: /Continue/i }));

@@ -1,5 +1,4 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import Register from './Register';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -59,14 +58,13 @@ describe('Register Page', () => {
   });
 
   it('validates password constraints on submit', async () => {
-    const user = userEvent.setup();
     renderWithRouter();
     
-    await user.type(screen.getByLabelText(/First Name/i), 'Jane');
-    await user.type(screen.getByLabelText(/Last Name/i), 'Smith');
-    await user.type(screen.getByLabelText(/Email Address/i), 'jane@example.com');
-    await user.type(screen.getByLabelText(/^Password \*/i), 'weak');
-    await user.type(screen.getByLabelText(/Confirm Password \*/i), 'weak');
+    fireEvent.change(screen.getByLabelText(/First Name/i), { target: { value: 'Jane' } });
+    fireEvent.change(screen.getByLabelText(/Last Name/i), { target: { value: 'Smith' } });
+    fireEvent.change(screen.getByLabelText(/Email Address/i), { target: { value: 'jane@example.com' } });
+    fireEvent.change(screen.getByLabelText(/^Password \*/i), { target: { value: 'weak' } });
+    fireEvent.change(screen.getByLabelText(/Confirm Password \*/i), { target: { value: 'weak' } });
     
     fireEvent.click(screen.getByRole('button', { name: /Create Account/i }));
     
@@ -77,14 +75,13 @@ describe('Register Page', () => {
   it('submits successfully and shows success message', async () => {
     (api.auth.register as any).mockResolvedValue({ success: true });
     
-    const user = userEvent.setup();
     renderWithRouter();
     
-    await user.type(screen.getByLabelText(/First Name/i), 'Jane');
-    await user.type(screen.getByLabelText(/Last Name/i), 'Smith');
-    await user.type(screen.getByLabelText(/Email Address/i), 'jane@example.com');
-    await user.type(screen.getByLabelText(/^Password \*/i), 'StrongPass123!');
-    await user.type(screen.getByLabelText(/Confirm Password \*/i), 'StrongPass123!');
+    fireEvent.change(screen.getByLabelText(/First Name/i), { target: { value: 'Jane' } });
+    fireEvent.change(screen.getByLabelText(/Last Name/i), { target: { value: 'Smith' } });
+    fireEvent.change(screen.getByLabelText(/Email Address/i), { target: { value: 'jane@example.com' } });
+    fireEvent.change(screen.getByLabelText(/^Password \*/i), { target: { value: 'StrongPass123!' } });
+    fireEvent.change(screen.getByLabelText(/Confirm Password \*/i), { target: { value: 'StrongPass123!' } });
     
     fireEvent.click(screen.getByRole('button', { name: /Create Account/i }));
     
@@ -104,11 +101,10 @@ describe('Register Page', () => {
   it('redirects to /apply after successful prefilled submission', async () => {
     (api.auth.register as any).mockResolvedValue({ success: true });
     
-    const user = userEvent.setup();
     renderWithRouter('/register?email=test@example.com&first_name=John&last_name=Doe&program=MDiv');
     
-    await user.type(screen.getByLabelText(/^Password \*/i), 'StrongPass123!');
-    await user.type(screen.getByLabelText(/Confirm Password \*/i), 'StrongPass123!');
+    fireEvent.change(screen.getByLabelText(/^Password \*/i), { target: { value: 'StrongPass123!' } });
+    fireEvent.change(screen.getByLabelText(/Confirm Password \*/i), { target: { value: 'StrongPass123!' } });
     
     fireEvent.click(screen.getByRole('button', { name: /Complete Registration/i }));
     

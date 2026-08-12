@@ -58,7 +58,15 @@ import { handleSubmitApplication } from './apply';
 
 function makeEnv(overrides: Record<string, unknown> = {}) {
   const db = {
-    prepare: vi.fn().mockReturnThis(),
+    prepare: vi.fn().mockImplementation((sql: string) => {
+      if (sql.includes('programs') || sql.includes('FROM programs')) {
+        return {
+          bind: vi.fn().mockReturnThis(),
+          first: vi.fn().mockResolvedValue({ found: 1 }),
+        };
+      }
+      return db;
+    }),
     bind: vi.fn().mockReturnThis(),
     first: vi.fn().mockResolvedValue(null),
     run: vi.fn().mockResolvedValue({ success: true }),
@@ -129,6 +137,20 @@ describe('handleSubmitApplication', () => {
   });
 
   it('returns 400 for invalid program (business rule check)', async () => {
+    // Override db.prepare to simulate program not found
+    env.PLATFORM_CONTEXT.db.prepare = vi.fn().mockImplementation((sql: string) => {
+      if (sql.includes('programs')) {
+        return {
+          bind: vi.fn().mockReturnThis(),
+          first: vi.fn().mockResolvedValue(null), // program not found
+        };
+      }
+      // fallback for other queries
+      return {
+        bind: vi.fn().mockReturnThis(),
+        first: vi.fn().mockResolvedValue({ found: 1 }),
+      };
+    });
     const req = makeRequest({
       program: 'Not A Real Program',
       degree_level: 'undergraduate',
