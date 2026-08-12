@@ -10,7 +10,7 @@ import { getOAuthConfig, exchangeCodeForToken, getUserInfo, type OAuthProvider }
 import { parseBody, RegisterSchema, LoginSchema } from '../lib/schemas';
 import { executeWithMonitoring } from '../lib/performance';
 import { createCoreDb, setRequestContext, isNeon, type CoreDb } from '../lib/db';
-import { users, emailVerifications, sessions, passwordResetTokens, oauthAccounts, applications } from '../schema/core';
+import { users, emailVerifications, sessions, passwordResetTokens, oauthAccounts, applications, programs } from '../schema/core';
 import type { Env } from '../lib/types';
 
 export interface AuthenticatedContext {
@@ -135,13 +135,14 @@ export async function handleRegister(request: Request, env: Env, ctx?: Execution
           token: verificationToken,
           expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000),
         });
-        // Auto-create initial application record as draft so applicant has a record without blocking formal submission
+        // Auto-create initial application record as draft using the DB programs table as source of truth
         try {
+          const defaultProg = (await tx.select({ name: programs.name, level: programs.level }).from(programs).limit(1).execute())[0];
           await tx.insert(applications).values({
             id: appId,
             user_id: userId,
-            program: 'BA in Biblical Studies',
-            degree_level: 'undergraduate',
+            program: defaultProg?.name || 'Unspecified Program',
+            degree_level: defaultProg?.level || 'undergraduate',
             status: 'draft',
           });
         } catch (appErr) {
