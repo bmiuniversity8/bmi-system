@@ -74,6 +74,8 @@ export default function RegistrationWizard() {
   const [availablePrograms, setAvailablePrograms] = useState<DbProgram[]>([]);
   const [data, setData] = useState<RegistrationData>({});
 
+  const [feeInfo, setFeeInfo] = useState<{ amount: number; description?: string } | null>(null);
+
   useEffect(() => {
     fetchRegistrationStatus();
     fetchModules();
@@ -85,6 +87,7 @@ export default function RegistrationWizard() {
       const res = await api.registration.getStatus();
       if (res) {
         setData(res.current_data || {});
+        if (res.program_fee_info) setFeeInfo(res.program_fee_info);
         if (res.registration_complete) setCompleted(true);
         const lastIndex = STEP_LABELS.length - 1 - [...STEP_LABELS].reverse().findIndex(
           (_, i) => res.current_data?.[STEP_LABELS[STEP_LABELS.length - 1 - i]?.toLowerCase().replace(/ /g, '_')]
@@ -435,10 +438,21 @@ export default function RegistrationWizard() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
         <div className="alert alert-warning">
           <strong>💰 Tuition &amp; Fees</strong><br />
-          <span style={{ fontSize: '0.9rem', marginTop: '0.4rem', display: 'block' }}>
-            Tuition fees vary by program and study mode. A detailed invoice will be generated after registration.
-            You agree to pay all applicable fees as outlined in the university fee schedule.
-          </span>
+          {feeInfo ? (
+            <div style={{ marginTop: '0.4rem' }}>
+              <span style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--navy)', display: 'block' }}>
+                {feeInfo.description || 'Program Tuition'}: ${feeInfo.amount.toFixed(2)}
+              </span>
+              <span style={{ fontSize: '0.85rem', color: 'var(--slate)', marginTop: '0.2rem', display: 'block' }}>
+                You agree to pay all applicable tuition and fees as outlined in the university fee schedule upon invoice generation.
+              </span>
+            </div>
+          ) : (
+            <span style={{ fontSize: '0.9rem', marginTop: '0.4rem', display: 'block' }}>
+              Tuition fees vary by program and study mode. A detailed invoice will be generated after registration.
+              You agree to pay all applicable fees as outlined in the university fee schedule.
+            </span>
+          )}
         </div>
         <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', cursor: 'pointer' }}>
           <input type="checkbox" checked={d.accepted_fee_structure || false}

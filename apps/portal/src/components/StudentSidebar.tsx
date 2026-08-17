@@ -13,6 +13,8 @@ export function StudentSidebar({ user }: StudentSidebarProps) {
     { label: 'Finances & Tuition', path: '/student/finances', icon: '💳' },
     { label: 'Class Registration', path: '/registration', icon: '📝' },
     { label: 'Documents & ID', path: '/student/documents', icon: '📁' },
+    { label: 'Orientation', path: '/student/orientation', icon: '🎓' },
+    { label: 'Graduation & Alumni', path: '/student/graduation', icon: '🏛️' },
     { label: 'Help & Support', path: '/student/support', icon: '🎫' },
     { label: 'Account Settings', path: '/student/settings', icon: '⚙️' },
   ];

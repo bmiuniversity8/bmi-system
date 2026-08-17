@@ -153,42 +153,94 @@ export default function Status() {
                 </div>
               )}
 
-              <div style={{ marginBottom: '0.5rem' }}>
+              <div style={{ marginBottom: '1rem' }}>
                 <div style={{ background: 'var(--border)', borderRadius: 999, height: 8, overflow: 'hidden' }}>
                   <div style={{ width: `${statusInfo?.pct ?? 0}%`, background: app.status === 'accepted' ? 'var(--success)' : app.status === 'rejected' ? 'var(--danger)' : 'var(--gold)', height: '100%', borderRadius: 999, transition: 'width 0.8s ease' }} />
                 </div>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                {['Submitted', 'Under Review', 'Decision'].map((label) => (
-                  <span key={label} style={{ fontSize: '0.75rem', color: 'var(--slate)', fontWeight: 500 }}>{label}</span>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem', textAlign: 'center' }}>
+                {[
+                  { label: 'Submitted', active: true, icon: '📄' },
+                  { label: 'Documents', active: (app.documents && app.documents.length > 0) || ['under_review', 'accepted', 'rejected'].includes(app.status), icon: '📑' },
+                  { label: 'Committee Review', active: ['under_review', 'accepted', 'rejected'].includes(app.status), icon: '🔍' },
+                  { label: 'Decision', active: ['accepted', 'rejected', 'waitlisted'].includes(app.status), icon: '🎓' },
+                ].map((step, idx) => (
+                  <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem' }}>
+                    <div style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: '50%',
+                      background: step.active ? 'var(--navy)' : 'var(--border)',
+                      color: step.active ? 'var(--gold)' : 'var(--slate)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.75rem',
+                      fontWeight: 700
+                    }}>
+                      {step.icon}
+                    </div>
+                    <span style={{ fontSize: '0.72rem', color: step.active ? 'var(--navy)' : 'var(--slate)', fontWeight: step.active ? 700 : 500 }}>
+                      {step.label}
+                    </span>
+                  </div>
                 ))}
               </div>
             </div>
 
             <div className="card">
-              <h3 style={{ marginBottom: '1rem' }}>Activity Timeline & Messages</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                <h3 style={{ margin: 0, fontSize: '1.1rem' }}>Application Activity Timeline</h3>
+                <span style={{ fontSize: '0.75rem', color: 'var(--slate)', fontWeight: 600 }}>
+                  {logs.length > 0 ? `${logs.length} update(s)` : 'Initial Submission'}
+                </span>
+              </div>
+
+              <div style={{ position: 'relative', paddingLeft: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                {/* Continuous vertical connector line */}
+                <div style={{ position: 'absolute', left: 7, top: 10, bottom: 10, width: 2, background: 'var(--border)', zIndex: 0 }} />
+
                 {(logs.length > 0 ? logs : [
                   {
                     old_status: null,
                     new_status: app.status || 'submitted',
-                    notes: 'Application submitted successfully. Currently under review by admissions.',
+                    notes: 'Application submitted successfully. Currently queued for admissions committee review.',
                     changed_at: app.submitted_at || app.created_at || new Date().toISOString(),
                   }
-                ]).map((log: any, i: number) => (
-                  <div key={i} style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--gold)', marginTop: '0.5rem', flexShrink: 0 }} />
-                    <div>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--slate)' }}>
-                        {new Date((log.changed_at || new Date().toISOString()) + (log.changed_at?.endsWith('Z') ? '' : 'Z')).toLocaleString()}
+                ]).map((log: any, i: number) => {
+                  const isLatest = i === 0;
+                  const dateStr = log.changed_at ? new Date((log.changed_at) + (log.changed_at?.endsWith('Z') ? '' : 'Z')).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : 'Recently';
+
+                  return (
+                    <div key={i} style={{ position: 'relative', zIndex: 1, display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
+                      <div style={{
+                        width: 16,
+                        height: 16,
+                        borderRadius: '50%',
+                        background: isLatest ? 'var(--gold)' : 'white',
+                        border: `3px solid ${isLatest ? 'var(--navy)' : 'var(--slate)'}`,
+                        marginTop: '0.2rem',
+                        flexShrink: 0,
+                        boxShadow: isLatest ? '0 0 0 3px rgba(212, 175, 55, 0.25)' : 'none'
+                      }} />
+                      <div style={{ flex: 1, background: isLatest ? 'rgba(212, 175, 55, 0.05)' : 'var(--bg)', padding: '0.75rem 1rem', borderRadius: 'var(--radius-sm)', border: `1px solid ${isLatest ? 'rgba(212, 175, 55, 0.3)' : 'var(--border)'}` }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                          <span style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--navy)', textTransform: 'capitalize' }}>
+                            {log.old_status ? `${log.old_status.replace('_', ' ')} → ` : ''}{(log.new_status || 'submitted').replace('_', ' ')}
+                          </span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--slate)', fontWeight: 500 }}>
+                            {dateStr}
+                          </span>
+                        </div>
+                        {log.notes && (
+                          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.25rem', lineHeight: 1.4 }}>
+                            {log.notes}
+                          </div>
+                        )}
                       </div>
-                      <div style={{ fontSize: '0.9rem', fontWeight: 600, textTransform: 'capitalize' }}>
-                        {log.old_status ? `${log.old_status.replace('_', ' ')} → ` : ''}{(log.new_status || 'submitted').replace('_', ' ')}
-                      </div>
-                      {log.notes && <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{log.notes}</div>}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 

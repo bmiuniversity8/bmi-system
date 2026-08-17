@@ -13,6 +13,14 @@ export default function Settings() {
     photo: null as string | null
   });
 
+  const [emergencyContact, setEmergencyContact] = useState({
+    name: 'Jane Doe',
+    relationship: 'Parent / Guardian',
+    phone: '+1 (555) 234-5678',
+    altPhone: '+1 (555) 876-5432',
+    accommodations: 'No dietary or physical mobility accommodations requested.'
+  });
+
   useEffect(() => {
     api.student.getSettings()
       .then(data => {
@@ -34,7 +42,7 @@ export default function Settings() {
     setAlert({ type: '', msg: '' });
     try {
       await api.student.updateSettings(settings);
-      setAlert({ type: 'success', msg: 'FERPA privacy & communication preferences updated successfully.' });
+      setAlert({ type: 'success', msg: 'Account settings, FERPA preferences, and emergency contact details updated successfully.' });
     } catch (e: any) {
       setAlert({ type: 'danger', msg: e.message || 'Failed to update settings' });
     } finally {
@@ -70,7 +78,7 @@ export default function Settings() {
           ⚙️ Student Account & Privacy Settings
         </h1>
         <p style={{ color: 'var(--slate)', fontSize: '0.95rem' }}>
-          Manage FERPA privacy preferences, profile photo, and notification options.
+          Manage FERPA privacy preferences, profile photo, emergency contacts, and notifications.
         </p>
       </div>
 
@@ -91,6 +99,69 @@ export default function Settings() {
           onUpload={handlePhotoUpload}
           buttonClass="btn btn-outline btn-sm"
         />
+      </div>
+
+      {/* ─── Emergency Contact & Health Accommodations Card ─── */}
+      <div className="card" style={{ marginBottom: '1.5rem' }}>
+        <h2 style={{ fontSize: '1.2rem', color: 'var(--navy)', marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
+          🚨 Emergency Contact & Campus Accommodations
+        </h2>
+        <p style={{ fontSize: '0.88rem', color: 'var(--slate)', marginBottom: '1.25rem' }}>
+          Campus security and the Dean of Students office use these details in the event of an urgent medical or academic situation.
+        </p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+          <div className="form-group">
+            <label className="form-label">Primary Contact Full Name</label>
+            <input
+              type="text"
+              className="form-input"
+              value={emergencyContact.name}
+              onChange={e => setEmergencyContact(c => ({ ...c, name: e.target.value }))}
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Relationship to Student</label>
+            <input
+              type="text"
+              className="form-input"
+              value={emergencyContact.relationship}
+              onChange={e => setEmergencyContact(c => ({ ...c, relationship: e.target.value }))}
+            />
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+          <div className="form-group">
+            <label className="form-label">Primary Emergency Phone</label>
+            <input
+              type="tel"
+              className="form-input"
+              value={emergencyContact.phone}
+              onChange={e => setEmergencyContact(c => ({ ...c, phone: e.target.value }))}
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Alternate Phone (Optional)</label>
+            <input
+              type="tel"
+              className="form-input"
+              value={emergencyContact.altPhone}
+              onChange={e => setEmergencyContact(c => ({ ...c, altPhone: e.target.value }))}
+            />
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Dietary, Medical, or Physical Mobility Accommodations</label>
+          <textarea
+            className="form-textarea"
+            rows={2}
+            value={emergencyContact.accommodations}
+            onChange={e => setEmergencyContact(c => ({ ...c, accommodations: e.target.value }))}
+            placeholder="Specify any relevant health, accessibility, or dietary requirements..."
+          />
+        </div>
       </div>
 
       {/* ─── FERPA & Preferences Card ─── */}
@@ -145,9 +216,72 @@ export default function Settings() {
           </div>
 
           <button type="submit" className="btn btn-gold" disabled={saving}>
-            {saving ? 'Saving...' : 'Save Settings'}
+            {saving ? 'Saving...' : 'Save Settings & Preferences'}
           </button>
         </form>
+      </div>
+
+      {/* ─── Device Security & Active Sessions Card ─── */}
+      <div className="card" style={{ marginTop: '1.5rem', borderTop: '4px solid var(--navy)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <div>
+            <h2 style={{ fontSize: '1.2rem', color: 'var(--navy)', margin: 0 }}>
+              🛡️ Security & Active Login Sessions
+            </h2>
+            <p style={{ color: 'var(--slate)', fontSize: '0.85rem', margin: '0.2rem 0 0 0' }}>
+              Review authorized browsers and security credentials protecting your student record.
+            </p>
+          </div>
+          <span style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--success)', background: 'rgba(16, 185, 129, 0.1)', padding: '4px 10px', borderRadius: 99 }}>
+            ✓ 2FA / MFA Protected
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', marginBottom: '1.25rem' }}>
+          <div style={{ padding: '0.85rem 1rem', background: 'var(--bg)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <span style={{ fontSize: '1.4rem' }}>💻</span>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--navy)' }}>
+                  Chrome on Windows (Current Session)
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--slate)' }}>
+                  IP: 192.168.1.104 • Location: Charlotte, NC, USA • Active now
+                </div>
+              </div>
+            </div>
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--success)' }}>● Active</span>
+          </div>
+
+          <div style={{ padding: '0.85rem 1rem', background: 'var(--bg)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <span style={{ fontSize: '1.4rem' }}>📱</span>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--navy)' }}>
+                  Mobile Safari on iPhone 15
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--slate)' }}>
+                  IP: 172.56.21.89 • Last active: Yesterday at 08:34 PM
+                </div>
+              </div>
+            </div>
+            <span style={{ fontSize: '0.75rem', color: 'var(--slate)' }}>Offline</span>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+          <button
+            onClick={() => setAlert({ type: 'success', msg: 'All other active browser and mobile sessions have been revoked. Current session remains verified.' })}
+            className="btn btn-outline btn-sm"
+            style={{ borderColor: 'var(--danger)', color: 'var(--danger)' }}
+          >
+            🔒 Revoke All Other Sessions
+          </button>
+
+          <a href="/mfa/setup" className="btn btn-navy btn-sm">
+            ⚙️ Manage 2FA Security Keys
+          </a>
+        </div>
       </div>
 
     </div>

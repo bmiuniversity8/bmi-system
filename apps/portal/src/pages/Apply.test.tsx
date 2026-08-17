@@ -74,7 +74,11 @@ describe('Apply Page (Portal)', () => {
     fireEvent.click(screen.getByRole('button', { name: /Continue/i }));
     await waitFor(() => {});
     
-    // We are on Personal Info. Continue to step 3
+    // We are on Personal Info. Fill required fields then continue
+    fireEvent.change(screen.getByLabelText(/Date of Birth \*/i), { target: { value: '2000-01-01' } });
+    fireEvent.change(screen.getByLabelText(/Gender \*/i), { target: { value: 'Male' } });
+    fireEvent.change(screen.getByLabelText(/Nationality \*/i), { target: { value: 'American' } });
+
     fireEvent.click(screen.getByRole('button', { name: /Continue/i }));
     await waitFor(() => {});
     
@@ -90,7 +94,11 @@ describe('Apply Page (Portal)', () => {
     const statementInput = screen.getByLabelText(/Personal Statement \*/i);
     fireEvent.change(statementInput, { target: { value: 'This is my personal statement. It must be at least one hundred characters long to pass the validation check in the Apply form. Here is some additional text to ensure the length requirement is satisfied.' } });
     
-    // Continue to step 5
+    // Continue to step 5 (Documents)
+    fireEvent.click(screen.getByRole('button', { name: /Continue/i }));
+    await waitFor(() => {});
+
+    // Continue to step 6 (Review & Submit)
     fireEvent.click(screen.getByRole('button', { name: /Continue/i }));
     await waitFor(() => {});
     

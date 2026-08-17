@@ -248,6 +248,7 @@ export const api = {
     payInvoice: (invoiceId: string) => request<{ success: boolean }>(`/student/invoices/${invoiceId}/pay`, { method: 'POST' }),
     dropCourse: (course_id: string) => request<{ success: boolean; message: string }>(`/student/courses/${course_id}/drop`, { method: 'POST' }),
     getTranscript: () => request<{ classes: any[]; gpa: string | null }>('/student/transcript'),
+    getDeadlines: () => request<Array<{ title: string; date: string; type: string; tag: string; color: string }>>('/v1/dashboard/deadlines'),
     getSettings: () => request<{ directory_release: number; communications_opt_in: number; photo?: string | null }>('/student/settings'),
     updateSettings: (settings: { directory_release: boolean; communications_opt_in: boolean }) =>
       request<{ success: boolean; message: string }>('/student/settings', {
@@ -264,6 +265,23 @@ export const api = {
       request<{ success: boolean; message: string; ticket_id: string }>('/student/support', {
         method: 'POST',
         body: JSON.stringify({ subject, description })
+      }),
+    completeOrientation: (data?: any) =>
+      request<{ success?: boolean; message: string }>('/student/orientation/complete', {
+        method: 'POST',
+        body: data ? JSON.stringify(data) : undefined,
+      }),
+  },
+
+  notifications: {
+    list: (unreadOnly?: boolean) => {
+      const qs = unreadOnly ? '?unread=true' : '';
+      return request<{ data: any[]; meta: { total: number; unread_count: number } }>(`/v1/notifications${qs}`);
+    },
+    markRead: (ids?: string[]) =>
+      request<{ message: string }>('/v1/notifications/read', {
+        method: 'POST',
+        body: JSON.stringify({ ids }),
       }),
   },
 
@@ -351,6 +369,13 @@ export interface Course {
   capacity: number;
   semester?: string;
   name?: string;
+  prerequisites_met?: boolean;
+  unmet_prerequisites?: string[];
+  is_full?: boolean;
+  enrolled_count?: number;
+  waitlisted_count?: number;
+  status?: string;
+  is_mandatory?: boolean;
 }
 
 export interface AuditLog {

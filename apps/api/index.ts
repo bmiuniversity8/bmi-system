@@ -1,6 +1,6 @@
 import { withSentry } from '@sentry/cloudflare';
 import { handleRegister, handleLogin, handleRefresh, handleLogout, handleMe, handleVerifyEmail, handleResendVerification, handleForgotPassword, handleResetPassword, handleMfaSetup, handleMfaEnable, handleMfaDisable, handleOAuthLogin, handleOAuthCallback } from './routes/auth';
-import { handleSubmitApplication, handleGetMyApplication, handleListApplications, handleGetApplication, handleUpdateStatus, handleGetStatusLogs, handleGetLifecycle, handleSaveDraft, handleAdminCreateApplication } from './routes/apply';
+import { handleSubmitApplication, handleGetMyApplication, handleListApplications, handleGetApplication, handleUpdateStatus, handleGetStatusLogs, handleGetLifecycle, handleSaveDraft, handleAdminCreateApplication, checkAdmissionCodeExpiries } from './routes/apply';
 import { handleUploadDocument, handleDownloadDocument, handleDeleteDocument, handleListDocuments, handleAdminUploadDocument, handleUpdateDocumentVerification } from './routes/documents';
 import { handleRequestRecommendation, handleGetRecommendationInfo, handleUploadRecommendation, handleListRecommendations } from './routes/recommendations';
 import { requireAuth, rateLimit, withCors, getCorsHeaders, createLogger, requestLogger } from '@bmi/api-middleware';
@@ -503,6 +503,7 @@ export default withSentry(
       env.PLATFORM_CONTEXT = context;
       await backupWorker.scheduled(controller, env, ctx);
       await runArchivalJob(env);
+      await checkAdmissionCodeExpiries(env, ctx);
     },
     async queue(batch, env, _ctx) {
       const context = bootstrap(env);

@@ -168,21 +168,84 @@ export async function handleSaveRegistrationStep(req: Request, env: Env, userId:
 
 export async function handleGetRegistrationStatus(_req: Request, env: Env, userId: string): Promise<Response> {
   try {
-    const existing = await env.PLATFORM_CONTEXT!.db.prepare(
-      `SELECT value FROM metadata WHERE id = ? AND key = 'registration_data'`
-    ).bind(userId).first<{ value: string }>();
+    const db = env.PLATFORM_CONTEXT!.db;
+    const [existingMeta, userRow, appRow] = await Promise.all([
+      db.prepare(`SELECT value FROM metadata WHERE id = ? AND key = 'registration_data'`).bind(userId).first<{ value: string }>(),
+      db.prepare(`SELECT first_name, last_name, date_of_birth, gender, nationality, phone, address FROM users WHERE id = ?`).bind(userId).first<{ first_name: string; last_name: string; date_of_birth: string; gender: string; nationality: string; phone: string; address: string }>(),
+      db.prepare(`SELECT program, degree_level FROM applications WHERE user_id = ? AND status = 'accepted' ORDER BY updated_at DESC LIMIT 1`).bind(userId).first<{ program: string; degree_level: string }>(),
+    ]);
 
-    const currentData: RegistrationData = existing ? JSON.parse(existing.value) : {};
-    const completedSteps = STEP_ORDER.filter(s => currentData[s] !== undefined);
-    const nextStep = STEP_ORDER.find(s => currentData[s] === undefined) || null;
+    const savedData: RegistrationData = existingMeta ? JSON.parse(existingMeta.value) : {};
+    const currentData: RegistrationData = JSON.parse(JSON.stringify(savedData));
+
+    // Auto-populate default personal_details if missing
+    if (!currentData.personal_details && userRow) {
+      let dobStr = '';
+      if (userRow.date_of_birth) {
+        try {
+          dobStr = new Date(userRow.date_of_birth).toISOString().split('T')[0];
+        } catch {
+          dobStr = String(userRow.date_of_birth);
+        }
+      }
+      currentData.personal_details = {
+        first_name: userRow.first_name || '',
+        last_name: userRow.last_name || '',
+        date_of_birth: dobStr,
+        gender: userRow.gender || '',
+        nationality: userRow.nationality || '',
+        phone: userRow.phone || '',
+      };
+    }
+
+    // Auto-populate default address if missing
+    if (!currentData.address && userRow) {
+      currentData.address = {
+        current_address: userRow.address || '',
+        city: '',
+        state: '',
+        country: userRow.nationality || '',
+        emergency_contact_name: '',
+        emergency_contact_phone: '',
+      };
+    }
+
+    // Auto-populate default program if missing
+    let selectedProgName = currentData.program?.program_name || appRow?.program;
+
+    if (appRow && !currentData.program) {
+      const prog = await db.prepare(`SELECT id, level FROM programs WHERE name = ? LIMIT 1`).bind(appRow.program).first<{ id: string; level: string }>();
+      currentData.program = {
+        program_id: prog?.id || '',
+        program_name: appRow.program,
+        level: appRow.degree_level || prog?.level || 'undergraduate',
+        study_mode: 'full_time',
+      };
+      selectedProgName = appRow.program;
+    }
+
+    let programFeeInfo: { amount: number; description?: string } | null = null;
+    if (selectedProgName) {
+      const feeRow = await db.prepare(
+        `SELECT pf.amount, pf.description FROM program_fees pf JOIN programs p ON p.id = pf.program_id WHERE p.name = ? LIMIT 1`
+      ).bind(selectedProgName).first<{ amount: number; description?: string }>();
+      if (feeRow) {
+        programFeeInfo = { amount: feeRow.amount, description: feeRow.description || undefined };
+      }
+    }
+
+    const completedSteps = STEP_ORDER.filter(s => savedData[s] !== undefined);
+    const nextStep = STEP_ORDER.find(s => savedData[s] === undefined) || null;
 
     return ok({
       completed_steps: completedSteps,
       next_step: nextStep,
       current_data: currentData,
       registration_complete: nextStep === null,
+      program_fee_info: programFeeInfo,
     });
-  } catch {
+  } catch (e) {
+    console.error('Failed to get registration status:', e);
     return error('Failed to get registration status', 500);
   }
 }

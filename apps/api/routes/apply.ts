@@ -847,3 +847,54 @@ export async function handleAdminCreateApplication(
 
   return ok({ application_id: appId, user_id: userId, status: 'submitted' });
 }
+
+export async function checkAdmissionCodeExpiries(env: Env, ctx?: ExecutionContext): Promise<void> {
+  const db = env.PLATFORM_CONTEXT!.db;
+  try {
+    const { results } = await db.prepare(
+      `SELECT u.id, u.email, u.first_name, u.admission_code, u.admission_code_expires_at,
+              (SELECT program FROM applications WHERE user_id = u.id AND status = 'accepted' ORDER BY updated_at DESC LIMIT 1) as program
+       FROM users u
+       WHERE u.admission_code IS NOT NULL
+         AND u.account_claimed = 0
+         AND u.admission_code_expires_at > datetime('now')
+         AND u.admission_code_expires_at <= datetime('now', '+2 days')`
+    ).all<{ id: string; email: string; first_name: string; admission_code: string; admission_code_expires_at: string; program: string | null }>();
+
+    if (!results || results.length === 0) return;
+
+    for (const user of results) {
+      if (user.email && isValidEmail(user.email)) {
+        const portalUrl = (env as any).PORTAL_URL || 'https://bmi-portal.pages.dev';
+        const claimUrl = `${portalUrl}/claim?code=${encodeURIComponent(user.admission_code)}`;
+        const runNotify = async () => {
+          await safeDispatchEmail(env, ctx, {
+            to: user.email,
+            subject: '⏰ Action Required — Your BMI Admission Code Expires Soon',
+            html: buildEmailLayout('Admission Code Expiry Warning', `
+              <h2 style="color: #0f172a;">Hi ${user.first_name},</h2>
+              <p style="color: #475569; line-height: 1.6;">
+                Your one-time admission code for <strong>${user.program || 'BMI University'}</strong> will expire in less than 48 hours.
+              </p>
+              <div style="background: #fffbeb; border-left: 4px solid #f59e0b; padding: 16px; margin: 20px 0; border-radius: 4px;">
+                <p style="margin: 0; color: #92400e; font-weight: bold; font-size: 18px;">
+                  Code: <span style="font-family: monospace; letter-spacing: 2px;">${user.admission_code}</span>
+                </p>
+              </div>
+              <a href="${claimUrl}"
+                 style="display: inline-block; background: #d4af37; color: #0f172a; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: bold;">
+                Claim Your Account Now →
+              </a>
+            `),
+            templateName: 'admission_code_expiry_reminder',
+            context: { action: 'admission_code_reminder', user_id: user.id },
+          });
+        };
+        if (ctx) ctx.waitUntil(runNotify());
+        else await runNotify();
+      }
+    }
+  } catch (e) {
+    console.error('[expiry_check] Failed to check admission code expiries:', e);
+  }
+}

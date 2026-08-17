@@ -154,6 +154,9 @@ describe('handleSubmitApplication', () => {
     const req = makeRequest({
       program: 'Not A Real Program',
       degree_level: 'undergraduate',
+      date_of_birth: '2000-01-01',
+      nationality: 'Liberian',
+      gender: 'Male',
     });
     const res = await handleSubmitApplication(req, env as any, 'user-1');
     expect(res.status).toBe(400);
@@ -166,6 +169,9 @@ describe('handleSubmitApplication', () => {
     const req = makeRequest({
       program: 'BA in Biblical Studies',
       degree_level: 'undergraduate',
+      date_of_birth: '2000-01-01',
+      nationality: 'Liberian',
+      gender: 'Male',
     });
     const res = await handleSubmitApplication(req, env as any, 'user-1');
     expect(res.status).toBe(409);
@@ -184,6 +190,9 @@ describe('handleSubmitApplication', () => {
     const req = makeRequest({
       program: 'BA in Biblical Studies',
       degree_level: 'undergraduate',
+      date_of_birth: '2000-01-01',
+      nationality: 'Liberian',
+      gender: 'Male',
     });
     const res = await handleSubmitApplication(req, env as any, 'user-1');
     expect(res.status).toBe(403);
@@ -200,6 +209,9 @@ describe('handleSubmitApplication', () => {
     const req = makeRequest({
       program: 'BA in Biblical Studies',
       degree_level: 'undergraduate',
+      date_of_birth: '2000-01-01',
+      nationality: 'Liberian',
+      gender: 'Male',
     });
     const res = await handleSubmitApplication(req, env as any, 'user-1');
     expect(res.status).toBe(403);
@@ -219,8 +231,11 @@ describe('handleSubmitApplication', () => {
     const req = makeRequest({
       program: 'BA in Biblical Studies',
       degree_level: 'undergraduate',
-      personal_statement: 'I want to study.',
-      prior_education: 'High school.',
+      date_of_birth: '2000-01-01',
+      nationality: 'Liberian',
+      gender: 'Male',
+      personal_statement: 'I want to study at BMI because of its mission.',
+      prior_education: 'High school graduate.',
     });
     
     const res = await handleSubmitApplication(req, env as any, 'user-1');

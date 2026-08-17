@@ -148,6 +148,38 @@ export async function handleDropCourse(_request: Request, env: Env, userId: stri
   if (result.meta.changes === 0) {
     return error('Course not found or not enrolled', 400);
   }
+
+  // Also update student_course_registrations
+  await env.PLATFORM_CONTEXT!.db.prepare(
+    'UPDATE student_course_registrations SET status = "dropped" WHERE course_id = ? AND student_id = ? AND status = "registered"'
+  ).bind(courseId, userId).run();
+
+  // Auto-promote next student from waitlist if any
+  try {
+    const nextWaitlisted = await env.PLATFORM_CONTEXT!.db.prepare(
+      'SELECT id, student_id, term_id FROM student_course_registrations WHERE course_id = ? AND status = "waitlisted" ORDER BY registered_at ASC LIMIT 1'
+    ).bind(courseId).first<{ id: string; student_id: string; term_id: string }>();
+
+    if (nextWaitlisted) {
+      await env.PLATFORM_CONTEXT!.db.prepare(
+        'UPDATE student_course_registrations SET status = "registered" WHERE id = ?'
+      ).bind(nextWaitlisted.id).run();
+
+      await env.PLATFORM_CONTEXT!.db.prepare(
+        'INSERT INTO enrollments (id, student_id, course_id, status) VALUES (?, ?, ?, ?)'
+      ).bind(crypto.randomUUID(), nextWaitlisted.student_id, courseId, 'enrolled').run();
+
+      // Send in-app notification to the promoted student
+      const notifId = crypto.randomUUID();
+      await env.PLATFORM_CONTEXT!.db.prepare(
+        `INSERT INTO notifications (id, user_id, type, title, body, link)
+         VALUES (?, ?, 'success', 'Enrolled from Waitlist!', 'A seat became available in your waitlisted course and you have been automatically enrolled.', '/student/academics')`
+      ).bind(notifId, nextWaitlisted.student_id).run();
+    }
+  } catch (err) {
+    console.warn('Waitlist promotion warning:', err);
+  }
+
   return ok({ success: true, message: 'Course dropped successfully' });
 }
 

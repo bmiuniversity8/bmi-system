@@ -21,6 +21,8 @@ import Finances from './pages/student/Finances';
 import Support from './pages/student/Support';
 import StudentSettings from './pages/student/Settings';
 import Documents from './pages/student/Documents';
+import Orientation from './pages/student/Orientation';
+import Graduation from './pages/student/Graduation';
 import ClaimAccount from './pages/claim/ClaimAccount';
 import RegistrationWizard from './pages/registration/RegistrationWizard';
 import DocumentRequest from './pages/documents/DocumentRequest';
@@ -109,6 +111,14 @@ export default function App() {
             }
           />
           <Route
+            path="/student/orientation"
+            element={
+              <ProtectedRoute roles={['student']}>
+                <StudentRouteWrapper><Orientation /></StudentRouteWrapper>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/student/academics"
             element={
               <ProtectedRoute roles={['student']}>
@@ -137,6 +147,14 @@ export default function App() {
             element={
               <ProtectedRoute roles={['student']}>
                 <StudentRouteWrapper><StudentSettings /></StudentRouteWrapper>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/student/graduation"
+            element={
+              <ProtectedRoute roles={['student']}>
+                <StudentRouteWrapper><Graduation /></StudentRouteWrapper>
               </ProtectedRoute>
             }
           />

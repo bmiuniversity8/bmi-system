@@ -52,6 +52,12 @@ export default function ClaimAccount() {
 
         <div className="card">
 
+        {searchParams.get('code') && (
+          <div className="alert alert-info" style={{ marginBottom: '1rem', fontSize: '0.85rem' }}>
+            ✓ Admission code auto-filled from your activation email.
+          </div>
+        )}
+
         {errorMsg && (
           <div className="alert alert-danger" style={{ marginBottom: '1.5rem' }}>
             {errorMsg}

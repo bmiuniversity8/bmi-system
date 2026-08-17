@@ -181,6 +181,7 @@ export async function handleAutoEnrollMandatory(_req: Request, env: Env, userId:
     course_id: programCourses.course_id,
     code: courses.code,
     title: courses.title,
+    capacity: courses.capacity,
   })
     .from(programCourses)
     .leftJoin(courses, eq(courses.id, programCourses.course_id))
@@ -196,7 +197,21 @@ export async function handleAutoEnrollMandatory(_req: Request, env: Env, userId:
     ));
 
   const already = new Set(existingRegs.map(r => r.course_id));
-  const toEnroll = mandatoryCourses.filter(c => !already.has(c.course_id!));
+  const candidateCourses = mandatoryCourses.filter(c => !already.has(c.course_id!));
+  const toEnroll: typeof candidateCourses = [];
+
+  for (const course of candidateCourses) {
+    if (course.capacity && course.capacity > 0) {
+      const cntRow = (await db.select({ cnt: count() })
+        .from(enrollments)
+        .where(and(eq(enrollments.course_id, course.course_id!), eq(enrollments.status, 'enrolled')))
+        .execute())[0];
+      if ((cntRow?.cnt || 0) >= course.capacity) {
+        continue; // course is full
+      }
+    }
+    toEnroll.push(course);
+  }
 
   if (toEnroll.length) {
     await db.transaction(async (tx) => {
@@ -276,15 +291,55 @@ export async function handleGetElectiveGroups(_req: Request, env: Env, userId: s
     title: courses.title,
     credits: courses.credits,
     description: courses.description,
+    capacity: courses.capacity,
     elective_group: programCourses.elective_group,
+    prerequisite_ids: programCourses.prerequisite_ids,
   })
     .from(programCourses)
     .leftJoin(courses, eq(courses.id, programCourses.course_id))
     .where(and(eq(programCourses.curriculum_id, curriculum.id), eq(programCourses.is_mandatory, 0)))
     .orderBy(programCourses.elective_group, courses.code);
 
-  const groups = new Map<string, typeof electives>();
-  for (const e of electives) {
+  // Student's completed courses
+  const studentPassed = await db.select({ course_id: enrollments.course_id })
+    .from(enrollments)
+    .where(and(eq(enrollments.student_id, userId), eq(enrollments.status, 'enrolled')))
+    .execute();
+  const passedSet = new Set(studentPassed.map(p => p.course_id));
+
+  const enrichedElectives = await Promise.all(electives.map(async (e) => {
+    let reqIds: string[] = [];
+    if (e.prerequisite_ids) {
+      try {
+        reqIds = JSON.parse(e.prerequisite_ids);
+      } catch {
+        reqIds = e.prerequisite_ids.split(',').map(s => s.trim()).filter(Boolean);
+      }
+    }
+    const unmet = reqIds.filter(id => !passedSet.has(id));
+    const prereqsMet = unmet.length === 0;
+
+    let currentEnrolled = 0;
+    if (e.course_id) {
+      const cntRow = (await db.select({ cnt: count() })
+        .from(enrollments)
+        .where(and(eq(enrollments.course_id, e.course_id), eq(enrollments.status, 'enrolled')))
+        .execute())[0];
+      currentEnrolled = cntRow?.cnt || 0;
+    }
+    const isFull = (e.capacity && e.capacity > 0) ? currentEnrolled >= e.capacity : false;
+
+    return {
+      ...e,
+      prerequisites_met: prereqsMet,
+      unmet_prerequisites: unmet,
+      is_full: isFull,
+      enrolled_count: currentEnrolled,
+    };
+  }));
+
+  const groups = new Map<string, typeof enrichedElectives>();
+  for (const e of enrichedElectives) {
     const group = e.elective_group || 'Ungrouped';
     if (!groups.has(group)) groups.set(group, []);
     groups.get(group)!.push(e);
@@ -300,7 +355,7 @@ export async function handleGetElectiveGroups(_req: Request, env: Env, userId: s
 }
 
 export async function handleSubmitElectives(req: Request, env: Env, userId: string): Promise<Response> {
-  const body = await typedJson<{ selected_course_ids: string[] }>(req);
+  const body = await typedJson<{ selected_course_ids: string[]; waitlist_if_full?: boolean }>(req);
   if (!body.selected_course_ids || !Array.isArray(body.selected_course_ids)) {
     return error('selected_course_ids is required.', 400);
   }
@@ -321,11 +376,19 @@ export async function handleSubmitElectives(req: Request, env: Env, userId: stri
   const currentTerm = await getActiveTerm(db);
   if (!currentTerm) return error('No active academic term found.', 404);
 
+  // Student's passed courses for prerequisite validation
+  const studentPassed = await db.select({ course_id: enrollments.course_id })
+    .from(enrollments)
+    .where(and(eq(enrollments.student_id, userId), eq(enrollments.status, 'enrolled')))
+    .execute();
+  const passedSet = new Set(studentPassed.map(p => p.course_id));
+
   let enrolled = 0;
+  let waitlisted = 0;
   const errors: string[] = [];
 
   for (const courseId of body.selected_course_ids) {
-    const existing = (await db.select({ id: studentCourseRegistrations.id })
+    const existing = (await db.select({ id: studentCourseRegistrations.id, status: studentCourseRegistrations.status })
       .from(studentCourseRegistrations)
       .where(and(
         eq(studentCourseRegistrations.student_id, userId),
@@ -335,17 +398,66 @@ export async function handleSubmitElectives(req: Request, env: Env, userId: stri
       .execute())[0];
 
     if (existing) {
-      errors.push(`Already registered for course ${courseId}`);
+      errors.push(`Already registered or waitlisted for course ${courseId}`);
       continue;
     }
 
-    const courseExists = (await db.select({ id: courses.id })
+    const courseRow = (await db.select({ id: courses.id, code: courses.code, capacity: courses.capacity })
       .from(courses)
       .where(eq(courses.id, courseId))
       .execute())[0];
 
-    if (!courseExists) {
+    if (!courseRow) {
       errors.push(`Course ${courseId} not found.`);
+      continue;
+    }
+
+    // Check prerequisites from programCourses
+    const progCourse = (await db.select({ prerequisite_ids: programCourses.prerequisite_ids })
+      .from(programCourses)
+      .where(eq(programCourses.course_id, courseId))
+      .execute())[0];
+
+    if (progCourse?.prerequisite_ids) {
+      let reqIds: string[] = [];
+      try {
+        reqIds = JSON.parse(progCourse.prerequisite_ids);
+      } catch {
+        reqIds = progCourse.prerequisite_ids.split(',').map(s => s.trim()).filter(Boolean);
+      }
+      const unmet = reqIds.filter(id => !passedSet.has(id));
+      if (unmet.length > 0) {
+        errors.push(`Prerequisites not met for course ${courseRow.code || courseId}.`);
+        continue;
+      }
+    }
+
+    let isFull = false;
+    if (courseRow.capacity && courseRow.capacity > 0) {
+      const currentCountRow = (await db.select({ cnt: count() })
+        .from(enrollments)
+        .where(and(eq(enrollments.course_id, courseId), eq(enrollments.status, 'enrolled')))
+        .execute())[0];
+      const currentCount = currentCountRow?.cnt || 0;
+      if (currentCount >= courseRow.capacity) {
+        isFull = true;
+      }
+    }
+
+    if (isFull) {
+      if (body.waitlist_if_full !== false) {
+        await db.insert(studentCourseRegistrations).values({
+          id: crypto.randomUUID(),
+          student_id: userId,
+          course_id: courseId,
+          term_id: currentTerm.id,
+          registration_type: 'elective',
+          status: 'waitlisted',
+        });
+        waitlisted++;
+      } else {
+        errors.push(`Course ${courseRow.code || courseId} is full (capacity: ${courseRow.capacity}).`);
+      }
       continue;
     }
 
@@ -368,7 +480,7 @@ export async function handleSubmitElectives(req: Request, env: Env, userId: stri
     enrolled++;
   }
 
-  if (enrolled > 0) {
+  if (enrolled > 0 || waitlisted > 0) {
     await db.update(studentHolds)
       .set({ is_active: 0, resolved_at: new Date() })
       .where(eq(studentHolds.id, hold.id));
@@ -376,9 +488,12 @@ export async function handleSubmitElectives(req: Request, env: Env, userId: stri
 
   return ok({
     message: enrolled > 0
-      ? `Enrolled in ${enrolled} elective(s). Course selection hold resolved.`
-      : 'No electives were enrolled.',
+      ? `Enrolled in ${enrolled} elective(s)${waitlisted > 0 ? `, waitlisted for ${waitlisted}` : ''}. Course selection hold resolved.`
+      : waitlisted > 0
+        ? `Added to waitlist for ${waitlisted} course(s). Course selection hold resolved.`
+        : 'No electives were enrolled.',
     enrolled_count: enrolled,
+    waitlisted_count: waitlisted,
     errors: errors.length > 0 ? errors : undefined,
   });
 }

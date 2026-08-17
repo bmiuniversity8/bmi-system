@@ -12,19 +12,34 @@ const API_BASE = (_viteApiUrl && _viteApiUrl.trim() !== ''
   : (_isDev ? 'http://127.0.0.1:8787' : API_WORKER_URL)
 ) + '/api';
 
-const STEPS = ['Program', 'Personal Info', 'Background', 'Statement', 'Review & Submit'];
+const STEPS = ['Program', 'Personal Info', 'Background', 'Statement', 'Documents', 'Review & Submit'];
 const STORAGE_KEY = 'bmi_apply_form';
+
+interface StagedDoc {
+  id: string;
+  file: File;
+  docType: string;
+  name: string;
+  sizeKb: number;
+}
 
 // Zod schemas (matching backend definitions)
 const SubmitApplicationSchema = z.object({
   program: z.string().min(1, 'Program is required'),
   degree_level: z.string().min(1, 'Degree level is required'),
+  date_of_birth: z.string().min(1, 'Date of birth is required'),
+  gender: z.string().min(1, 'Gender is required'),
+  nationality: z.string().min(1, 'Nationality is required'),
   personal_statement: z.string()
     .min(100, 'Personal statement must be at least 100 characters')
     .max(10000, 'Personal statement must not exceed 10000 characters'),
   prior_education: z.string()
     .min(20, 'Prior education must be at least 20 characters')
     .max(5000, 'Prior education must not exceed 5000 characters'),
+  high_school: z.string().optional(),
+  graduation_year: z.union([z.number(), z.string()]).optional(),
+  gpa: z.union([z.number(), z.string()]).optional(),
+  address: z.string().optional(),
 });
 
 export default function Apply() {
@@ -33,6 +48,10 @@ export default function Apply() {
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [stagedDocs, setStagedDocs] = useState<StagedDoc[]>([]);
+  const [selectedDocType, setSelectedDocType] = useState('transcript');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [form, setForm] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -78,14 +97,12 @@ export default function Apply() {
   const resetSessionTimer = useCallback(() => {
     setShowTimeoutWarning(false);
     if (sessionTimeoutRef.current) clearTimeout(sessionTimeoutRef.current as any);
-    // 15 minutes = 900000 ms before warning shows
     sessionTimeoutRef.current = setTimeout(() => {
       setShowTimeoutWarning(true);
     }, 15 * 60 * 1000) as any;
   }, []);
 
   useEffect(() => {
-    // Listen to user activity to reset timer
     const events = ['mousedown', 'keydown', 'scroll', 'touchstart'];
     const handleActivity = () => {
       if (!showTimeoutWarning) {
@@ -101,7 +118,6 @@ export default function Apply() {
   }, [resetSessionTimer, showTimeoutWarning]);
 
   useEffect(() => {
-    // Only auto-save if >50% complete (Step 2 or higher)
     if (step < 2) return;
 
     if (saveTimeout.current) {
@@ -110,11 +126,9 @@ export default function Apply() {
 
     const now = Date.now();
     const timeSinceLastSave = now - lastSavedAt.current;
-
-    // Ensure we don't hit the API more than once every 30 seconds
     const delay = Math.max(30000 - timeSinceLastSave, 2000);
 
-    setDraftStatus('idle'); // Indicate pending save
+    setDraftStatus('idle');
 
     saveTimeout.current = setTimeout(() => {
       setDraftStatus('saving');
@@ -140,8 +154,6 @@ export default function Apply() {
 
   const update = useCallback((field: string, value: string | number) => setForm((f: any) => ({ ...f, [field]: value })), []);
 
-  // ── DB-as-SSOT: hydrate program picker from the canonical /public/programs endpoint.
-  //    Fallback ensures the form renders immediately and tests pass without a live API.
   const [programs, setPrograms] = useState(FALLBACK_PROGRAMS);
   useEffect(() => {
     let cancelled = false;
@@ -172,9 +184,31 @@ export default function Apply() {
   const prev = () => setStep(s => Math.max(s - 1, 0));
 
   const canProceedStep0 = SubmitApplicationSchema.pick({ program: true, degree_level: true }).safeParse(form).success;
-
+  const canProceedStep1 = SubmitApplicationSchema.pick({ date_of_birth: true, gender: true, nationality: true }).safeParse(form).success;
   const canProceedStep2 = SubmitApplicationSchema.pick({ prior_education: true }).safeParse(form).success;
   const canProceedStep3 = SubmitApplicationSchema.pick({ personal_statement: true }).safeParse(form).success;
+
+  const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      setError('File is too large (maximum 10 MB).');
+      return;
+    }
+    const newDoc: StagedDoc = {
+      id: crypto.randomUUID(),
+      file,
+      docType: selectedDocType,
+      name: file.name,
+      sizeKb: Math.round(file.size / 1024),
+    };
+    setStagedDocs(prev => [...prev, newDoc]);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const removeStagedDoc = (id: string) => {
+    setStagedDocs(prev => prev.filter(d => d.id !== id));
+  };
 
   const handleSubmit = async () => {
     setError('');
@@ -187,7 +221,7 @@ export default function Apply() {
 
     setLoading(true);
     try {
-      await api.applications.submit({
+      const res = await api.applications.submit({
         program: form.program,
         degree_level: form.degree_level,
         personal_statement: form.personal_statement,
@@ -200,7 +234,20 @@ export default function Apply() {
         graduation_year: form.graduation_year ? Number(form.graduation_year) : undefined,
         gpa: form.gpa ? Number(form.gpa) : undefined,
       });
-      // Clear saved form on success
+
+      const appId = (res as any)?.application_id || (res as any)?.data?.application_id || (res as any)?.id;
+
+      // Upload any staged documents attached during the application
+      if (appId && stagedDocs.length > 0) {
+        for (const doc of stagedDocs) {
+          try {
+            await api.documents.upload(appId, doc.docType, doc.file);
+          } catch (uploadErr) {
+            console.warn('Attached document upload error:', uploadErr);
+          }
+        }
+      }
+
       localStorage.removeItem(STORAGE_KEY);
       navigate('/status?submitted=1');
     } catch (err: unknown) {
@@ -316,13 +363,13 @@ export default function Apply() {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
                 <div className="form-group">
-                  <label className="form-label" htmlFor="date_of_birth">Date of Birth</label>
-                  <input type="date" id="date_of_birth" className="form-input" value={form.date_of_birth || ''} onChange={e => update('date_of_birth', e.target.value)} />
+                  <label className="form-label" htmlFor="date_of_birth">Date of Birth *</label>
+                  <input type="date" id="date_of_birth" className="form-input" value={form.date_of_birth || ''} onChange={e => update('date_of_birth', e.target.value)} required />
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label" htmlFor="gender">Gender</label>
-                  <select id="gender" className="form-input" value={form.gender || ''} onChange={e => update('gender', e.target.value)}>
+                  <label className="form-label" htmlFor="gender">Gender *</label>
+                  <select id="gender" className="form-input" value={form.gender || ''} onChange={e => update('gender', e.target.value)} required>
                     <option value="">Select Gender</option>
                     <option value="Male">Male</option>
                     <option value="Female">Female</option>
@@ -332,8 +379,8 @@ export default function Apply() {
               </div>
 
               <div className="form-group">
-                <label className="form-label" htmlFor="nationality">Nationality</label>
-                <input type="text" id="nationality" className="form-input" value={form.nationality || ''} onChange={e => update('nationality', e.target.value)} placeholder="e.g. American, Canadian, etc." />
+                <label className="form-label" htmlFor="nationality">Nationality *</label>
+                <input type="text" id="nationality" className="form-input" value={form.nationality || ''} onChange={e => update('nationality', e.target.value)} placeholder="e.g. American, Canadian, etc." required />
               </div>
 
               <div className="form-group">
@@ -407,6 +454,80 @@ export default function Apply() {
           )}
 
           {step === 4 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              <h2 style={{ marginBottom: '0.25rem' }}>Supporting Documents</h2>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                Upload transcripts, government-issued photo ID, or certificates. Documents can also be submitted later from your status page.
+              </p>
+
+              <div style={{ background: 'var(--bg)', padding: '1.25rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '1rem' }}>
+                  <div style={{ flex: 1, minWidth: 180 }}>
+                    <label className="form-label" htmlFor="doc-type-select">Document Type</label>
+                    <select
+                      id="doc-type-select"
+                      className="form-select"
+                      value={selectedDocType}
+                      onChange={e => setSelectedDocType(e.target.value)}
+                    >
+                      <option value="transcript">Academic Transcript</option>
+                      <option value="id_document">Passport / National ID</option>
+                      <option value="other">Supporting Certificate / Other</option>
+                    </select>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={() => fileInputRef.current?.click()}
+                    style={{ whiteSpace: 'nowrap' }}
+                  >
+                    📎 Select File
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
+                    onChange={handleFileSelected}
+                    style={{ display: 'none' }}
+                  />
+                </div>
+
+                {stagedDocs.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--slate)', border: '2px dashed var(--border)', borderRadius: 'var(--radius-sm)' }}>
+                    <div style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }}>📄</div>
+                    <p style={{ margin: 0, fontSize: '0.85rem' }}>No documents attached yet (optional during submission).</p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    {stagedDocs.map(d => (
+                      <div
+                        key={d.id}
+                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.85rem', background: 'white', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span className="badge badge-submitted" style={{ textTransform: 'capitalize', fontSize: '0.75rem' }}>
+                            {d.docType.replace('_', ' ')}
+                          </span>
+                          <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{d.name}</span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--slate)' }}>({d.sizeKb} KB)</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeStagedDoc(d.id)}
+                          style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', fontSize: '1.1rem', fontWeight: 800 }}
+                          title="Remove file"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {step === 5 && (
             <div>
               <h2 style={{ marginBottom: '0.5rem' }}>Review & Submit</h2>
               <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>Please review your application before submitting.</p>
@@ -415,6 +536,9 @@ export default function Apply() {
                   { label: 'Applicant', value: `${user?.first_name} ${user?.last_name} (${user?.email})` },
                   { label: 'Program', value: form.program },
                   { label: 'Degree Level', value: form.degree_level.charAt(0).toUpperCase() + form.degree_level.slice(1) },
+                  { label: 'Date of Birth', value: form.date_of_birth || 'Not provided' },
+                  { label: 'Nationality', value: form.nationality || 'Not provided' },
+                  { label: 'Attached Documents', value: `${stagedDocs.length} file(s) attached` },
                 ].map(row => (
                   <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.85rem 1rem', background: 'var(--bg)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
                     <span style={{ color: 'var(--text-muted)', fontSize: '0.875rem', fontWeight: 600 }}>{row.label}</span>
@@ -423,7 +547,7 @@ export default function Apply() {
                 ))}
               </div>
               <div className="alert alert-warning" style={{ marginTop: '1.5rem', fontSize: '0.875rem' }} role="note">
-                ⚠️ Once submitted, you cannot edit your application. Document uploads will be available after submission on your status page. You will receive a confirmation email after submission.
+                ⚠️ Once submitted, you cannot edit your application directly. Any additional documents can be uploaded on your status page.
               </div>
             </div>
           )}
@@ -436,7 +560,7 @@ export default function Apply() {
               <button
                 className="btn btn-gold"
                 onClick={next}
-                disabled={step === 0 ? !canProceedStep0 : step === 2 ? !canProceedStep2 : step === 3 ? !canProceedStep3 : false}
+                disabled={step === 0 ? !canProceedStep0 : step === 1 ? !canProceedStep1 : step === 2 ? !canProceedStep2 : step === 3 ? !canProceedStep3 : false}
                 aria-label={step === 0 ? 'Continue to personal info' : step === 2 ? 'Continue to statement' : 'Continue'}
               >
                 Continue →

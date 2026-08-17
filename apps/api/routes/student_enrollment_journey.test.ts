@@ -223,6 +223,9 @@ describe('End-to-End Live Student Enrollment Journey', () => {
         program: 'BA in Biblical Studies',
         degree_level: 'undergraduate',
         personal_statement: 'I want to study.',
+        date_of_birth: '2000-01-01',
+        nationality: 'Liberian',
+        gender: 'Male',
       }),
     });
 
