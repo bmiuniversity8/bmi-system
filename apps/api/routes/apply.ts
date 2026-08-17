@@ -446,21 +446,42 @@ export async function handleUpdateStatus(
   }
   const trimmedAdminId = adminId.trim();
 
-  const authDb = createCoreDb(env);
-  if (isNeon(authDb)) await setRequestContext(authDb as NeonHttpDatabase<any>, trimmedAdminId);
-  const adminRecord = (await authDb.select({ id: users.id, role: users.role, first_name: users.first_name, email: users.email })
-    .from(users)
-    .where(eq(users.id, trimmedAdminId))
-    .execute())[0];
+  let adminRecord: { id: string; role: string; first_name?: string | null; email?: string | null } | null = null;
+
+  // 1. Check primary D1 database (where users and applications live)
+  try {
+    const row = await env.PLATFORM_CONTEXT!.db
+      .prepare('SELECT id, role, first_name, email FROM users WHERE id = ?')
+      .bind(trimmedAdminId)
+      .first<{ id: string; role: string; first_name: string | null; email: string | null }>();
+    if (row) adminRecord = row;
+  } catch (d1Err) {
+    console.warn(`[apply:update:${traceId}] D1 user fetch warning:`, d1Err);
+  }
+
+  // 2. Fallback to authDb/Neon if not found in D1
+  if (!adminRecord) {
+    try {
+      const authDb = createCoreDb(env);
+      if (isNeon(authDb)) await setRequestContext(authDb as NeonHttpDatabase<any>, trimmedAdminId);
+      const res = await authDb.select({ id: users.id, role: users.role, first_name: users.first_name, email: users.email })
+        .from(users)
+        .where(eq(users.id, trimmedAdminId))
+        .execute();
+      if (res && res.length > 0) adminRecord = res[0];
+    } catch (authDbErr) {
+      console.warn(`[apply:update:${traceId}] AuthDb user fetch warning:`, authDbErr);
+    }
+  }
 
   if (!adminRecord) {
     console.error(`[apply:update:${traceId}] Admin identity ${trimmedAdminId.substring(0, 8)}... NOT FOUND in users table`);
     return error('Admin identity could not be verified. Please log in again.', 401);
   }
 
-  const authorizedRoles = ['admin', 'staff', 'registrar'];
+  const authorizedRoles = ['admin', 'staff', 'registrar', 'superadmin'];
   if (!authorizedRoles.includes(adminRecord.role)) {
-    console.error(`[apply:update:${traceId}] Role guard failed: user ${trimmedAdminId.substring(0, 8)}... has role "${adminRecord.role}" (required: admin/staff/registrar)`);
+    console.error(`[apply:update:${traceId}] Role guard failed: user ${trimmedAdminId.substring(0, 8)}... has role "${adminRecord.role}" (required: admin/staff/registrar/superadmin)`);
     return error(`Insufficient permissions. Your role "${adminRecord.role}" cannot update application statuses.`, 403);
   }
 
