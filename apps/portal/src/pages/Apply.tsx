@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../hooks/useAuth';
 import { PROGRAMS as FALLBACK_PROGRAMS, API_WORKER_URL } from '@bmi/shared';
 import { z } from 'zod';
+import styles from './Apply.module.css';
 
 const _viteApiUrl = (import.meta as any).env?.VITE_API_URL as string | undefined;
 const _isDev = (import.meta as any).env?.DEV as boolean | undefined;
@@ -14,6 +15,50 @@ const API_BASE = (_viteApiUrl && _viteApiUrl.trim() !== ''
 
 const STEPS = ['Program', 'Personal Info', 'Background', 'Statement', 'Documents', 'Review & Submit'];
 const STORAGE_KEY = 'bmi_apply_form';
+
+const COUNTRIES_LIST = [
+  { name: 'Liberia', nationality: 'Liberian', flag: '🇱🇷' },
+  { name: 'Kenya', nationality: 'Kenyan', flag: '🇰🇪' },
+  { name: 'Nigeria', nationality: 'Nigerian', flag: '🇳🇬' },
+  { name: 'Ghana', nationality: 'Ghanaian', flag: '🇬🇭' },
+  { name: 'United States', nationality: 'American', flag: '🇺🇸' },
+  { name: 'United Kingdom', nationality: 'British', flag: '🇬🇧' },
+  { name: 'Canada', nationality: 'Canadian', flag: '🇨🇦' },
+  { name: 'Sierra Leone', nationality: 'Sierra Leonean', flag: '🇸🇱' },
+  { name: 'South Africa', nationality: 'South African', flag: '🇿🇦' },
+  { name: 'Uganda', nationality: 'Ugandan', flag: '🇺🇬' },
+  { name: 'Tanzania', nationality: 'Tanzanian', flag: '🇹🇿' },
+  { name: 'Rwanda', nationality: 'Rwandan', flag: '🇷🇼' },
+  { name: 'Ethiopia', nationality: 'Ethiopian', flag: '🇪🇹' },
+  { name: 'Egypt', nationality: 'Egyptian', flag: '🇪🇬' },
+  { name: 'Cameroon', nationality: 'Cameroonian', flag: '🇨🇲' },
+  { name: 'Zambia', nationality: 'Zambian', flag: '🇿🇲' },
+  { name: 'Zimbabwe', nationality: 'Zimbabwean', flag: '🇿🇼' },
+  { name: 'Australia', nationality: 'Australian', flag: '🇦🇺' },
+  { name: 'India', nationality: 'Indian', flag: '🇮🇳' },
+  { name: 'Germany', nationality: 'German', flag: '🇩🇪' },
+  { name: 'France', nationality: 'French', flag: '🇫🇷' },
+  { name: 'Brazil', nationality: 'Brazilian', flag: '🇧🇷' },
+  { name: 'China', nationality: 'Chinese', flag: '🇨🇳' },
+  { name: 'Japan', nationality: 'Japanese', flag: '🇯🇵' },
+  { name: 'South Korea', nationality: 'South Korean', flag: '🇰🇷' },
+  { name: 'Mexico', nationality: 'Mexican', flag: '🇲🇽' },
+  { name: 'Philippines', nationality: 'Filipino', flag: '🇵🇭' },
+  { name: 'Jamaica', nationality: 'Jamaican', flag: '🇯🇲' },
+  { name: 'Trinidad and Tobago', nationality: 'Trinidadian', flag: '🇹🇹' },
+  { name: 'Bahamas', nationality: 'Bahamian', flag: '🇧🇸' },
+  { name: 'Haiti', nationality: 'Haitian', flag: '🇭🇹' },
+  { name: 'Dominican Republic', nationality: 'Dominican', flag: '🇩🇴' },
+  { name: 'New Zealand', nationality: 'New Zealander', flag: '🇳🇿' },
+  { name: 'Ireland', nationality: 'Irish', flag: '🇮🇪' },
+  { name: 'Netherlands', nationality: 'Dutch', flag: '🇳🇱' },
+  { name: 'Sweden', nationality: 'Swedish', flag: '🇸🇪' },
+  { name: 'Norway', nationality: 'Norwegian', flag: '🇳🇴' },
+  { name: 'Switzerland', nationality: 'Swiss', flag: '🇨🇭' },
+  { name: 'Other', nationality: 'Other', flag: '🌐' },
+];
+
+const TOP_COUNTRIES = COUNTRIES_LIST.slice(0, 7);
 
 interface StagedDoc {
   id: string;
@@ -52,6 +97,14 @@ export default function Apply() {
   const [selectedDocType, setSelectedDocType] = useState('transcript');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Step 0 Filter & Search State
+  const [programSearch, setProgramSearch] = useState('');
+  const [selectedLevel, setSelectedLevel] = useState<string>('all');
+
+  // Step 1 Country Combobox State
+  const [countryDropdownOpen, setCountryDropdownOpen] = useState(false);
+  const countryComboboxRef = useRef<HTMLDivElement>(null);
+
   const [form, setForm] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -84,6 +137,17 @@ export default function Apply() {
       console.warn('Failed to save form:', e);
     }
   }, [form]);
+
+  // Click outside to close country dropdown
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (countryComboboxRef.current && !countryComboboxRef.current.contains(e.target as Node)) {
+        setCountryDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Auto-save to API (debounced 30s, quota protection)
   const lastSavedAt = useRef<number>(0);
@@ -175,6 +239,37 @@ export default function Apply() {
     return () => { cancelled = true; };
   }, []);
 
+  // Filtered Programs
+  const filteredPrograms = useMemo(() => {
+    return programs.filter(p => {
+      const matchesLevel = selectedLevel === 'all' || p.level.toLowerCase() === selectedLevel.toLowerCase();
+      const matchesSearch = programSearch.trim() === '' || 
+        p.label.toLowerCase().includes(programSearch.toLowerCase()) ||
+        (p.description && p.description.toLowerCase().includes(programSearch.toLowerCase()));
+      return matchesLevel && matchesSearch;
+    });
+  }, [programs, selectedLevel, programSearch]);
+
+  // Program Level Counts
+  const levelCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: programs.length };
+    programs.forEach(p => {
+      const lvl = p.level.toLowerCase();
+      counts[lvl] = (counts[lvl] || 0) + 1;
+    });
+    return counts;
+  }, [programs]);
+
+  // Filtered Countries for Combobox
+  const filteredCountries = useMemo(() => {
+    const query = form.nationality?.trim().toLowerCase() || '';
+    if (!query) return COUNTRIES_LIST;
+    return COUNTRIES_LIST.filter(c =>
+      c.name.toLowerCase().includes(query) ||
+      c.nationality.toLowerCase().includes(query)
+    );
+  }, [form.nationality]);
+
   const selectProgram = (p: { label: string; level: string }) => {
     update('program', p.label);
     update('degree_level', p.level);
@@ -258,19 +353,17 @@ export default function Apply() {
   };
 
   return (
-    <div className="page" style={{ padding: '5rem 1.5rem 3rem', background: 'var(--bg)' }}>
-      <div style={{ maxWidth: 680, margin: '0 auto' }}>
-        <div style={{ marginBottom: '2.5rem' }}>
-          <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 'clamp(1.8rem, 4vw, 2.5rem)', fontWeight: 900 }}>
-            Your Application
-          </h1>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem', flexWrap: 'wrap', gap: '1rem' }}>
-            <p style={{ color: 'var(--text-muted)', margin: 0 }}>
+    <div className={styles.pageContainer}>
+      <div className={styles.wrapper}>
+        <div className={styles.header}>
+          <h1 className={styles.title}>Your Application</h1>
+          <div className={styles.subHeader}>
+            <p className={styles.welcomeText}>
               Welcome, {user?.first_name}. Complete all steps to submit your application.
             </p>
-            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <div className={styles.stepMeta}>
               {step > 1 && (
-                <span style={{ fontSize: '0.8rem', color: draftStatus === 'saving' ? 'var(--navy)' : draftStatus === 'saved' ? 'var(--success)' : draftStatus === 'error' ? 'var(--danger)' : 'var(--text-muted)' }}>
+                <span className={`${styles.draftPill} ${styles[draftStatus] || ''}`}>
                   {draftStatus === 'saving' ? 'Saving draft...' : draftStatus === 'saved' ? '✓ Draft saved' : draftStatus === 'error' ? '⚠️ Save failed' : ''}
                 </span>
               )}
@@ -320,45 +413,134 @@ export default function Apply() {
 
           {step === 0 && (
             <div>
-              <h2 style={{ marginBottom: '0.5rem' }}>Choose Your Program</h2>
-              <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>Select the degree program you wish to apply to.</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                {programs.map((p) => (
-                  <div key={p.label}
-                    onClick={() => selectProgram(p)}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => { if (e.key === 'Enter') selectProgram(p); }}
-                    aria-pressed={form.program === p.label}
-                    style={{
-                      padding: '1rem 1.25rem',
-                      borderRadius: 'var(--radius-sm)',
-                      border: `2px solid ${form.program === p.label ? 'var(--gold)' : 'var(--border)'}`,
-                      background: form.program === p.label ? 'rgba(212,175,55,0.06)' : 'white',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      transition: 'all 0.2s',
-                    }}>
-                    <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>{p.label}</span>
-                    <span className={`badge badge-${p.level}`} style={{ textTransform: 'capitalize' }}>{p.level}</span>
-                  </div>
-                ))}
+              <div style={{ marginBottom: '1.25rem' }}>
+                <h2 style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: '0.25rem' }}>Choose Your Program</h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', margin: 0 }}>Select the degree or certificate program you wish to apply to.</p>
               </div>
+
+              {/* Search and Category Filters */}
+              <div className={styles.searchFilterBar}>
+                <div className={styles.searchBox}>
+                  <span className={styles.searchIcon}>🔍</span>
+                  <input
+                    type="text"
+                    className={styles.searchInput}
+                    placeholder="Search programs by keyword or title..."
+                    value={programSearch}
+                    onChange={(e) => setProgramSearch(e.target.value)}
+                  />
+                  {programSearch && (
+                    <button
+                      type="button"
+                      className={styles.clearSearchBtn}
+                      onClick={() => setProgramSearch('')}
+                      title="Clear search"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                <div className={styles.levelTabs} role="tablist">
+                  {[
+                    { key: 'all', label: 'All Programs' },
+                    { key: 'undergraduate', label: 'Undergraduate' },
+                    { key: 'graduate', label: 'Graduate' },
+                    { key: 'doctorate', label: 'Doctorate' },
+                    { key: 'certificate', label: 'Certificate' },
+                  ].map(tab => (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      role="tab"
+                      aria-selected={selectedLevel === tab.key}
+                      className={`${styles.levelTab} ${selectedLevel === tab.key ? styles.active : ''}`}
+                      onClick={() => setSelectedLevel(tab.key)}
+                    >
+                      <span>{tab.label}</span>
+                      <span className={styles.tabCount}>{levelCounts[tab.key] || 0}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Programs Grid */}
+              {filteredPrograms.length === 0 ? (
+                <div className={styles.emptyPrograms}>
+                  <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🔍</div>
+                  <p style={{ fontWeight: 600, margin: '0 0 0.5rem 0' }}>No programs match your search</p>
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={() => { setProgramSearch(''); setSelectedLevel('all'); }}
+                    style={{ fontSize: '0.85rem', padding: '0.4rem 0.85rem' }}
+                  >
+                    Reset Filters
+                  </button>
+                </div>
+              ) : (
+                <div className={styles.programGrid}>
+                  {filteredPrograms.map((p) => {
+                    const isSelected = form.program === p.label;
+                    const levelClass = styles[p.level] || '';
+                    return (
+                      <div
+                        key={p.label}
+                        onClick={() => selectProgram(p)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => { if (e.key === 'Enter') selectProgram(p); }}
+                        aria-pressed={isSelected}
+                        className={`${styles.programCard} ${isSelected ? styles.selected : ''}`}
+                      >
+                        <div>
+                          <div className={styles.cardHeader}>
+                            <span className={`${styles.levelBadge} ${levelClass}`}>
+                              {p.level}
+                            </span>
+                            <div className={styles.checkIndicator}>
+                              ✓
+                            </div>
+                          </div>
+                          <h3 className={styles.programTitle}>{p.label}</h3>
+                          {p.description && (
+                            <p className={styles.programDesc}>{p.description}</p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {form.program && (
+                <div className={styles.selectedBanner}>
+                  <div>
+                    <span style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#a16207', fontWeight: 700 }}>Selected Program:</span>
+                    <div style={{ fontWeight: 800, color: '#4B0082', fontSize: '1rem', marginTop: '0.1rem' }}>
+                      {form.program}
+                    </div>
+                  </div>
+                  <span className={`badge badge-${form.degree_level}`} style={{ textTransform: 'capitalize' }}>
+                    {form.degree_level}
+                  </span>
+                </div>
+              )}
             </div>
           )}
 
           {step === 1 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <h2 style={{ marginBottom: '0.5rem' }}>Personal Information</h2>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                Please provide your personal details.
-              </p>
+              <div>
+                <h2 style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: '0.25rem' }}>Personal Information</h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', margin: 0 }}>
+                  Please confirm your personal details and origin.
+                </p>
+              </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', background: 'var(--bg)', padding: '1.25rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', marginBottom: '0.5rem' }}>
-                <div><strong>Name:</strong> {user?.first_name} {user?.last_name}</div>
-                <div><strong>Email:</strong> {user?.email}</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', background: 'var(--bg)', padding: '1rem 1.25rem', borderRadius: '10px', border: '1px solid var(--border)' }}>
+                <div style={{ fontSize: '0.9rem' }}><strong>Name:</strong> {user?.first_name} {user?.last_name}</div>
+                <div style={{ fontSize: '0.9rem' }}><strong>Email:</strong> {user?.email}</div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
@@ -378,14 +560,105 @@ export default function Apply() {
                 </div>
               </div>
 
-              <div className="form-group">
-                <label className="form-label" htmlFor="nationality">Nationality *</label>
-                <input type="text" id="nationality" className="form-input" value={form.nationality || ''} onChange={e => update('nationality', e.target.value)} placeholder="e.g. American, Canadian, etc." required />
+              {/* Searchable & Typable Country / Nationality Combobox */}
+              <div className="form-group" ref={countryComboboxRef}>
+                <label className="form-label" htmlFor="nationality">
+                  Nationality *
+                </label>
+                <div className={styles.comboboxContainer}>
+                  <div className={styles.comboboxInputWrapper}>
+                    <input
+                      type="text"
+                      id="nationality"
+                      className="form-input"
+                      value={form.nationality || ''}
+                      onChange={e => {
+                        update('nationality', e.target.value);
+                        setCountryDropdownOpen(true);
+                      }}
+                      onFocus={() => setCountryDropdownOpen(true)}
+                      placeholder="Type or select your nationality / country (e.g. Liberian, Kenyan, American...)"
+                      autoComplete="off"
+                      required
+                    />
+                    <button
+                      type="button"
+                      style={{
+                        position: 'absolute',
+                        right: '0.75rem',
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        color: 'var(--slate)',
+                        padding: '0.25rem',
+                        fontSize: '0.8rem'
+                      }}
+                      onClick={() => setCountryDropdownOpen(prev => !prev)}
+                      tabIndex={-1}
+                    >
+                      {countryDropdownOpen ? '▲' : '▼'}
+                    </button>
+                  </div>
+
+                  {countryDropdownOpen && (
+                    <div className={styles.comboboxDropdown} role="listbox">
+                      {filteredCountries.length === 0 ? (
+                        <div style={{ padding: '0.75rem', fontSize: '0.85rem', color: 'var(--slate)', textAlign: 'center' }}>
+                          No direct match. You can keep typing "{form.nationality}" as custom nationality.
+                        </div>
+                      ) : (
+                        filteredCountries.map(c => {
+                          const isMatch = form.nationality?.toLowerCase() === c.name.toLowerCase() || 
+                                          form.nationality?.toLowerCase() === c.nationality.toLowerCase();
+                          return (
+                            <div
+                              key={c.name}
+                              role="option"
+                              aria-selected={isMatch}
+                              className={`${styles.comboboxItem} ${isMatch ? styles.selected : ''}`}
+                              onClick={() => {
+                                update('nationality', c.nationality);
+                                setCountryDropdownOpen(false);
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center' }}>
+                                <span className={styles.countryFlag}>{c.flag}</span>
+                                <span>{c.name}</span>
+                              </div>
+                              <span style={{ fontSize: '0.8rem', color: isMatch ? '#854d0e' : 'var(--slate)' }}>
+                                {c.nationality}
+                              </span>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Quick Selection Chips */}
+                <div className={styles.quickChips}>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', alignSelf: 'center', marginRight: '0.2rem' }}>Quick select:</span>
+                  {TOP_COUNTRIES.map(c => (
+                    <button
+                      key={c.name}
+                      type="button"
+                      className={`${styles.quickChip} ${form.nationality === c.nationality ? styles.active : ''}`}
+                      onClick={() => {
+                        update('nationality', c.nationality);
+                        setCountryDropdownOpen(false);
+                      }}
+                    >
+                      <span>{c.flag}</span>
+                      <span>{c.name}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="form-group">
                 <label className="form-label" htmlFor="address">Mailing Address</label>
-                <textarea id="address" className="form-textarea" rows={3} value={form.address || ''} onChange={e => update('address', e.target.value)} placeholder="Full mailing address" />
+                <textarea id="address" className="form-textarea" rows={3} value={form.address || ''} onChange={e => update('address', e.target.value)} placeholder="Full street address, city, state/province, postal code" />
               </div>
             </div>
           )}
