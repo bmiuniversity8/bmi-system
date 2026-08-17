@@ -93,6 +93,8 @@ export default function Apply() {
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [existingApp, setExistingApp] = useState<any>(null);
+  const [checkingExisting, setCheckingExisting] = useState(true);
   const [stagedDocs, setStagedDocs] = useState<StagedDoc[]>([]);
   const [selectedDocType, setSelectedDocType] = useState('transcript');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -128,6 +130,24 @@ export default function Apply() {
       gpa: ''
     };
   });
+
+  // Check if applicant already has an active submitted application
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const myApp = await api.applications.getMyApplication();
+        if (active && myApp && myApp.status && !['draft', 'rejected'].includes(myApp.status)) {
+          setExistingApp(myApp);
+        }
+      } catch {
+        // No application found or fetch failed, proceed with form
+      } finally {
+        if (active) setCheckingExisting(false);
+      }
+    })();
+    return () => { active = false; };
+  }, []);
 
   // Auto-save to localStorage
   useEffect(() => {
@@ -306,6 +326,7 @@ export default function Apply() {
   };
 
   const handleSubmit = async () => {
+    if (loading) return;
     setError('');
 
     const validation = SubmitApplicationSchema.safeParse(form);
@@ -346,7 +367,13 @@ export default function Apply() {
       localStorage.removeItem(STORAGE_KEY);
       navigate('/status?submitted=1');
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Submission failed. Please try again.');
+      const msg = err instanceof Error ? err.message : 'Submission failed. Please try again.';
+      if (msg.toLowerCase().includes('already have an active application') || msg.includes('409')) {
+        setError('You already have an active application submitted. Redirecting to your status tracker...');
+        setTimeout(() => navigate('/status'), 1800);
+      } else {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -373,6 +400,25 @@ export default function Apply() {
             </div>
           </div>
         </div>
+
+        {existingApp && (
+          <div className="alert alert-info" style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', background: '#f8fafc', borderLeft: '4px solid var(--gold)' }}>
+            <div>
+              <strong style={{ color: 'var(--navy)', fontSize: '1rem' }}>Active Application on File</strong>
+              <p style={{ margin: '0.25rem 0 0 0', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+                You already have a submitted application for <strong>{existingApp.program}</strong> (Status: <span style={{ textTransform: 'capitalize', fontWeight: 600 }}>{existingApp.status?.replace('_', ' ')}</span>).
+              </p>
+            </div>
+            <button
+              type="button"
+              className="btn btn-navy"
+              onClick={() => navigate('/status')}
+              style={{ padding: '0.5rem 1rem', fontSize: '0.875rem', whiteSpace: 'nowrap' }}
+            >
+              Track Application Status →
+            </button>
+          </div>
+        )}
 
         {showTimeoutWarning && (
           <div className="alert alert-warning" style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
