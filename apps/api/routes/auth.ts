@@ -753,8 +753,8 @@ export async function handleMfaDisable(request: Request, env: Env, userId: strin
   return ok({ message: 'MFA disabled successfully', trace_id: ctx.traceId });
 }
 
-export async function handleOAuthLogin(_request: Request, env: Env, provider: OAuthProvider): Promise<Response> {
-  const config = getOAuthConfig(provider, env);
+export async function handleOAuthLogin(request: Request, env: Env, provider: OAuthProvider): Promise<Response> {
+  const config = getOAuthConfig(provider, env, request);
   if (!config.clientId || !config.clientSecret) {
     return error('Provider not configured', 501);
   }
@@ -766,11 +766,14 @@ export async function handleOAuthLogin(_request: Request, env: Env, provider: OA
   url.searchParams.set('state', state);
   url.searchParams.set('response_type', 'code');
 
+  const isSecure = request.url.startsWith('https:');
+  const cookieFlags = isSecure ? 'Path=/; HttpOnly; Secure; SameSite=None; Max-Age=600' : 'Path=/; HttpOnly; SameSite=Lax; Max-Age=600';
+
   return new Response(null, {
     status: 302,
     headers: {
       Location: url.toString(),
-      'Set-Cookie': `oauth_state=${state}; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=600`,
+      'Set-Cookie': `oauth_state=${state}; ${cookieFlags}`,
     },
   });
 }
@@ -785,7 +788,7 @@ export async function handleOAuthCallback(request: Request, env: Env, provider: 
     return error('Invalid state or code', 400);
   }
 
-  const config = getOAuthConfig(provider, env);
+  const config = getOAuthConfig(provider, env, request);
   const accessToken = await exchangeCodeForToken(provider, code, config);
   const userInfo = await getUserInfo(provider, accessToken, config);
 
@@ -868,12 +871,17 @@ export async function handleOAuthCallback(request: Request, env: Env, provider: 
     set: { expires_at: new Date(expiresAt) },
   });
 
-  const baseUrl = getPortalUrl(env);
+  const baseUrl = getPortalUrl(env, request);
+  const dest = user.role === 'admin' || user.role === 'staff' ? '/admin' : user.role === 'student' ? '/student/dashboard' : '/status';
 
-  const headers = new Headers({ Location: `${baseUrl}/dashboard` });
-  headers.append('Set-Cookie', `bmi_token=${token}; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=${60 * 60 * 24 * 7}`);
-  headers.append('Set-Cookie', `csrf_token=${csrfToken}; Path=/; Secure; SameSite=None; Max-Age=${60 * 60 * 24 * 7}`);
-  headers.append('Set-Cookie', 'oauth_state=; Path=/; Secure; SameSite=None; Max-Age=0');
+  const isSecure = request.url.startsWith('https:');
+  const tokenCookieFlags = isSecure ? 'Path=/; HttpOnly; Secure; SameSite=None' : 'Path=/; HttpOnly; SameSite=Lax';
+  const csrfCookieFlags = isSecure ? 'Path=/; Secure; SameSite=None' : 'Path=/; SameSite=Lax';
+
+  const headers = new Headers({ Location: `${baseUrl}${dest}` });
+  headers.append('Set-Cookie', `bmi_token=${token}; ${tokenCookieFlags}; Max-Age=${60 * 60 * 24 * 7}`);
+  headers.append('Set-Cookie', `csrf_token=${csrfToken}; ${csrfCookieFlags}; Max-Age=${60 * 60 * 24 * 7}`);
+  headers.append('Set-Cookie', `oauth_state=; Path=/; ${isSecure ? 'Secure; SameSite=None; ' : 'SameSite=Lax; '}Max-Age=0`);
 
   return new Response(undefined, {
     status: 302,

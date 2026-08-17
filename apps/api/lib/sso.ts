@@ -1,5 +1,4 @@
 import type { Env } from './types';
-import { getPortalUrl } from './config';
 
 export type OAuthProvider = 'google' | 'github' | 'microsoft';
 
@@ -21,8 +20,20 @@ export interface UserInfo {
   emailVerified?: boolean;
 }
 
-export function getOAuthConfig(provider: OAuthProvider, env: Env): OAuthConfig {
-  const baseUrl = getPortalUrl(env);
+export function getOAuthConfig(provider: OAuthProvider, env: Env, request?: Request): OAuthConfig {
+  let baseUrl = 'http://localhost:5173';
+  if (request) {
+    const url = new URL(request.url);
+    if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
+      // In local dev, the callback must go through the Vite proxy (port 5173)
+      // so that cookies are set on the same origin as the portal frontend.
+      baseUrl = 'http://localhost:5173';
+    } else {
+      baseUrl = `${url.protocol}//${url.host}`;
+    }
+  } else if (env.ENVIRONMENT === 'production') {
+    baseUrl = 'https://api.bmi-portal.pages.dev';
+  }
   const redirectUri = `${baseUrl}/api/auth/oauth/${provider}/callback`;
   
   const configs: Record<OAuthProvider, Partial<OAuthConfig>> = {
@@ -55,7 +66,7 @@ export function getOAuthConfig(provider: OAuthProvider, env: Env): OAuthConfig {
     }
   };
 
-      return configs[provider] as OAuthConfig;
+  return configs[provider] as OAuthConfig;
 }
 
 export async function exchangeCodeForToken(

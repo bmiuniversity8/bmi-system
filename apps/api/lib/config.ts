@@ -7,7 +7,13 @@
 import { PORTAL_URL as PRODUCTION_PORTAL_URL, UMS_URL as PRODUCTION_UMS_URL } from '@bmi/shared';
 import type { Env } from './types';
 
-export function getPortalUrl(env: Env): string {
+export function getPortalUrl(env: Env, request?: Request): string {
+  if (request) {
+    const host = request.headers.get('Host') || '';
+    if (host.includes('localhost') || host.includes('127.0.0.1')) {
+      return 'http://localhost:5173';
+    }
+  }
   return env.ENVIRONMENT === 'development' ? 'http://localhost:5173' : PRODUCTION_PORTAL_URL;
 }
 
