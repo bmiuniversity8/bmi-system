@@ -19,7 +19,7 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
+    <html lang="en" style={{ scrollPaddingTop: '112px' }}>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -30,7 +30,7 @@ export default function RootLayout({ children }) {
       </head>
       <body style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
         <Navbar />
-        <div style={{ flexGrow: 1 }}>
+        <div style={{ flexGrow: 1, paddingTop: '112px' }}>
           {children}
         </div>
         <CookieBanner />

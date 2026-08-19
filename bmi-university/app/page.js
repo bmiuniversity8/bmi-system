@@ -68,7 +68,7 @@ export default function HomePage() {
     <main id="main-content">
 
       {/* ─── HERO SECTION ─── */}
-      <section aria-label="Hero" style={{ position: "relative", width: "100%", height: "100vh", minHeight: "680px", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", paddingTop: "60px" }}>
+      <section aria-label="Hero" style={{ position: "relative", width: "100%", height: "100vh", minHeight: "680px", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
         {slides.map((s, i) => (
           <div
             key={i}

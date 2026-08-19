@@ -28,8 +28,13 @@
   padding: 0;
 }
 
+:root {
+  --navbar-height: 112px; /* utility bar (~30px) + main nav (82px) */
+}
+
 html {
   scroll-behavior: smooth;
+  scroll-padding-top: var(--navbar-height);
 }
 
 body {
