@@ -67,13 +67,6 @@
 		}
 	],
 
-	// ─── Custom Domain Routing ────────────────────────────────────────────────
-	"routes": [
-		{
-			"pattern": "api.bmiuniversities.org",
-			"custom_domain": true
-		}
-	],
 
 	// ─── Public Environment Variables ─────────────────────────────────────────
 	"vars": {
