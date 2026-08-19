@@ -87,7 +87,7 @@ export default function HomePage() {
           />
         ))}
         {/* Deep Oxford Navy Gradient Vignette */}
-        <div aria-hidden="true" style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, rgba(9, 18, 35, 0.7) 0%, rgba(9, 18, 35, 0.85) 65%, #091223 100%)" }} />
+        <div aria-hidden="true" style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, rgba(9, 18, 35, 0.65) 0%, rgba(9, 18, 35, 0.85) 65%, #091223 100%)" }} />
 
         <div style={{ position: "relative", zIndex: 1, maxWidth: "1020px", padding: "0 2rem", textAlign: "center" }}>
           <div className="animate-hero">
@@ -100,7 +100,7 @@ export default function HomePage() {
               color: "#e5c578",
               fontSize: "0.82rem",
               fontWeight: 800,
-              letterSpacing: "0.14em",
+              letterSpacing: "0.12em",
               textTransform: "uppercase",
               padding: "0.5rem 1.4rem",
               borderRadius: "999px",
@@ -113,18 +113,18 @@ export default function HomePage() {
           </div>
 
           <h1 className="animate-hero-delay" style={{
-            fontFamily: "'Cinzel', 'Times New Roman', serif",
+            fontFamily: "'Outfit', sans-serif",
             fontWeight: 900,
-            fontSize: "clamp(2.6rem, 5.8vw, 5rem)",
+            fontSize: "clamp(2.7rem, 6vw, 5.2rem)",
             color: "#ffffff",
-            lineHeight: 1.12,
+            lineHeight: 1.1,
             marginBottom: "1.5rem",
-            letterSpacing: "0.01em",
+            letterSpacing: "-0.03em",
             textShadow: "0 4px 30px rgba(0,0,0,0.6)",
           }}>
             Scholarship for Eternity.<br />
             <span style={{
-              background: "linear-gradient(135deg, #c5a048 0%, #f7f3e8 50%, #c5a048 100%)",
+              background: "linear-gradient(135deg, #c5a048 0%, #e5c578 50%, #c5a048 100%)",
               WebkitBackgroundClip: "text",
               WebkitTextFillColor: "transparent",
               filter: "drop-shadow(0 2px 10px rgba(197, 160, 72, 0.4))",
@@ -139,10 +139,9 @@ export default function HomePage() {
             lineHeight: 1.8,
             maxWidth: "740px",
             margin: "0 auto 2.5rem",
-            fontFamily: "'Plus Jakarta Sans', sans-serif",
             fontWeight: 400,
           }}>
-            Developing Christ-centered men and women with the values, theological depth, and leadership skills essential to transform nations.
+            Developing Christ-centered men and women at <strong>Bethel Ministries International University</strong> with the values, theological depth, and leadership skills essential to transform nations.
           </p>
 
           <div className="animate-hero-delay-2" style={{ display: "flex", gap: "1rem", justifyContent: "center", flexWrap: "wrap" }}>
@@ -183,25 +182,25 @@ export default function HomePage() {
         <div style={{ maxWidth: "1280px", margin: "0 auto", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "2rem" }}>
           
           <div style={{ textAlign: "center", borderRight: "1px solid rgba(255,255,255,0.08)", padding: "0 1rem" }} className="metric-box">
-            <div style={{ fontFamily: "'Cinzel', serif", fontSize: "2.8rem", fontWeight: 900, color: "var(--color-gold, #c5a048)", lineHeight: 1 }}>100%</div>
+            <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: "2.8rem", fontWeight: 900, color: "var(--color-gold, #c5a048)", lineHeight: 1 }}>100%</div>
             <div style={{ fontWeight: 800, fontSize: "0.95rem", color: "white", marginTop: "0.5rem" }}>Christ-Centered Doctrine</div>
             <div style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.6)", marginTop: "0.2rem" }}>Rooted in biblical inerrancy & scholarship</div>
           </div>
 
           <div style={{ textAlign: "center", borderRight: "1px solid rgba(255,255,255,0.08)", padding: "0 1rem" }} className="metric-box">
-            <div style={{ fontFamily: "'Cinzel', serif", fontSize: "2.8rem", fontWeight: 900, color: "#ffffff", lineHeight: 1 }}>40+</div>
+            <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: "2.8rem", fontWeight: 900, color: "#ffffff", lineHeight: 1 }}>40+</div>
             <div style={{ fontWeight: 800, fontSize: "0.95rem", color: "var(--color-gold-light, #e5c578)", marginTop: "0.5rem" }}>Nations Represented</div>
             <div style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.6)", marginTop: "0.2rem" }}>Worldwide student body & alumni network</div>
           </div>
 
           <div style={{ textAlign: "center", borderRight: "1px solid rgba(255,255,255,0.08)", padding: "0 1rem" }} className="metric-box">
-            <div style={{ fontFamily: "'Cinzel', serif", fontSize: "2.8rem", fontWeight: 900, color: "var(--color-gold, #c5a048)", lineHeight: 1 }}>1 : 12</div>
+            <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: "2.8rem", fontWeight: 900, color: "var(--color-gold, #c5a048)", lineHeight: 1 }}>1 : 12</div>
             <div style={{ fontWeight: 800, fontSize: "0.95rem", color: "white", marginTop: "0.5rem" }}>Faculty Mentorship Ratio</div>
             <div style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.6)", marginTop: "0.2rem" }}>Personal pastoral & academic guidance</div>
           </div>
 
           <div style={{ textAlign: "center", padding: "0 1rem" }}>
-            <div style={{ fontFamily: "'Cinzel', serif", fontSize: "2.8rem", fontWeight: 900, color: "#ffffff", lineHeight: 1 }}>QAHE</div>
+            <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: "2.8rem", fontWeight: 900, color: "#ffffff", lineHeight: 1 }}>QAHE</div>
             <div style={{ fontWeight: 800, fontSize: "0.95rem", color: "var(--color-gold-light, #e5c578)", marginTop: "0.5rem" }}>Accredited Institution</div>
             <div style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.6)", marginTop: "0.2rem" }}>International quality assurance certified</div>
           </div>
@@ -218,7 +217,7 @@ export default function HomePage() {
             <span style={{ fontSize: "0.85rem", fontWeight: 800, color: "var(--color-gold-dark, #a07e2c)", textTransform: "uppercase", letterSpacing: "0.12em" }}>
               ACADEMIC DEGREE PATHWAYS
             </span>
-            <h2 id="programs-heading" style={{ fontFamily: "'Cinzel', serif", fontWeight: 900, fontSize: "clamp(2.2rem, 3.8vw, 3.2rem)", color: "#091223", marginTop: "0.35rem", marginBottom: "1rem", letterSpacing: "-0.01em" }}>
+            <h2 id="programs-heading" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: "clamp(2.2rem, 3.8vw, 3.2rem)", color: "#091223", marginTop: "0.35rem", marginBottom: "1rem", letterSpacing: "-0.03em" }}>
               Accredited Programs of Study
             </h2>
             <p style={{ color: "#64748b", fontSize: "1.1rem", maxWidth: "700px", margin: "0 auto", lineHeight: 1.7 }}>
@@ -327,7 +326,7 @@ export default function HomePage() {
               <span style={{ fontSize: "0.78rem", fontWeight: 800, color: "var(--color-gold-light, #e5c578)", textTransform: "uppercase", letterSpacing: "0.12em" }}>
                 EXECUTIVE & POSTGRADUATE PATHWAYS
               </span>
-              <h3 style={{ fontFamily: "'Cinzel', serif", fontWeight: 800, fontSize: "1.7rem", color: "#ffffff", margin: "0.35rem 0 0.75rem 0" }}>
+              <h3 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: "1.7rem", color: "#ffffff", margin: "0.35rem 0 0.75rem 0" }}>
                 Executive Graduate Certificates
               </h3>
               <p style={{ color: "rgba(255,255,255,0.8)", fontSize: "0.95rem", margin: 0 }}>
@@ -351,12 +350,12 @@ export default function HomePage() {
             <span style={{ fontSize: "0.85rem", fontWeight: 800, color: "var(--color-gold-dark, #a07e2c)", textTransform: "uppercase", letterSpacing: "0.12em" }}>
               PRESIDENT & CHANCELLOR&apos;S ADDRESS
             </span>
-            <h2 style={{ fontFamily: "'Cinzel', serif", fontWeight: 900, fontSize: "clamp(2rem, 3.5vw, 2.8rem)", color: "#091223", marginTop: "0.4rem", marginBottom: "1.5rem", lineHeight: 1.2 }}>
+            <h2 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: "clamp(2rem, 3.5vw, 2.8rem)", color: "#091223", marginTop: "0.4rem", marginBottom: "1.5rem", lineHeight: 1.2, letterSpacing: "-0.025em" }}>
               A Sacred Mandate for Global Leadership
             </h2>
             
-            <p style={{ fontSize: "1.05rem", lineHeight: 1.8, color: "#334155", marginBottom: "1.25rem", fontStyle: "italic", fontFamily: "'Cormorant Garamond', Georgia, serif" }}>
-              &ldquo;At Bishop Mathew Institute, higher education is not merely an academic endeavor; it is a sacred calling to equip visionary leaders who will stand as pillars of integrity, divine truth, and scholarly excellence in a rapidly changing world.&rdquo;
+            <p style={{ fontSize: "1.1rem", lineHeight: 1.8, color: "#334155", marginBottom: "1.25rem", fontStyle: "italic" }}>
+              &ldquo;At Bethel Ministries International University, higher education is not merely an academic endeavor; it is a sacred calling to equip visionary leaders who will stand as pillars of integrity, divine truth, and scholarly excellence in a rapidly changing world.&rdquo;
             </p>
             
             <p style={{ fontSize: "0.95rem", lineHeight: 1.8, color: "#64748b", marginBottom: "2rem" }}>
@@ -369,7 +368,7 @@ export default function HomePage() {
               </div>
               <div>
                 <div style={{ fontWeight: 800, color: "#091223", fontSize: "1.05rem" }}>Office of the Academic Senate</div>
-                <div style={{ fontSize: "0.82rem", color: "#64748b" }}>Bishop Mathew Institute • BMI University</div>
+                <div style={{ fontSize: "0.82rem", color: "#64748b" }}>Bethel Ministries International University</div>
               </div>
             </div>
           </div>
@@ -390,7 +389,7 @@ export default function HomePage() {
               </span>
             </div>
 
-            <h3 style={{ fontFamily: "'Cinzel', serif", fontSize: "1.5rem", fontWeight: 800, margin: "0.5rem 0 1rem 0" }}>
+            <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: "1.6rem", fontWeight: 800, margin: "0.5rem 0 1rem 0" }}>
               Verify Diplomas & Records
             </h3>
 
@@ -434,7 +433,7 @@ export default function HomePage() {
             <span style={{ fontSize: "0.82rem", fontWeight: 800, color: "var(--color-gold-light, #e5c578)", textTransform: "uppercase", letterSpacing: "0.12em" }}>
               ACCREDITED HIGHER EDUCATION
             </span>
-            <h2 style={{ fontFamily: "'Cinzel', serif", fontWeight: 900, fontSize: "clamp(2.2rem, 3.8vw, 3.2rem)", color: "#ffffff", margin: "0.4rem 0 1.5rem 0", lineHeight: 1.15 }}>
+            <h2 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: "clamp(2.2rem, 3.8vw, 3.4rem)", color: "#ffffff", margin: "0.4rem 0 1.5rem 0", lineHeight: 1.15, letterSpacing: "-0.025em" }}>
               Ready to Begin Your <span style={{ color: "#e5c578" }}>Academic Journey?</span>
             </h2>
             <p style={{ color: "rgba(255,255,255,0.85)", fontSize: "1.1rem", lineHeight: 1.8, marginBottom: "1.25rem" }}>

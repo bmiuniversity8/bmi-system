@@ -58,13 +58,13 @@ export default function Footer() {
           <Link href="/" aria-label="BMI University — Home" style={{ display: "flex", alignItems: "center", gap: "12px", textDecoration: "none" }}>
             <img src="/images/bmi-crest-270.png" alt="BMI University Crest" style={{ height: "54px", width: "auto", objectFit: "contain", filter: "drop-shadow(0 2px 8px rgba(197, 160, 72, 0.3))" }} />
             <div style={{ display: "flex", flexDirection: "column", lineHeight: 1 }}>
-              <span style={{ fontFamily: "'Cinzel', serif", fontWeight: 900, fontSize: "1.5rem", color: "#ffffff", letterSpacing: "0.04em", lineHeight: 0.95 }}>BMI</span>
-              <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 800, fontSize: "0.58rem", color: "#e5c578", letterSpacing: "0.25em", textTransform: "uppercase", marginTop: "3px" }}>University</span>
+              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: "1.5rem", color: "#ffffff", letterSpacing: "-0.01em", lineHeight: 0.95 }}>BMI</span>
+              <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 800, fontSize: "0.58rem", color: "#e5c578", letterSpacing: "0.22em", textTransform: "uppercase", marginTop: "3px" }}>University</span>
             </div>
           </Link>
 
           <p style={{ color: "rgba(255,255,255,0.7)", fontSize: "0.88rem", lineHeight: 1.7, margin: 0 }}>
-            Bishop Mathew Institute is dedicated to empowering Christ-centered scholars with biblical truth, academic excellence, and servant leadership.
+            Bethel Ministries International University is dedicated to empowering Christ-centered scholars with biblical truth, academic excellence, and servant leadership.
           </p>
 
           <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginTop: "0.5rem" }}>
@@ -89,7 +89,7 @@ export default function Footer() {
 
         {/* Column 2 — Academic Programs */}
         <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-          <h3 style={{ fontFamily: "'Cinzel', serif", fontSize: "1.05rem", fontWeight: 800, color: "#e5c578", letterSpacing: "0.05em", margin: 0 }}>
+          <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: "1.1rem", fontWeight: 800, color: "#e5c578", letterSpacing: "-0.01em", margin: 0 }}>
             Academic Degrees
           </h3>
           <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -110,7 +110,7 @@ export default function Footer() {
 
         {/* Column 3 — Portals & Verification */}
         <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-          <h3 style={{ fontFamily: "'Cinzel', serif", fontSize: "1.05rem", fontWeight: 800, color: "#e5c578", letterSpacing: "0.05em", margin: 0 }}>
+          <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: "1.1rem", fontWeight: 800, color: "#e5c578", letterSpacing: "-0.01em", margin: 0 }}>
             Portals & Verification
           </h3>
           <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -144,12 +144,12 @@ export default function Footer() {
 
         {/* Column 4 — Institutional Contact */}
         <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-          <h3 style={{ fontFamily: "'Cinzel', serif", fontSize: "1.05rem", fontWeight: 800, color: "#e5c578", letterSpacing: "0.05em", margin: 0 }}>
+          <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: "1.1rem", fontWeight: 800, color: "#e5c578", letterSpacing: "-0.01em", margin: 0 }}>
             Admissions Office
           </h3>
           <p style={{ color: "rgba(255,255,255,0.75)", fontSize: "0.88rem", lineHeight: 1.6, margin: 0 }}>
             Office of Admissions & Student Records<br />
-            Bishop Mathew Institute<br />
+            Bethel Ministries International University<br />
             <strong>Email:</strong> admin@bmiuniversities.org<br />
             <strong>Admissions:</strong> admissions@bmiuniversities.org
           </p>
@@ -189,7 +189,7 @@ export default function Footer() {
       }}>
         <div style={{ maxWidth: "1280px", margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
           <div>
-            © {new Date().getFullYear()} Bishop Mathew Institute (BMI University). All rights reserved.
+            © {new Date().getFullYear()} Bethel Ministries International University (BMI University). All rights reserved.
           </div>
           <div>
             Exempt from licensure under N.C.G.S. 116-15(d) for religious education • QAHE Accredited

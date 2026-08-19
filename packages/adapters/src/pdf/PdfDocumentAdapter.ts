@@ -156,7 +156,7 @@ export class PdfDocumentAdapter implements IDocumentGenerator {
     page.drawText(`Dear ${name},`, { x: 55, y, size: 10.5, font: timesBold, color: PdfDocumentAdapter.BLACK });
 
     y -= 18;
-    const p1 = `On behalf of the Faculty Senate, the Directorate of Admissions, and Bishop Mathew Institute, it is our distinct honour to officially notify you of your acceptance and admission to BMI University for the ${program} degree program commencing in the ${term}.`;
+    const p1 = `On behalf of the Faculty Senate, the Directorate of Admissions, and Bethel Ministries International University, it is our distinct honour to officially notify you of your acceptance and admission to BMI University for the ${program} degree program commencing in the ${term}.`;
     this.drawParagraph(page, p1, 55, y, 502, 10, times, PdfDocumentAdapter.CHARCOAL, 14);
 
     y -= 46;
@@ -201,7 +201,7 @@ export class PdfDocumentAdapter implements IDocumentGenerator {
     }
 
     y -= 6;
-    page.drawText('We warmly welcome you to the Bishop Mathew Institute community and pray for your academic and spiritual growth.', { x: 55, y, size: 9.5, font: timesItalic, color: PdfDocumentAdapter.NAVY });
+    page.drawText('We warmly welcome you to the Bethel Ministries International University community and pray for your academic and spiritual growth.', { x: 55, y, size: 9.5, font: timesItalic, color: PdfDocumentAdapter.NAVY });
 
     // Dual Signatures & Seal Section
     y -= 46;
@@ -220,7 +220,7 @@ export class PdfDocumentAdapter implements IDocumentGenerator {
     this.drawHLine(page, y - 10, PdfDocumentAdapter.CHARCOAL, 397, 160, 1);
     page.drawText('Prof. M. Adebayo, Th.D.', { x: 397, y: y - 22, size: 10, font: bold, color: PdfDocumentAdapter.NAVY });
     page.drawText('Vice-Chancellor & Dean of Academic Affairs', { x: 397, y: y - 33, size: 8, font: helvetica, color: PdfDocumentAdapter.DARK_GRAY });
-    page.drawText('Bishop Mathew Institute', { x: 397, y: y - 43, size: 7.5, font: helvetica, color: PdfDocumentAdapter.LIGHT_GRAY });
+    page.drawText('Bethel Ministries International University', { x: 397, y: y - 43, size: 7.5, font: helvetica, color: PdfDocumentAdapter.LIGHT_GRAY });
 
     // Footer with Verification Code & Microtext
     this.drawFooter(pdf, page, helvetica, bold, verificationCode);
@@ -271,7 +271,7 @@ export class PdfDocumentAdapter implements IDocumentGenerator {
     page.drawText('TO WHOM IT MAY CONCERN:', { x: 50, y, size: 11, font: timesBold, color: PdfDocumentAdapter.NAVY_DARK });
 
     y -= 20;
-    const attestation = `This official document certifies that the individual named below is a bona fide, actively matriculated student in good standing at Bishop Mathew Institute (BMI University), pursuing an accredited course of higher learning.`;
+    const attestation = `This official document certifies that the individual named below is a bona fide, actively matriculated student in good standing at Bethel Ministries International (BMI University), pursuing an accredited course of higher learning.`;
     this.drawParagraph(page, attestation, 50, y, 512, 10.5, times, PdfDocumentAdapter.CHARCOAL, 15);
 
     // Student Particulars Grid
@@ -347,7 +347,7 @@ export class PdfDocumentAdapter implements IDocumentGenerator {
     }
 
     page.drawText('BMI UNIVERSITY', { x: logo ? 40 : 12, y: PdfDocumentAdapter.CARD_H - 24, size: 12, font: bold, color: PdfDocumentAdapter.GOLD });
-    page.drawText('BISHOP MATHEW INSTITUTE', { x: logo ? 40 : 12, y: PdfDocumentAdapter.CARD_H - 35, size: 7, font: helvetica, color: PdfDocumentAdapter.WHITE });
+    page.drawText('BETHEL MINISTRIES INTERNATIONAL', { x: logo ? 40 : 12, y: PdfDocumentAdapter.CARD_H - 35, size: 7, font: helvetica, color: PdfDocumentAdapter.WHITE });
 
     // Student Badge Pill
     this.drawRect(page, PdfDocumentAdapter.CARD_W - 65, PdfDocumentAdapter.CARD_H - 30, 55, 16, PdfDocumentAdapter.GOLD);
@@ -550,10 +550,10 @@ export class PdfDocumentAdapter implements IDocumentGenerator {
     }
 
     let y = 620;
-    page.drawText('BISHOP MATHEW INSTITUTE', {
-      x: PdfDocumentAdapter.centerX('BISHOP MATHEW INSTITUTE', timesBold, 22),
+    page.drawText('BETHEL MINISTRIES INTERNATIONAL UNIVERSITY', {
+      x: PdfDocumentAdapter.centerX('BETHEL MINISTRIES INTERNATIONAL UNIVERSITY', timesBold, 16),
       y,
-      size: 22,
+      size: 16,
       font: timesBold,
       color: PdfDocumentAdapter.NAVY_DARK,
     });
@@ -701,14 +701,14 @@ export class PdfDocumentAdapter implements IDocumentGenerator {
     }
 
     const textX = logo ? 115 : 45;
-    page.drawText('BISHOP MATHEW INSTITUTE', { x: textX, y: 760, size: 18, font: bold, color: PdfDocumentAdapter.WHITE });
+    page.drawText('BETHEL MINISTRIES INTERNATIONAL UNIVERSITY', { x: textX, y: 760, size: 15, font: bold, color: PdfDocumentAdapter.WHITE });
     page.drawText('BMI UNIVERSITY • OFFICE OF THE REGISTRAR & ADMISSIONS', { x: textX, y: 742, size: 8.5, font: bold, color: PdfDocumentAdapter.GOLD });
     page.drawText('www.bmiuniversities.org  |  admissions@bmiuniversities.org  |  verify.bmiuniversities.org', { x: textX, y: 725, size: 7.5, font, color: PdfDocumentAdapter.LIGHT_GRAY });
   }
 
   private drawFooter(_pdf: PDFDocument, page: any, font: PDFFont, _bold: PDFFont, verificationCode?: string): void {
     this.drawHLine(page, 44, PdfDocumentAdapter.BORDER_GRAY, 45, 522, 0.75);
-    page.drawText(`Official University Document • Bishop Mathew Institute (BMI University) • Accredited Higher Education`, {
+    page.drawText(`Official University Document • Bethel Ministries International University (BMI) • Accredited Higher Education`, {
       x: 45, y: 32, size: 7, font, color: PdfDocumentAdapter.DARK_GRAY,
     });
     page.drawText(`Digital Verification Code: ${verificationCode || 'VERIFIED'} • Verify at https://verify.bmiuniversities.org`, {

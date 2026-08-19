@@ -90,8 +90,8 @@ export default function Navbar() {
           style={{
             height: "82px",
             background: scrolled
-              ? "rgba(9, 18, 35, 0.95)"
-              : "rgba(9, 18, 35, 0.88)",
+              ? "rgba(9, 18, 35, 0.96)"
+              : "rgba(9, 18, 35, 0.9)",
             backdropFilter: "blur(16px)",
             WebkitBackdropFilter: "blur(16px)",
             borderBottom: "1px solid rgba(197, 160, 72, 0.25)",
@@ -134,25 +134,25 @@ export default function Navbar() {
               />
               <div style={{ display: "flex", flexDirection: "column", lineHeight: 1 }}>
                 <span style={{
-                  fontFamily: "'Cinzel', 'Times New Roman', serif",
+                  fontFamily: "'Outfit', sans-serif",
                   fontWeight: 900,
                   fontSize: "1.45rem",
                   color: "#ffffff",
-                  letterSpacing: "0.05em",
+                  letterSpacing: "-0.01em",
                   lineHeight: 1,
                 }}>
                   BMI UNIVERSITY
                 </span>
                 <span style={{
                   fontFamily: "'Plus Jakarta Sans', sans-serif",
-                  fontWeight: 800,
+                  fontWeight: 700,
                   fontSize: "0.58rem",
                   color: "var(--color-gold, #c5a048)",
-                  letterSpacing: "0.22em",
+                  letterSpacing: "0.18em",
                   textTransform: "uppercase",
                   marginTop: "4px",
                 }}>
-                  Bishop Mathew Institute
+                  Bethel Ministries International
                 </span>
               </div>
             </Link>

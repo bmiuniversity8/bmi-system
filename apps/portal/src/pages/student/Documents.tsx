@@ -162,7 +162,7 @@ export default function Documents() {
                     </div>
                     <div>
                       <div style={{ fontSize: '0.95rem', fontWeight: 900, color: 'var(--gold)', letterSpacing: '0.06em', lineHeight: 1.1 }}>BMI UNIVERSITY</div>
-                      <div style={{ fontSize: '0.62rem', color: '#94a3b8', letterSpacing: '0.05em' }}>BISHOP MATHEW INSTITUTE</div>
+                      <div style={{ fontSize: '0.62rem', color: '#94a3b8', letterSpacing: '0.05em' }}>BETHEL MINISTRIES INTERNATIONAL</div>
                     </div>
                   </div>
                   <div style={{ background: 'linear-gradient(135deg, #c5a048 0%, #e5c578 100%)', color: '#091223', padding: '3px 10px', borderRadius: 99, fontSize: '0.7rem', fontWeight: 900, letterSpacing: '0.08em', boxShadow: '0 2px 8px rgba(197, 160, 72, 0.4)' }}>
@@ -252,7 +252,7 @@ export default function Documents() {
                     TERMS & EMERGENCY SERVICES
                   </div>
                   <p style={{ fontSize: '0.68rem', color: '#94a3b8', lineHeight: 1.4, margin: '0 0 0.75rem 0' }}>
-                    This card remains the property of Bishop Mathew Institute (BMI University) and is non-transferable. It serves as official proof of student status, campus access, and library borrowing authorization.
+                    This card remains the property of Bethel Ministries International University (BMI) and is non-transferable. It serves as official proof of student status, campus access, and library borrowing authorization.
                   </p>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', background: 'rgba(255,255,255,0.05)', padding: '0.6rem', borderRadius: 8, fontSize: '0.7rem', color: '#cbd5e1' }}>
@@ -268,7 +268,7 @@ export default function Documents() {
                 </div>
 
                 <div style={{ textAlign: 'center', paddingTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.1)', fontSize: '0.62rem', color: '#64748b', letterSpacing: '0.04em' }}>
-                  BISHOP MATHEW INSTITUTE • ACCREDITED GLOBAL HIGHER LEARNING
+                  BETHEL MINISTRIES INTERNATIONAL UNIVERSITY • ACCREDITED GLOBAL HIGHER LEARNING
                 </div>
               </div>
             )}
@@ -448,7 +448,7 @@ export default function Documents() {
                 </div>
                 <div>
                   <h2 style={{ fontSize: '1.4rem', color: 'var(--navy)', margin: 0, fontWeight: 900, letterSpacing: '0.02em' }}>
-                    BISHOP MATHEW INSTITUTE
+                    BETHEL MINISTRIES INTERNATIONAL UNIVERSITY
                   </h2>
                   <div style={{ fontSize: '0.85rem', color: 'var(--gold-dark)', fontWeight: 800 }}>
                     BMI UNIVERSITY • OFFICE OF THE REGISTRAR & ADMISSIONS
@@ -489,7 +489,7 @@ export default function Documents() {
                   Dear <strong>{studentName}</strong>,
                 </p>
                 <p style={{ fontSize: '0.92rem', lineHeight: 1.7, color: '#334155', marginBottom: '1rem' }}>
-                  On behalf of the Faculty Senate, the Directorate of Admissions, and Bishop Mathew Institute, it is our distinct honour to officially notify you of your acceptance and admission to <strong>BMI University</strong> in the <strong>{programName}</strong> program for the <strong>{termName}</strong>.
+                  On behalf of the Faculty Senate, the Directorate of Admissions, and Bethel Ministries International University, it is our distinct honour to officially notify you of your acceptance and admission to <strong>BMI University</strong> in the <strong>{programName}</strong> program for the <strong>{termName}</strong>.
                 </p>
                 <p style={{ fontSize: '0.92rem', lineHeight: 1.7, color: '#334155', marginBottom: '1rem' }}>
                   Your application and academic credentials have demonstrated exceptional dedication to scholarship, integrity, and servant leadership. We are confident that you will contribute meaningfully to our global academic community.
@@ -515,7 +515,7 @@ export default function Documents() {
                   TO WHOM IT MAY CONCERN:
                 </p>
                 <p style={{ fontSize: '0.92rem', lineHeight: 1.7, color: '#334155', marginBottom: '1.5rem' }}>
-                  This official institutional document certifies that <strong>{studentName}</strong> (Student Identification Number: <strong>{studentIdNumber}</strong>, Registration Number: <strong>{regNo}</strong>) is currently a fully matriculated, active student in good academic standing at Bishop Mathew Institute (BMI University), enrolled in the <strong>{programName}</strong>.
+                  This official institutional document certifies that <strong>{studentName}</strong> (Student Identification Number: <strong>{studentIdNumber}</strong>, Registration Number: <strong>{regNo}</strong>) is currently a fully matriculated, active student in good academic standing at Bethel Ministries International (BMI University), enrolled in the <strong>{programName}</strong>.
                 </p>
 
                 <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '1rem 1.25rem', marginBottom: '1.5rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', fontSize: '0.85rem' }}>
@@ -608,7 +608,7 @@ export default function Documents() {
                 <div style={{ borderBottom: '1px solid #334155', width: '180px', marginBottom: '0.35rem', height: 20, marginLeft: 'auto' }} />
                 <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--navy)' }}>Prof. M. Adebayo, Th.D.</div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--slate)' }}>Vice-Chancellor</div>
-                <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Bishop Mathew Institute</div>
+                <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Bethel Ministries International</div>
               </div>
             </div>
 
