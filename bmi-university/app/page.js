@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { PROGRAMS as FALLBACK_PROGRAMS, API_WORKER_URL } from "@bmi/shared";
 
 const slides = [
   { bg: "/images/home-hero/home-hero-1-graduation.jpg", tagline: "Empowering Christ-Centered Scholars & Global Leaders" },
@@ -13,35 +12,8 @@ const slides = [
 
 export default function HomePage() {
   const [current, setCurrent] = useState(0);
-  const [activeTab, setActiveTab] = useState("bachelors");
   const [verifyCode, setVerifyCode] = useState("");
   const intervalRef = useRef(null);
-
-  // ── Load authoritative program data from API worker (with fallback) ──
-  const [programs, setPrograms] = useState(FALLBACK_PROGRAMS);
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(`${API_WORKER_URL}/api/public/programs`, { cache: 'force-cache' });
-        if (!res.ok) return;
-        const body = await res.json();
-        if (!body?.success || !Array.isArray(body.data)) return;
-        if (cancelled) return;
-        setPrograms(body.data.map(p => ({
-          label: p.label ?? p.name,
-          level: p.level,
-          description: p.description,
-          icon: p.icon ?? undefined,
-        })));
-      } catch { /* keep fallback */ }
-    })();
-    return () => { cancelled = true; };
-  }, []);
-
-  const bachelors = useMemo(() => programs.filter(p => p.level === 'undergraduate').map(p => ({ title: p.label, desc: p.description, credits: "120 Credits", duration: "4 Years" })), [programs]);
-  const masters   = useMemo(() => programs.filter(p => p.level === 'graduate').map(p => ({ title: p.label, desc: p.description, credits: "48 Credits", duration: "2 Years" })), [programs]);
-  const doctorates= useMemo(() => programs.filter(p => p.level === 'doctorate').map(p => ({ title: p.label, desc: p.description, credits: "60 Credits", duration: "3 Years" })), [programs]);
 
   useEffect(() => {
     intervalRef.current = setInterval(() => {
@@ -61,8 +33,6 @@ export default function HomePage() {
     if (!verifyCode.trim()) return;
     window.open(`https://verify.bmiuniversities.org/verify?code=${encodeURIComponent(verifyCode.trim())}`, '_blank');
   };
-
-  const programMap = { bachelors, masters, doctorates };
 
   return (
     <main id="main-content">
@@ -208,133 +178,171 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ─── INTERACTIVE DEGREE & CAREER PATHWAY EXPLORER ─── */}
-      <section aria-labelledby="programs-heading" style={{ background: "#f8fafc", padding: "7rem 2rem" }}>
+      {/* ─── DEGREE PATHWAYS ─── */}
+      <section aria-labelledby="programs-heading" style={{ background: "#ffffff", padding: "7rem 2rem" }}>
         <div style={{ maxWidth: "1280px", margin: "0 auto" }}>
-          
-          <div style={{ textAlign: "center", marginBottom: "3.5rem" }}>
+
+          <div style={{ textAlign: "center", marginBottom: "5rem" }}>
             <div className="gold-bar" style={{ margin: "0 auto 1.25rem" }} />
-            <span style={{ fontSize: "0.85rem", fontWeight: 800, color: "var(--color-gold-dark, #a07e2c)", textTransform: "uppercase", letterSpacing: "0.12em" }}>
+            <span style={{ fontSize: "0.82rem", fontWeight: 800, color: "#a07e2c", textTransform: "uppercase", letterSpacing: "0.14em" }}>
               ACADEMIC DEGREE PATHWAYS
             </span>
-            <h2 id="programs-heading" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: "clamp(2.2rem, 3.8vw, 3.2rem)", color: "#091223", marginTop: "0.35rem", marginBottom: "1rem", letterSpacing: "-0.03em" }}>
-              Accredited Programs of Study
+            <h2 id="programs-heading" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: "clamp(2.2rem, 3.8vw, 3.2rem)", color: "#091223", marginTop: "0.4rem", letterSpacing: "-0.03em" }}>
+              Programs Offered at BMI University
             </h2>
-            <p style={{ color: "#64748b", fontSize: "1.1rem", maxWidth: "700px", margin: "0 auto", lineHeight: 1.7 }}>
-              Earn your accredited degree online or in our hybrid format. Discover flexible, comprehensive theological curriculum at the bachelor&apos;s, master&apos;s, and doctoral levels.
-            </p>
           </div>
 
-          {/* Level Filter Tabs */}
-          <div style={{ display: "flex", justifyContent: "center", gap: "0.75rem", marginBottom: "3.5rem", flexWrap: "wrap" }}>
-            {[
-              ["bachelors", "Undergraduate (Bachelors)"],
-              ["masters", "Graduate (Masters)"],
-              ["doctorates", "Doctoral Studies (Ph.D. / Th.D.)"],
-            ].map(([key, label]) => (
-              <button
-                key={key}
-                onClick={() => setActiveTab(key)}
-                style={{
-                  padding: "0.85rem 2rem",
-                  borderRadius: "999px",
-                  border: "2px solid",
-                  fontWeight: 800,
-                  fontSize: "0.95rem",
-                  cursor: "pointer",
-                  transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                  background: activeTab === key ? "#091223" : "#ffffff",
-                  color: activeTab === key ? "#e5c578" : "#0e1d38",
-                  borderColor: activeTab === key ? "#091223" : "#cbd5e1",
-                  boxShadow: activeTab === key ? "0 8px 24px rgba(9, 18, 35, 0.2)" : "none",
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {/* Program Cards Grid */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "2rem" }}>
-            {programMap[activeTab].map((p, i) => (
-              <article
-                key={i}
-                className="program-card"
-                style={{
-                  background: "#ffffff",
-                  borderRadius: "20px",
-                  padding: "2.25rem",
-                  border: "1px solid rgba(14, 29, 56, 0.08)",
-                  boxShadow: "0 4px 16px rgba(9, 18, 35, 0.04)",
-                  display: "flex",
-                  flexDirection: "column",
-                  justifyContent: "space-between",
-                }}
-              >
-                <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-                    <div style={{ width: "42px", height: "4px", borderRadius: "999px", background: "linear-gradient(90deg, #c5a048, #e5c578)" }} />
-                    <span style={{ fontSize: "0.75rem", fontWeight: 800, color: "var(--color-gold-dark, #a07e2c)", background: "#f7f3e8", padding: "3px 10px", borderRadius: 99 }}>
-                      {p.credits}
-                    </span>
-                  </div>
-
-                  <h3 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: "1.25rem", color: "#091223", lineHeight: 1.3, marginBottom: "0.75rem" }}>
-                    {p.title}
-                  </h3>
-                  <p style={{ color: "#64748b", fontSize: "0.92rem", lineHeight: 1.7, marginBottom: "1.5rem" }}>
-                    {p.desc}
-                  </p>
-                </div>
-
-                <div style={{ paddingTop: "1.25rem", borderTop: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: "0.8rem", color: "#94a3b8", fontWeight: 600 }}>Duration: {p.duration}</span>
-                  <Link
-                    href="/apply"
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "0.4rem",
-                      color: "var(--color-gold-dark, #a07e2c)",
-                      fontWeight: 800,
-                      fontSize: "0.9rem",
-                      transition: "transform 0.2s ease",
-                    }}
-                  >
-                    Apply Now →
-                  </Link>
-                </div>
-              </article>
-            ))}
-          </div>
-
-          {/* Graduate Certificate Banner */}
-          <div style={{
-            marginTop: "4rem",
-            background: "linear-gradient(135deg, #091223 0%, #0e1d38 50%, #172a4d 100%)",
-            borderRadius: "24px",
-            padding: "3rem",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            flexWrap: "wrap",
-            gap: "2rem",
-            border: "1px solid rgba(197, 160, 72, 0.3)",
-            boxShadow: "0 20px 50px rgba(9, 18, 35, 0.35)",
-          }}>
-            <div>
-              <span style={{ fontSize: "0.78rem", fontWeight: 800, color: "var(--color-gold-light, #e5c578)", textTransform: "uppercase", letterSpacing: "0.12em" }}>
-                EXECUTIVE & POSTGRADUATE PATHWAYS
-              </span>
-              <h3 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: "1.7rem", color: "#ffffff", margin: "0.35rem 0 0.75rem 0" }}>
-                Executive Graduate Certificates
-              </h3>
-              <p style={{ color: "rgba(255,255,255,0.8)", fontSize: "0.95rem", margin: 0 }}>
-                Targeted professional ministry credentials in <strong>Christian Studies</strong>, <strong>Spiritual Formation</strong>, and <strong>Theological Leadership</strong>.
-              </p>
+          {/* ── UNDERGRADUATE ── */}
+          <div style={{ marginBottom: "5rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "1.25rem", marginBottom: "2rem" }}>
+              <div style={{ background: "linear-gradient(135deg, #091223, #0e1d38)", color: "#e5c578", width: 44, height: 44, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.3rem", flexShrink: 0 }}>🎓</div>
+              <div>
+                <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "#a07e2c", textTransform: "uppercase", letterSpacing: "0.12em" }}>UNDERGRADUATE</div>
+                <div style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: "1.45rem", color: "#091223", lineHeight: 1.1 }}>Bachelor&apos;s Degrees — 4 Years</div>
+              </div>
+              <div style={{ flex: 1, height: 1, background: "linear-gradient(90deg, rgba(197,160,72,0.4), transparent)", marginLeft: "0.5rem" }} />
             </div>
-            <Link href="/apply" className="btn btn-gold" style={{ fontSize: "0.95rem", padding: "0.9rem 2rem" }}>
-              Apply for Certificate →
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "1.25rem" }}>
+              {[
+                { title: "Bachelor of Biblical Studies", tag: "B.B.S." },
+                { title: "Bachelor of Theology", tag: "B.Th." },
+                { title: "Bachelor of Arts — Christian Ministry", tag: "B.A." },
+                { title: "Bachelor of Arts — Christian Counseling", tag: "B.A." },
+                { title: "Bachelor of Arts — Missions & Evangelism", tag: "B.A." },
+                { title: "Bachelor of Arts — Pastoral Leadership", tag: "B.A." },
+              ].map((p, i) => (
+                <Link key={i} href="/apply" style={{ textDecoration: "none" }}>
+                  <div style={{
+                    background: "#f8fafc",
+                    border: "1.5px solid #e2e8f0",
+                    borderRadius: "16px",
+                    padding: "1.5rem 1.75rem",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "1rem",
+                    transition: "all 0.25s ease",
+                    cursor: "pointer",
+                  }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = "#c5a048"; e.currentTarget.style.background = "#fffdf5"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(197,160,72,0.12)"; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = "#e2e8f0"; e.currentTarget.style.background = "#f8fafc"; e.currentTarget.style.boxShadow = "none"; }}
+                  >
+                    <div>
+                      <div style={{ fontSize: "0.68rem", fontWeight: 800, color: "#a07e2c", letterSpacing: "0.08em", marginBottom: "0.35rem" }}>{p.tag} • 120 CR HRS</div>
+                      <div style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: "1rem", color: "#091223", lineHeight: 1.3 }}>{p.title}</div>
+                    </div>
+                    <span style={{ color: "#c5a048", fontSize: "1.1rem", flexShrink: 0 }}>→</span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          {/* ── GRADUATE ── */}
+          <div style={{ marginBottom: "5rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "1.25rem", marginBottom: "2rem" }}>
+              <div style={{ background: "linear-gradient(135deg, #c5a048, #e5c578)", color: "#091223", width: 44, height: 44, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.3rem", flexShrink: 0 }}>📖</div>
+              <div>
+                <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "#a07e2c", textTransform: "uppercase", letterSpacing: "0.12em" }}>GRADUATE</div>
+                <div style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: "1.45rem", color: "#091223", lineHeight: 1.1 }}>Master&apos;s Degrees — 2 Years</div>
+              </div>
+              <div style={{ flex: 1, height: 1, background: "linear-gradient(90deg, rgba(197,160,72,0.4), transparent)", marginLeft: "0.5rem" }} />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "1.25rem" }}>
+              {[
+                { title: "Master of Divinity", tag: "M.Div." },
+                { title: "Master of Theology", tag: "M.Th." },
+                { title: "Master of Arts — Christian Leadership", tag: "M.A." },
+                { title: "Master of Arts — Biblical Counseling", tag: "M.A." },
+                { title: "Master of Arts — Missions & Global Ministry", tag: "M.A." },
+                { title: "Master of Ministry", tag: "M.Min." },
+              ].map((p, i) => (
+                <Link key={i} href="/apply" style={{ textDecoration: "none" }}>
+                  <div style={{
+                    background: "#fffdf5",
+                    border: "1.5px solid rgba(197,160,72,0.25)",
+                    borderRadius: "16px",
+                    padding: "1.5rem 1.75rem",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "1rem",
+                    transition: "all 0.25s ease",
+                    cursor: "pointer",
+                  }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = "#c5a048"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(197,160,72,0.18)"; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(197,160,72,0.25)"; e.currentTarget.style.boxShadow = "none"; }}
+                  >
+                    <div>
+                      <div style={{ fontSize: "0.68rem", fontWeight: 800, color: "#a07e2c", letterSpacing: "0.08em", marginBottom: "0.35rem" }}>{p.tag} • 48 CR HRS</div>
+                      <div style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: "1rem", color: "#091223", lineHeight: 1.3 }}>{p.title}</div>
+                    </div>
+                    <span style={{ color: "#c5a048", fontSize: "1.1rem", flexShrink: 0 }}>→</span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          {/* ── DOCTORAL ── */}
+          <div style={{ marginBottom: "4rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "1.25rem", marginBottom: "2rem" }}>
+              <div style={{ background: "linear-gradient(135deg, #172a4d, #233c66)", color: "#e5c578", width: 44, height: 44, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.3rem", flexShrink: 0 }}>🏛️</div>
+              <div>
+                <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "#a07e2c", textTransform: "uppercase", letterSpacing: "0.12em" }}>DOCTORAL STUDIES</div>
+                <div style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: "1.45rem", color: "#091223", lineHeight: 1.1 }}>Doctoral Degrees — 3 Years</div>
+              </div>
+              <div style={{ flex: 1, height: 1, background: "linear-gradient(90deg, rgba(197,160,72,0.4), transparent)", marginLeft: "0.5rem" }} />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "1.25rem" }}>
+              {[
+                { title: "Doctor of Ministry", tag: "D.Min." },
+                { title: "Doctor of Philosophy in Biblical Studies", tag: "Ph.D." },
+                { title: "Doctor of Theology", tag: "Th.D." },
+                { title: "Doctor of Philosophy in Christian Leadership", tag: "Ph.D." },
+              ].map((p, i) => (
+                <Link key={i} href="/apply" style={{ textDecoration: "none" }}>
+                  <div style={{
+                    background: "linear-gradient(135deg, #091223 0%, #0e1d38 100%)",
+                    border: "1.5px solid rgba(197,160,72,0.2)",
+                    borderRadius: "16px",
+                    padding: "1.5rem 1.75rem",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "1rem",
+                    transition: "all 0.25s ease",
+                    cursor: "pointer",
+                  }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = "#c5a048"; e.currentTarget.style.boxShadow = "0 8px 28px rgba(9,18,35,0.35)"; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(197,160,72,0.2)"; e.currentTarget.style.boxShadow = "none"; }}
+                  >
+                    <div>
+                      <div style={{ fontSize: "0.68rem", fontWeight: 800, color: "#e5c578", letterSpacing: "0.08em", marginBottom: "0.35rem" }}>{p.tag} • 60 CR HRS</div>
+                      <div style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: "1rem", color: "#ffffff", lineHeight: 1.3 }}>{p.title}</div>
+                    </div>
+                    <span style={{ color: "#e5c578", fontSize: "1.1rem", flexShrink: 0 }}>→</span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          {/* ── CTA Strip ── */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1.5rem", padding: "2.5rem 3rem", background: "linear-gradient(135deg, #091223 0%, #0e1d38 100%)", borderRadius: "20px", border: "1px solid rgba(197,160,72,0.3)" }}>
+            <div>
+              <div style={{ fontSize: "0.8rem", fontWeight: 800, color: "#e5c578", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "0.4rem" }}>
+                ALSO AVAILABLE: GRADUATE CERTIFICATES
+              </div>
+              <div style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: "1.5rem", color: "#ffffff" }}>
+                Christian Studies • Spiritual Formation • Theological Leadership
+              </div>
+            </div>
+            <Link href="/apply" className="btn btn-gold" style={{ fontSize: "1rem", padding: "1rem 2.25rem", whiteSpace: "nowrap" }}>
+              View All Programs →
             </Link>
           </div>
 
