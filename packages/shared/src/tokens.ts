@@ -2,39 +2,39 @@
  * @bmi/shared — Brand Design Tokens
  *
  * Canonical color values for BMI University branding.
- * Both repos define these independently today — this is the single source of truth.
- *
- * Consuming repos:
- *   - bmi-portal/src/index.css           uses --gold / --navy (same hex values)
- *   - bmi-university/app/globals.css     uses --color-gold / --color-navy (same hex values)
- *
- * Neither CSS file uses this TypeScript module directly, but both should reference
- * this file in comments so any rebrand starts here. A build-step token generator
- * can be added in the future if needed.
+ * Oxford Navy & Burnished Gold Institutional Theme.
  */
 
 export const BrandColors = {
-  /** Primary gold accent — #d4af37 */
-  gold: '#d4af37',
-  /** Lighter gold for hover states — #e8c84a (portal) / gradient end */
-  goldLight: '#e8c84a',
-  /** Darker gold for hover states — #b8952e (portal) / #b5952f (university) */
-  goldDark: '#b8952e',
+  /** Deep Oxford Navy — #091223 */
+  oxfordNavy: '#091223',
+  /** Primary Imperial Navy — #0e1d38 */
+  navy: '#0e1d38',
+  /** Mid-tone navy for cards / hero gradients — #172a4d */
+  navyMid: '#172a4d',
+  /** Light navy for borders & labels — #233c66 */
+  navyLight: '#233c66',
 
-  /** Primary navy background — #0f172a */
-  navy: '#0f172a',
-  /** Mid-tone navy for cards / gradients — #1e293b */
-  navyMid: '#1e293b',
-  /** Light navy for labels — #334155 */
-  navyLight: '#334155',
+  /** Primary Burnished Gold accent — #c5a048 */
+  gold: '#c5a048',
+  /** Radiant gold for highlights & hover — #e5c578 */
+  goldLight: '#e5c578',
+  /** Deep gold for borders and contrast — #a07e2c */
+  goldDark: '#a07e2c',
+  /** Subtle parchment gold tint — #f7f3e8 */
+  goldParchment: '#f7f3e8',
 
+  /** Dark charcoal body text — #1e293b */
+  charcoal: '#1e293b',
   /** Muted slate text — #64748b */
   slate: '#64748b',
-  /** Light slate for placeholders — #94a3b8 */
+  /** Light slate for borders & placeholders — #94a3b8 */
   slateLight: '#94a3b8',
 
   /** Page background — #f8fafc */
   bg: '#f8fafc',
+  /** Pure white canvas — #ffffff */
+  white: '#ffffff',
 } as const;
 
 export type BrandColorKey = keyof typeof BrandColors;

@@ -4,32 +4,27 @@ import { useState } from "react";
 import Link from "next/link";
 
 const quickLinks = [
-  { label: "Academics",  href: "/academics"  },
-  { label: "Admissions", href: "/admissions" },
-  { label: "About Us",   href: "/about"      },
-  { label: "Contact",    href: "/contact"    },
-  { label: "Accreditation", href: "/accreditation" },
-  { label: "Apply Now",  href: "/apply" },
+  { label: "Academic Programs", href: "/academics" },
+  { label: "Admissions & Aid", href: "/admissions" },
+  { label: "QAHE Accreditation", href: "/accreditation" },
+  { label: "About BMI University", href: "/about" },
+  { label: "Contact & Campus", href: "/contact" },
+  { label: "Online Application", href: "/apply" },
 ];
 
 const programCategories = [
-  { label: "Bachelor's Degrees",    href: "/academics#undergraduate" },
-  { label: "Master's Degrees",      href: "/academics#graduate"      },
-  { label: "Doctorate",             href: "/academics#doctorate"     },
-  { label: "Graduate Certificates", href: "/academics#certificate"   },
+  { label: "Bachelor's Degrees", href: "/academics#undergraduate" },
+  { label: "Master's Degrees", href: "/academics#graduate" },
+  { label: "Doctoral Studies (Ph.D./Th.D.)", href: "/academics#doctorate" },
+  { label: "Graduate Certificates", href: "/academics#certificate" },
 ];
 
-const FacebookIcon = () => (
-  <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-    <path fillRule="evenodd" d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12z" clipRule="evenodd" />
-  </svg>
-);
-
-const YouTubeIcon = () => (
-  <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-    <path fillRule="evenodd" d="M19.812 5.418c.861.23 1.538.907 1.768 1.768C21.998 8.746 22 12 22 12s0 3.255-.418 4.814a2.504 2.504 0 0 1-1.768 1.768c-1.56.419-7.814.419-7.814.419s-6.255 0-7.814-.419a2.505 2.505 0 0 1-1.768-1.768C2 15.255 2 12 2 12s0-3.255.417-4.814a2.507 2.507 0 0 1 1.768-1.768C5.744 5 11.998 5 11.998 5s6.255 0 7.814.418ZM15.194 12 10 15V9l5.194 3Z" clipRule="evenodd" />
-  </svg>
-);
+const institutionalPortals = [
+  { label: "Student Portal Login", href: "https://portal.bmiuniversities.org", external: true },
+  { label: "Document Verification Engine", href: "https://verify.bmiuniversities.org", external: true },
+  { label: "University Management System (UMS)", href: "https://ums.bmiuniversities.org", external: true },
+  { label: "Privacy Policy & FERPA", href: "/privacy", external: false },
+];
 
 export default function Footer() {
   const [email, setEmail] = useState("");
@@ -41,12 +36,12 @@ export default function Footer() {
   };
 
   return (
-    <footer style={{ background: "#007FFF", color: "#fff", fontFamily: "'Inter', sans-serif" }}>
+    <footer style={{ background: "linear-gradient(180deg, #091223 0%, #050a14 100%)", color: "#ffffff", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
 
-      {/* ── Gold accent top border ── */}
-      <div style={{ height: "4px", background: "linear-gradient(90deg, #d4af37 0%, #f5d76e 50%, #d4af37 100%)" }} />
+      {/* ── Gold Accent Top Border ── */}
+      <div style={{ height: "4px", background: "linear-gradient(90deg, #c5a048 0%, #e5c578 50%, #c5a048 100%)" }} />
 
-      {/* ── Main grid ── */}
+      {/* ── Main Footer Grid ── */}
       <div style={{
         maxWidth: "1280px",
         margin: "0 auto",
@@ -58,244 +53,158 @@ export default function Footer() {
         className="footer-grid"
       >
 
-        {/* Column 1 — Brand */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+        {/* Column 1 — Brand & Accreditation */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
           <Link href="/" aria-label="BMI University — Home" style={{ display: "flex", alignItems: "center", gap: "12px", textDecoration: "none" }}>
-            <img src="/images/bmi-crest-270.png" alt="BMI University Crest" style={{ height: "54px", width: "auto", objectFit: "contain" }} />
+            <img src="/images/bmi-crest-270.png" alt="BMI University Crest" style={{ height: "54px", width: "auto", objectFit: "contain", filter: "drop-shadow(0 2px 8px rgba(197, 160, 72, 0.3))" }} />
             <div style={{ display: "flex", flexDirection: "column", lineHeight: 1 }}>
-              <span style={{ fontFamily: "Georgia, serif", fontWeight: "bold", fontSize: "1.95rem", color: "#ffffff", letterSpacing: "0.04em", lineHeight: 0.95 }}>BMI</span>
-              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: "0.55rem", color: "#d4af37", letterSpacing: "0.27em", textTransform: "uppercase", marginTop: "2px" }}>University</span>
+              <span style={{ fontFamily: "'Cinzel', serif", fontWeight: 900, fontSize: "1.5rem", color: "#ffffff", letterSpacing: "0.04em", lineHeight: 0.95 }}>BMI</span>
+              <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 800, fontSize: "0.58rem", color: "#e5c578", letterSpacing: "0.25em", textTransform: "uppercase", marginTop: "3px" }}>University</span>
             </div>
           </Link>
 
-          <p style={{ color: "rgba(255,255,255,0.55)", fontSize: "0.875rem", lineHeight: 1.7, margin: 0 }}>
-            Developing Christ-centered men and women with the values, knowledge, and skills essential to impact the world.
+          <p style={{ color: "rgba(255,255,255,0.7)", fontSize: "0.88rem", lineHeight: 1.7, margin: 0 }}>
+            Bishop Mathew Institute is dedicated to empowering Christ-centered scholars with biblical truth, academic excellence, and servant leadership.
           </p>
 
-          <Link href="/accreditation" aria-label="QAHE Accreditation" style={{ display: "inline-block", marginTop: "4px" }}>
-            <span style={{
-              background: "#ffffff",
-              padding: "6px 10px",
-              borderRadius: "6px",
-              display: "inline-flex",
-              alignItems: "center",
-              boxShadow: "0 2px 10px rgba(0,0,0,0.12)",
-              transition: "transform 0.2s, box-shadow 0.2s",
-            }}
-              onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.18)"; }}
-              onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 2px 10px rgba(0,0,0,0.12)"; }}
-            >
-              <img 
-                src="/images/qahe-logo.jpg" 
-                alt="QAHE Accredited Institution" 
-                style={{ 
-                  height: "40px", 
-                  width: "auto", 
-                  objectFit: "contain",
-                  display: "block"
-                }} 
-              />
-            </span>
-          </Link>
-
-          {/* Social icons */}
-          <div style={{ display: "flex", gap: "10px", marginTop: "8px" }}>
-            {[
-              { label: "Facebook", icon: <FacebookIcon /> },
-              { label: "YouTube",  icon: <YouTubeIcon /> },
-            ].map((s) => (
-              <button
-                key={s.label}
-                type="button"
-                aria-label={s.label}
-                style={{
-                  width: "38px", height: "38px",
-                  borderRadius: "8px",
-                  background: "rgba(255,255,255,0.07)",
-                  border: "1px solid rgba(255,255,255,0.12)",
-                  color: "rgba(255,255,255,0.6)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  cursor: "pointer",
-                  transition: "background 0.2s, color 0.2s, border-color 0.2s",
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = "#d4af37"; e.currentTarget.style.color = "#0a1628"; e.currentTarget.style.borderColor = "#d4af37"; }}
-                onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.07)"; e.currentTarget.style.color = "rgba(255,255,255,0.6)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.12)"; }}
-              >
-                {s.icon}
-              </button>
-            ))}
+          <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginTop: "0.5rem" }}>
+            <Link href="/accreditation" aria-label="QAHE Accreditation" style={{ display: "inline-block" }}>
+              <span style={{
+                background: "#ffffff",
+                padding: "6px 10px",
+                borderRadius: "6px",
+                display: "inline-flex",
+                alignItems: "center",
+                boxShadow: "0 2px 10px rgba(0,0,0,0.2)",
+              }}>
+                <img 
+                  src="/images/qahe-logo.jpg" 
+                  alt="QAHE Accredited Institution" 
+                  style={{ height: "38px", width: "auto", objectFit: "contain", display: "block" }} 
+                />
+              </span>
+            </Link>
           </div>
         </div>
 
-        {/* Column 2 — Quick Links */}
-        <nav aria-label="Footer quick links">
-          <h3 style={{ color: "#d4af37", fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "20px" }}>
-            Quick Links
+        {/* Column 2 — Academic Programs */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+          <h3 style={{ fontFamily: "'Cinzel', serif", fontSize: "1.05rem", fontWeight: 800, color: "#e5c578", letterSpacing: "0.05em", margin: 0 }}>
+            Academic Degrees
           </h3>
-          <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "12px" }}>
-            {quickLinks.map((l) => (
-              <li key={l.label}>
-                {l.external ? (
-                  <a href={l.href} target="_blank" rel="noopener noreferrer" style={linkStyle}>
-                    {l.label}
+          <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "10px" }}>
+            {programCategories.map((item) => (
+              <li key={item.label}>
+                <Link
+                  href={item.href}
+                  style={{ color: "rgba(255,255,255,0.75)", fontSize: "0.88rem", transition: "color 0.2s" }}
+                  onMouseEnter={(e) => e.currentTarget.style.color = "#e5c578"}
+                  onMouseLeave={(e) => e.currentTarget.style.color = "rgba(255,255,255,0.75)"}
+                >
+                  {item.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Column 3 — Portals & Verification */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+          <h3 style={{ fontFamily: "'Cinzel', serif", fontSize: "1.05rem", fontWeight: 800, color: "#e5c578", letterSpacing: "0.05em", margin: 0 }}>
+            Portals & Verification
+          </h3>
+          <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "10px" }}>
+            {institutionalPortals.map((item) => (
+              <li key={item.label}>
+                {item.external ? (
+                  <a
+                    href={item.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: "rgba(255,255,255,0.75)", fontSize: "0.88rem", transition: "color 0.2s" }}
+                    onMouseEnter={(e) => e.currentTarget.style.color = "#e5c578"}
+                    onMouseLeave={(e) => e.currentTarget.style.color = "rgba(255,255,255,0.75)"}
+                  >
+                    {item.label} ↗
                   </a>
                 ) : (
-                  <Link href={l.href} style={linkStyle}>
-                    {l.label}
+                  <Link
+                    href={item.href}
+                    style={{ color: "rgba(255,255,255,0.75)", fontSize: "0.88rem", transition: "color 0.2s" }}
+                    onMouseEnter={(e) => e.currentTarget.style.color = "#e5c578"}
+                    onMouseLeave={(e) => e.currentTarget.style.color = "rgba(255,255,255,0.75)"}
+                  >
+                    {item.label}
                   </Link>
                 )}
               </li>
             ))}
           </ul>
-        </nav>
-
-        {/* Column 3 — Programs */}
-        <nav aria-label="Footer programs">
-          <h3 style={{ color: "#d4af37", fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "20px" }}>
-            Programs
-          </h3>
-          <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "12px" }}>
-            {programCategories.map((p) => (
-              <li key={p.label}>
-                <Link href={p.href} style={linkStyle}>{p.label}</Link>
-              </li>
-            ))}
-          </ul>
-        </nav>
-
-        {/* Column 4 — Contact */}
-        <address style={{ fontStyle: "normal" }}>
-          <h3 style={{ color: "#d4af37", fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "20px" }}>
-            Contact Us
-          </h3>
-          <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-            {[
-              { label: "US Branch", value: "704-607-5540", href: "tel:+17046075540", icon: "📍" },
-              { label: "East Africa Branch", value: "+254-726-912577", href: "tel:+254726912577", icon: "🌍" },
-              { label: "Email", value: "admin@bmiuniversities.org", href: "mailto:admin@bmiuniversities.org", icon: "✉️" },
-            ].map((c) => (
-              <div key={c.label} style={{ display: "flex", gap: "12px", alignItems: "flex-start" }}>
-                <span style={{ fontSize: "0.95rem", marginTop: "2px" }}>{c.icon}</span>
-                <div>
-                  <div style={{ color: "rgba(255,255,255,0.35)", fontSize: "0.65rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "3px" }}>
-                    {c.label}
-                  </div>
-                  <a href={c.href} style={{ color: "rgba(255,255,255,0.8)", fontSize: "0.875rem", fontWeight: 600, textDecoration: "none", transition: "color 0.2s" }}
-                    onMouseEnter={e => e.currentTarget.style.color = "#d4af37"}
-                    onMouseLeave={e => e.currentTarget.style.color = "rgba(255,255,255,0.8)"}
-                  >
-                    {c.value}
-                  </a>
-                </div>
-              </div>
-            ))}
-
-            <div style={{ display: "flex", gap: "12px", alignItems: "flex-start" }}>
-              <span style={{ fontSize: "0.95rem", marginTop: "2px" }}>❤️</span>
-              <div>
-                <div style={{ color: "rgba(255,255,255,0.35)", fontSize: "0.65rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "3px" }}>Give / Donate</div>
-                <a href="https://www.paypal.com/donate/?hosted_button_id=NTSHAE86BEUBN" target="_blank" rel="noopener noreferrer"
-                  style={{ color: "#d4af37", fontSize: "0.875rem", fontWeight: 700, textDecoration: "none" }}>
-                  Donate via PayPal →
-                </a>
-              </div>
-            </div>
-          </div>
-        </address>
-      </div>
-
-      {/* ── Newsletter bar ── */}
-      <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", background: "rgba(0,0,0,0.2)" }}>
-        <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "28px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "24px", flexWrap: "wrap" }}>
-          <div>
-            <p style={{ margin: 0, fontWeight: 700, fontSize: "1rem", color: "#fff" }}>Stay Connected with BMI University</p>
-            <p style={{ margin: "4px 0 0", color: "rgba(255,255,255,0.45)", fontSize: "0.8rem" }}>Get news, events, and updates from our global community.</p>
-          </div>
-          {subscribed ? (
-            <p style={{ color: "#d4af37", fontWeight: 700 }}>✓ Subscribed! Welcome to the BMI family.</p>
-          ) : (
-            <form onSubmit={handleSubscribe} style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-              <label htmlFor="footer-email" className="sr-only">Email address</label>
-              <input
-                id="footer-email" type="email" required
-                placeholder="Your email address"
-                value={email} onChange={(e) => setEmail(e.target.value)}
-                style={{
-                  padding: "10px 18px", borderRadius: "8px",
-                  border: "1px solid rgba(255,255,255,0.15)",
-                  background: "rgba(255,255,255,0.07)",
-                  color: "#fff", fontSize: "0.875rem",
-                  outline: "none", minWidth: "260px",
-                }}
-              />
-              <button type="submit" style={{
-                padding: "10px 24px", borderRadius: "8px",
-                background: "#d4af37", color: "#0a1628",
-                fontWeight: 700, fontSize: "0.875rem",
-                border: "none", cursor: "pointer",
-                whiteSpace: "nowrap",
-              }}>
-                Subscribe
-              </button>
-            </form>
-          )}
         </div>
-      </div>
 
-      {/* ── Bottom bar ── */}
-      <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", background: "rgba(0,0,0,0.25)" }}>
-        <div style={{
-          maxWidth: "1280px", margin: "0 auto",
-          padding: "18px 32px",
-          display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", flexWrap: "wrap"
-        }}>
-          <p style={{ margin: 0, color: "rgba(255,255,255,0.3)", fontSize: "0.78rem" }}>
-            © {new Date().getFullYear()} BMI University. All Rights Reserved.
+        {/* Column 4 — Institutional Contact */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+          <h3 style={{ fontFamily: "'Cinzel', serif", fontSize: "1.05rem", fontWeight: 800, color: "#e5c578", letterSpacing: "0.05em", margin: 0 }}>
+            Admissions Office
+          </h3>
+          <p style={{ color: "rgba(255,255,255,0.75)", fontSize: "0.88rem", lineHeight: 1.6, margin: 0 }}>
+            Office of Admissions & Student Records<br />
+            Bishop Mathew Institute<br />
+            <strong>Email:</strong> admin@bmiuniversities.org<br />
+            <strong>Admissions:</strong> admissions@bmiuniversities.org
           </p>
-          <div style={{ display: "flex", gap: "24px" }}>
-            {[
-              { label: "Privacy Policy", href: "/privacy" },
-            ].map((l) => (
-              <Link key={l.label} href={l.href} style={{ color: "rgba(255,255,255,0.3)", fontSize: "0.78rem", textDecoration: "none", transition: "color 0.2s" }}
-                onMouseEnter={e => e.currentTarget.style.color = "#fff"}
-                onMouseLeave={e => e.currentTarget.style.color = "rgba(255,255,255,0.3)"}
-              >{l.label}</Link>
-            ))}
-            {["Terms of Service", "Accessibility"].map((t) => (
-              <button key={t} type="button"
-                style={{ color: "rgba(255,255,255,0.3)", fontSize: "0.78rem", background: "none", border: "none", cursor: "pointer", padding: 0, transition: "color 0.2s" }}
-                onMouseEnter={e => e.currentTarget.style.color = "#fff"}
-                onMouseLeave={e => e.currentTarget.style.color = "rgba(255,255,255,0.3)"}
-              >{t}</button>
-            ))}
+
+          <form onSubmit={handleSubscribe} style={{ marginTop: "0.5rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+            <input
+              type="email"
+              placeholder="Your email address"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              style={{
+                padding: "0.65rem 0.9rem",
+                borderRadius: "8px",
+                border: "1px solid rgba(197,160,72,0.4)",
+                background: "rgba(255,255,255,0.08)",
+                color: "#ffffff",
+                fontSize: "0.85rem",
+                outline: "none",
+              }}
+            />
+            <button type="submit" className="btn btn-gold" style={{ padding: "0.6rem 1rem", fontSize: "0.82rem" }}>
+              {subscribed ? "✓ Subscribed" : "Subscribe to Academic Updates"}
+            </button>
+          </form>
+        </div>
+
+      </div>
+
+      {/* ── Bottom Bar ── */}
+      <div style={{
+        borderTop: "1px solid rgba(255,255,255,0.08)",
+        padding: "24px 32px",
+        background: "#04070d",
+        fontSize: "0.78rem",
+        color: "rgba(255,255,255,0.5)",
+        textAlign: "center",
+      }}>
+        <div style={{ maxWidth: "1280px", margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
+          <div>
+            © {new Date().getFullYear()} Bishop Mathew Institute (BMI University). All rights reserved.
+          </div>
+          <div>
+            Exempt from licensure under N.C.G.S. 116-15(d) for religious education • QAHE Accredited
           </div>
         </div>
       </div>
 
-      {/* Responsive grid styles */}
       <style>{`
-        .footer-grid {
-          grid-template-columns: repeat(4, 1fr);
+        @media (max-width: 900px) {
+          .footer-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 32px !important; }
         }
-        @media (max-width: 1024px) {
-          .footer-grid {
-            grid-template-columns: repeat(2, 1fr);
-          }
-        }
-        @media (max-width: 640px) {
-          .footer-grid {
-            grid-template-columns: 1fr;
-          }
+        @media (max-width: 580px) {
+          .footer-grid { grid-template-columns: 1fr !important; gap: 28px !important; }
         }
       `}</style>
     </footer>
   );
 }
-
-const linkStyle = {
-  color: "rgba(255,255,255,0.6)",
-  fontSize: "0.875rem",
-  textDecoration: "none",
-  transition: "color 0.2s",
-  display: "inline-block",
-};

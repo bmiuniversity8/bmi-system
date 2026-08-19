@@ -1,20 +1,25 @@
 @import "tailwindcss";
 
 @theme {
-  /* ── Brand Tokens ──────────────────────────────────────────────────────────
-   * Canonical color values are defined in @bmi/shared/src/tokens.ts (BrandColors).
-   * If you update any hex value here, update the shared package first so both
-   * bmi-university (globals.css) and bmi-portal (index.css) stay in sync.
-   * G-4 fix: single source of truth cross-referenced.
-   * ────────────────────────────────────────────────────────────────────────── */
-  --font-sans: 'Inter', sans-serif;
+  --font-sans: 'Plus Jakarta Sans', 'Inter', sans-serif;
+  --font-serif: 'Cormorant Garamond', 'Georgia', serif;
+  --font-display: 'Cinzel', 'Times New Roman', serif;
   --font-outfit: 'Outfit', sans-serif;
-  --color-navy: #0f172a;
-  --color-navy-light: #1e293b;
-  --color-gold: #d4af37;
-  --color-gold-dark: #b5952f;
+
+  /* Oxford Navy & Burnished Gold Palette */
+  --color-oxford: #091223;
+  --color-navy: #0e1d38;
+  --color-navy-light: #172a4d;
+  --color-navy-border: #233c66;
+  
+  --color-gold: #c5a048;
+  --color-gold-light: #e5c578;
+  --color-gold-dark: #a07e2c;
+  --color-gold-parchment: #f7f3e8;
+
   --color-slate: #334155;
   --color-muted: #64748b;
+  --color-body: #1e293b;
 }
 
 /* Base Resets */
@@ -29,16 +34,25 @@ html {
 }
 
 body {
-  font-family: 'Inter', sans-serif;
-  color: #334155;
+  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+  color: #1e293b;
   background-color: #f8fafc;
   line-height: 1.6;
   overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
 }
 
 h1, h2, h3, h4, h5, h6 {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Outfit', 'Plus Jakarta Sans', sans-serif;
   line-height: 1.2;
+}
+
+.font-serif-title {
+  font-family: 'Cormorant Garamond', serif;
+}
+
+.font-display-title {
+  font-family: 'Cinzel', serif;
 }
 
 a {
@@ -61,57 +75,83 @@ img {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  padding: 0.875rem 2rem;
-  border-radius: 8px;
+  padding: 0.85rem 1.85rem;
+  border-radius: 10px;
   font-weight: 700;
-  font-size: 0.95rem;
+  font-size: 0.92rem;
   cursor: pointer;
   border: none;
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   text-align: center;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.02em;
 }
 
 .btn-primary {
-  background-color: #0f172a;
+  background: linear-gradient(135deg, #091223 0%, #0e1d38 100%);
   color: #ffffff;
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.3);
+  box-shadow: 0 4px 14px rgba(9, 18, 35, 0.35);
+  border: 1px solid rgba(197, 160, 72, 0.3);
 }
 .btn-primary:hover {
-  background-color: #1e293b;
+  background: linear-gradient(135deg, #0e1d38 0%, #172a4d 100%);
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.4);
+  box-shadow: 0 8px 24px rgba(9, 18, 35, 0.5);
   color: #ffffff;
 }
 
 .btn-gold {
-  background-color: #d4af37;
-  color: #0f172a;
-  box-shadow: 0 4px 14px rgba(212, 175, 55, 0.4);
+  background: linear-gradient(135deg, #c5a048 0%, #e5c578 50%, #c5a048 100%);
+  background-size: 200% auto;
+  color: #091223;
+  font-weight: 800;
+  box-shadow: 0 4px 16px rgba(197, 160, 72, 0.4);
 }
 .btn-gold:hover {
-  background-color: #b5952f;
+  background-position: right center;
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(212, 175, 55, 0.5);
-  color: #0f172a;
+  box-shadow: 0 8px 26px rgba(197, 160, 72, 0.6);
+  color: #091223;
+}
+
+.btn-outline-gold {
+  background: transparent;
+  border: 1.5px solid #c5a048;
+  color: #c5a048;
+}
+.btn-outline-gold:hover {
+  background: rgba(197, 160, 72, 0.12);
+  transform: translateY(-2px);
+  color: #e5c578;
+  border-color: #e5c578;
 }
 
 .btn-outline-white {
-  background: transparent;
-  border: 2px solid rgba(255,255,255,0.7);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1.5px solid rgba(255,255,255,0.7);
   color: #ffffff;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(8px);
 }
 .btn-outline-white:hover {
-  background: rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.18);
   border-color: #ffffff;
+  transform: translateY(-2px);
+}
+
+.btn-glass {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+.btn-glass:hover {
+  background: rgba(255, 255, 255, 0.2);
   transform: translateY(-2px);
 }
 
 /* ─── Page Header (Inner Pages) ─── */
 .page-header {
-  height: 50vh;
-  min-height: 360px;
+  height: 48vh;
+  min-height: 380px;
   position: relative;
   display: flex;
   align-items: flex-end;
@@ -127,7 +167,7 @@ img {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(to top, rgba(15,23,42,0.85) 0%, rgba(15,23,42,0.3) 60%, transparent 100%);
+  background: linear-gradient(to top, rgba(9, 18, 35, 0.92) 0%, rgba(9, 18, 35, 0.45) 60%, rgba(9, 18, 35, 0.2) 100%);
 }
 .page-header-content {
   position: relative;
@@ -138,15 +178,17 @@ img {
 }
 .page-header h1 {
   color: #ffffff;
-  font-size: clamp(2.5rem, 5vw, 4rem);
+  font-size: clamp(2.5rem, 5vw, 4.2rem);
   font-weight: 900;
   margin-bottom: 1rem;
-  text-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  letter-spacing: -0.02em;
+  text-shadow: 0 4px 16px rgba(0,0,0,0.5);
 }
 .page-header p {
-  color: rgba(255,255,255,0.85);
-  font-size: clamp(1rem, 1.8vw, 1.25rem);
-  max-width: 600px;
+  color: rgba(255,255,255,0.9);
+  font-size: clamp(1.05rem, 1.8vw, 1.3rem);
+  max-width: 650px;
+  line-height: 1.7;
 }
 
 /* ─── Hero Slider ─── */
@@ -155,45 +197,65 @@ img {
   inset: 0;
   background-size: cover;
   background-position: center;
-  transition: opacity 1.2s ease-in-out;
+  transition: opacity 1.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ─── Section Utility ─── */
 .section {
-  padding: 6rem 2rem;
+  padding: 6.5rem 2rem;
 }
 .section-sm {
-  padding: 4rem 2rem;
+  padding: 4.5rem 2rem;
 }
 
-/* ─── Card Hover ─── */
+/* ─── Glassmorphism & Card Hover ─── */
+.glass-panel {
+  background: rgba(9, 18, 35, 0.65);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(197, 160, 72, 0.25);
+  border-radius: 20px;
+}
+
 .program-card {
   background: #ffffff;
   border-radius: 20px;
   overflow: hidden;
-  border: 1px solid rgba(0,0,0,0.06);
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  border: 1px solid rgba(14, 29, 56, 0.08);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s ease;
+  box-shadow: 0 4px 16px rgba(9, 18, 35, 0.04);
   display: flex;
   flex-direction: column;
 }
 .program-card:hover {
   transform: translateY(-8px);
-  box-shadow: 0 20px 48px rgba(15,23,42,0.14);
+  box-shadow: 0 24px 50px rgba(9, 18, 35, 0.12);
+  border-color: rgba(197, 160, 72, 0.5);
 }
 
-/* ─── Split Section ─── */
-.split-section {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 5rem;
-  align-items: center;
+/* ─── Gold Accent Line ─── */
+.gold-bar {
+  width: 56px;
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #c5a048, #e5c578);
+  margin-bottom: 1.25rem;
 }
-@media (max-width: 900px) {
-  .split-section {
-    grid-template-columns: 1fr;
-    gap: 3rem;
-  }
+
+/* ─── Stat Card ─── */
+.stat-card {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(197, 160, 72, 0.25);
+  border-radius: 18px;
+  padding: 2.25rem 1.75rem;
+  text-align: center;
+  backdrop-filter: blur(12px);
+  transition: all 0.3s ease;
+}
+.stat-card:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(197, 160, 72, 0.6);
+  transform: translateY(-4px);
 }
 
 /* ─── Animations ─── */
@@ -202,34 +264,11 @@ img {
   to   { opacity: 1; transform: translateY(0);    }
 }
 .animate-hero {
-  animation: fadeSlideUp 1s ease-out both;
+  animation: fadeSlideUp 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 .animate-hero-delay {
-  animation: fadeSlideUp 1s 0.3s ease-out both;
+  animation: fadeSlideUp 0.9s 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 .animate-hero-delay-2 {
-  animation: fadeSlideUp 1s 0.6s ease-out both;
-}
-
-/* ─── Gold Accent Line ─── */
-.gold-bar {
-  width: 64px;
-  height: 5px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, #d4af37, #b5952f);
-  margin-bottom: 1.25rem;
-}
-
-/* ─── Stat Card ─── */
-.stat-card {
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 16px;
-  padding: 2rem 1.5rem;
-  text-align: center;
-  backdrop-filter: blur(8px);
-  transition: background 0.3s ease;
-}
-.stat-card:hover {
-  background: rgba(255,255,255,0.14);
+  animation: fadeSlideUp 0.9s 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
 }

@@ -7,12 +7,13 @@
    * bmi-university (globals.css) and bmi-portal (this file) stay in sync.
    * G-4 fix: single source of truth cross-referenced.
    * ────────────────────────────────────────────────────────────────────────── */
-  --gold: #d4af37;        /* BrandColors.gold */
-  --gold-light: #e8c84a;
-  --gold-dark: #b8952e;
-  --navy: #0f172a;
-  --navy-mid: #1e293b;
-  --navy-light: #334155;
+  --gold: #c5a048;        /* BrandColors.gold */
+  --gold-light: #e5c578;
+  --gold-dark: #a07e2c;
+  --navy: #0e1d38;
+  --navy-dark: #091223;
+  --navy-mid: #172a4d;
+  --navy-light: #233c66;
   --slate: #64748b;
   --slate-light: #94a3b8;
   --bg: #f8fafc;
