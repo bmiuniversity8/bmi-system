@@ -146,6 +146,77 @@ export const api = {
 
     getStatusLogs: (appId: string) =>
       request<StatusLogEntry[]>(`/applications/${appId}/logs`),
+
+    checkDuplicate: (email: string, dob?: string) =>
+      request<{ is_duplicate: boolean; message?: string }>('/applications/check-duplicate', {
+        method: 'POST',
+        body: JSON.stringify({ email, date_of_birth: dob }),
+      }).catch(() => ({ is_duplicate: false })),
+  },
+
+  admissions: {
+    getDecision: (applicationId?: string) =>
+      request<AdmissionsDecision>(applicationId ? `/admissions/decision/${applicationId}` : '/admissions/decision'),
+    acceptOffer: (applicationId: string) =>
+      request<{ success: boolean; provisioningResult: any }>('/admissions/accept', {
+        method: 'POST',
+        body: JSON.stringify({ application_id: applicationId }),
+      }),
+    payDeposit: (applicationId: string, paymentReference: string, amount = 100) =>
+      request<{ success: boolean; depositId: string }>('/admissions/deposit', {
+        method: 'POST',
+        body: JSON.stringify({ application_id: applicationId, payment_reference: paymentReference, amount }),
+      }),
+    declineOffer: (applicationId: string, reason?: string) =>
+      request<{ message: string }>('/admissions/decline', {
+        method: 'POST',
+        body: JSON.stringify({ application_id: applicationId, reason }),
+      }),
+  },
+
+  provisioning: {
+    getStatus: () =>
+      request<{
+        status: 'idle' | 'in_progress' | 'completed' | 'failed';
+        uid: string | null;
+        regNo: string | null;
+        studentEmail: string | null;
+        catalogYearId: string | null;
+        steps: Array<{ step: string; label: string; status: string; completedAt?: string; error?: string }>;
+      }>('/provisioning/status'),
+  },
+
+  finance: {
+    getFinancialAid: (termId?: string) => {
+      const qs = termId ? `?term_id=${encodeURIComponent(termId)}` : '';
+      return request<{ awards: any[]; total_awarded: number }>(`/finance/financial-aid${qs}`);
+    },
+    getFeeAgreement: (termId?: string) => {
+      const qs = termId ? `?term_id=${encodeURIComponent(termId)}` : '';
+      return request<{
+        program_name: string;
+        catalog_year_id: string;
+        gross_tuition: number;
+        financial_aid_discount: number;
+        net_balance_due: number;
+        currency: string;
+        payment_plans: Array<{ id: string; name: string; discount?: string }>;
+      }>(`/finance/fee-agreement${qs}`);
+    },
+  },
+
+  enrollment: {
+    getStatus: () =>
+      request<{ status: string; lastChangedAt: string; reason: string | null }>('/enrollment/status'),
+    signAgreement: (documentId: string, signedName: string, documentVersionHash = 'v1.0-sha256') =>
+      request<{ success: boolean; signature_id: string; status: string; message: string }>('/enrollment/sign-agreement', {
+        method: 'POST',
+        body: JSON.stringify({
+          document_id: documentId,
+          signed_name: signedName,
+          document_version_hash: documentVersionHash,
+        }),
+      }),
   },
 
   admin: {
@@ -161,6 +232,23 @@ export const api = {
       request<{ application_id: string; new_status: string }>(`/admin/applications/${appId}/status`, {
         method: 'PUT',
         body: JSON.stringify({ status, notes }),
+      }),
+    decideApplication: (body: {
+      application_id: string;
+      decision: 'admit' | 'conditional' | 'waitlist' | 'deny';
+      conditions?: string[];
+      deposit_required?: boolean;
+      deposit_amount?: number;
+      reviewer_notes?: string;
+    }) =>
+      request<{ success: boolean; decisionId: string; status: string }>('/admissions/decide', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    runCensusJob: (termId?: string) =>
+      request<any>('/admin/census/run', {
+        method: 'POST',
+        body: JSON.stringify({ term_id: termId }),
       }),
     listUsers: () =>
       request<{ users: any[] }>('/admin/users'),
@@ -221,6 +309,18 @@ export const api = {
   },
 
   student: {
+    getRegistrationEligibility: (termId?: string) => {
+      const qs = termId ? `?term_id=${encodeURIComponent(termId)}` : '';
+      return request<{
+        eligible: boolean;
+        status: string;
+        reasons: string[];
+        activeHolds: Array<{ id: string; hold_type: string; reason: string; blocks: string }>;
+        advisingReleased: boolean;
+        catalogYearId: string | null;
+        term: { id: string; name: string; academic_year: string; status: string } | null;
+      }>(`/student/registration-eligibility${qs}`);
+    },
     getOnboardingStatus: () => request<{ tasks: any[]; progress: number; isComplete: boolean }>('/student/onboarding'),
     uploadDocument: (docType: string, file: File) => {
       const fd = new FormData();
@@ -271,6 +371,10 @@ export const api = {
         method: 'POST',
         body: data ? JSON.stringify(data) : undefined,
       }),
+    getCurriculum: () => request<any>('/student/curriculum'),
+    getHolds: () => request<any[]>('/student/holds'),
+    getAttendance: () => request<any[]>('/v1/attendance'),
+    getRegistrationProgress: () => request<any>('/student/registration-progress'),
   },
 
   notifications: {
@@ -291,6 +395,21 @@ export const api = {
     getPrograms: () =>
       request<{ items: { id: string; name: string; code: string; level: string; degree_type: string }[]; total: number }>('/v1/programs')
         .then(r => r.items ?? []),
+    reserveSeat: (sectionId: string, termId?: string) =>
+      request<{ status: string; sectionId: string; waitlistPosition?: number; message: string }>('/registration/reserve-seat', {
+        method: 'POST',
+        body: JSON.stringify({ section_id: sectionId, term_id: termId }),
+      }),
+    joinWaitlist: (sectionId: string) =>
+      request<{ status: string; sectionId: string; waitlistPosition: number; message: string }>('/registration/waitlist', {
+        method: 'POST',
+        body: JSON.stringify({ section_id: sectionId }),
+      }),
+    dropCourse: (courseId: string, sectionId?: string) =>
+      request<{ success: boolean; promotedStudentId: string | null; message: string }>('/registration/drop', {
+        method: 'POST',
+        body: JSON.stringify({ course_id: courseId, section_id: sectionId }),
+      }),
     saveStep: (stepKey: string, data: any) =>
       request<any>(`/registration/${stepKey}`, {
         method: 'POST',
@@ -299,6 +418,21 @@ export const api = {
     complete: () => request<any>('/registration/complete', { method: 'POST' })
   }
 };
+
+export interface AdmissionsDecision {
+  id?: string;
+  application_id: string;
+  decision: 'admit' | 'conditional' | 'waitlist' | 'deny' | null;
+  decided_by?: string;
+  decided_at?: string;
+  conditions?: string | string[] | null;
+  offer_expires_at?: string | null;
+  deposit_required?: number;
+  deposit_amount?: number;
+  program?: string;
+  degree_level?: string;
+  application_status?: string;
+}
 
 export interface User {
   id: string;

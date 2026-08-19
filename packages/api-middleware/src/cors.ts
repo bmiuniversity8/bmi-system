@@ -14,12 +14,10 @@ export function getCorsHeaders(
   let isAllowed = origin ? origins.includes(origin) : false;
 
   if (origin && !isAllowed) {
-    // Dynamically match any Cloudflare Pages branch / preview deployment domain (*.pages.dev)
+    // Dynamically match any official Cloudflare Pages branch / preview deployment domain or bmiuniversities.org subdomain
     if (/^https:\/\/(?:[a-zA-Z0-9-]+\.)*pages\.dev$/.test(origin)) {
       isAllowed = true;
     } else if (/^https:\/\/(?:[a-zA-Z0-9-]+\.)*bmiuniversities\.org$/.test(origin)) {
-      isAllowed = true;
-    } else if (/^https:\/\/(?:[a-zA-Z0-9-]+\.)*hkmministries\.org$/.test(origin)) {
       isAllowed = true;
     }
   }

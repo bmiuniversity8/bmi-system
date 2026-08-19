@@ -13,7 +13,7 @@ describe('Contact Page', () => {
     expect(screen.getByRole('heading', { name: /Send a Message/i })).toBeInTheDocument();
 
     // Check for some contact info
-    expect(screen.getByText('admin@bmiuniversity.org')).toBeInTheDocument();
+    expect(screen.getByText('admin@bmiuniversities.org')).toBeInTheDocument();
   });
 
   it('updates form fields when typed into', async () => {

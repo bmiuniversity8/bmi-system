@@ -1,15 +1,17 @@
 # BMI University ERP — Deployment & Canonical Domain Standards
 
-## 1. Canonical Production URLs (Use These Always)
+## 1. Production Domain & Subdomain Topology
 
-To avoid confusion caused by Cloudflare's dynamic preview deployment hashes (e.g. `612805e2.bmi-ums-88m.pages.dev`), **always** use the following stable canonical domain aliases:
+All production traffic is routed via the primary secured domain **`bmiuniversities.org`** and its dedicated subdomains:
 
-| Component | Canonical Production URL | Custom Domain (Primary) |
-|---|---|---|
-| **UMS Frontend** | `https://bmi-ums-88m.pages.dev` | `https://ums.bmiuniversities.org` |
-| **Admissions Portal** | `https://bmi-portal.pages.dev` | `https://portal.bmiuniversities.org` |
-| **University Web** | `https://bmi-university.pages.dev` | `https://bmiuniversities.org` |
-| **Backend API Worker** | `https://bmi-api.bmi-university.workers.dev` | — |
+| Service / Component | Custom Domain (Primary) | Fallback / Alias | Purpose |
+|---|---|---|---|
+| **University Website** | `https://bmiuniversities.org` | `https://www.bmiuniversities.org` | Public marketing, academic catalog, institutional info |
+| **Admissions / Student Portal** | `https://portal.bmiuniversities.org` | `https://bmi-portal.pages.dev` | Application submissions, status tracking, student portal |
+| **University Management System (UMS)** | `https://ums.bmiuniversities.org` | `https://bmi-ums.pages.dev` | Faculty, registrar, financial & institutional ERP |
+| **API Gateway / Cloudflare Worker** | `https://api.bmiuniversities.org` | `https://bmi-api.bmi-university.workers.dev` | Unified backend REST API & webhooks |
+| **Document Verification** | `https://verify.bmiuniversities.org` | `https://bmiuniversities.org/verify` | Public validation of transcripts, degrees & letters |
+| **Direct Application Gateway** | `https://apply.bmiuniversities.org` | `https://portal.bmiuniversities.org/register` | Express direct applicant intake |
 
 ---
 

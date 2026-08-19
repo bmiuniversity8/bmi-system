@@ -8,18 +8,21 @@ export default function Dashboard() {
   const [data, setData] = useState<any>(null);
   const [onboarding, setOnboarding] = useState<any>(null);
   const [deadlines, setDeadlines] = useState<any[]>([]);
+  const [attendance, setAttendance] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
       api.student.getDashboard().catch(() => null),
       api.student.getOnboardingStatus().catch(() => null),
-      api.student.getDeadlines().catch(() => [])
+      api.student.getDeadlines().catch(() => []),
+      api.student.getAttendance().catch(() => []),
     ])
-      .then(([dashData, obData, deadlineList]) => {
+      .then(([dashData, obData, deadlineList, attList]) => {
         setData(dashData);
         setOnboarding(obData);
         setDeadlines(Array.isArray(deadlineList) ? deadlineList : []);
+        setAttendance(Array.isArray(attList) ? attList : []);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -46,6 +49,16 @@ export default function Dashboard() {
 
   // Approximate remaining terms (assuming 15 credits / term)
   const estTermsLeft = Math.ceil(creditsRemaining / 15);
+
+  const presentCount = attendance.filter((a: any) => a.status === 'present' || a.status === 'attended').length;
+  const totalAttSessions = attendance.length;
+  const attendanceRate = totalAttSessions > 0 ? Math.round((presentCount / totalAttSessions) * 100) : 100;
+  const attendanceStats = {
+    total: totalAttSessions,
+    present: presentCount,
+    absent: Math.max(0, totalAttSessions - presentCount),
+    rate: attendanceRate,
+  };
 
   return (
     <div style={{ maxWidth: 1140, margin: '0 auto' }}>
@@ -245,23 +258,23 @@ export default function Dashboard() {
               <h2 style={{ fontSize: '1.2rem', color: 'var(--navy)', margin: 0 }}>
                 📊 Course Attendance & Engagement Record
               </h2>
-              <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#065f46', background: 'rgba(16, 185, 129, 0.1)', padding: '3px 10px', borderRadius: 99 }}>
-                ✓ 96% Attendance Rate
+              <span style={{ fontSize: '0.8rem', fontWeight: 800, color: attendanceStats.rate >= 80 ? '#065f46' : '#b45309', background: attendanceStats.rate >= 80 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)', padding: '3px 10px', borderRadius: 99 }}>
+                ✓ {attendanceStats.total > 0 ? `${attendanceStats.rate}% Attendance Rate` : 'No Records Yet'}
               </span>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
               <div style={{ padding: '0.85rem', background: 'var(--bg)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
-                <div style={{ fontSize: '0.78rem', color: 'var(--slate)', fontWeight: 600 }}>Total Lectures Held</div>
-                <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--navy)', marginTop: '0.2rem' }}>30 Sessions</div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--slate)', fontWeight: 600 }}>Total Lectures Logged</div>
+                <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--navy)', marginTop: '0.2rem' }}>{attendanceStats.total} Sessions</div>
               </div>
               <div style={{ padding: '0.85rem', background: 'var(--bg)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
                 <div style={{ fontSize: '0.78rem', color: 'var(--slate)', fontWeight: 600 }}>Attended & Participated</div>
-                <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--success)', marginTop: '0.2rem' }}>28 Sessions</div>
+                <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--success)', marginTop: '0.2rem' }}>{attendanceStats.present} Sessions</div>
               </div>
               <div style={{ padding: '0.85rem', background: 'var(--bg)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
-                <div style={{ fontSize: '0.78rem', color: 'var(--slate)', fontWeight: 600 }}>Excused Absences</div>
-                <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--slate)', marginTop: '0.2rem' }}>2 Sessions</div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--slate)', fontWeight: 600 }}>Absences / Excused</div>
+                <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--slate)', marginTop: '0.2rem' }}>{attendanceStats.absent} Sessions</div>
               </div>
             </div>
 

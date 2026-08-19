@@ -17,7 +17,7 @@ export class ResendEmailAdapter implements IEmailProvider {
   }
 
   async sendEmail(message: EmailMessage): Promise<void> {
-    const fromAddr = message.from || 'BMI University <noreply@hkmministries.org>';
+    const fromAddr = message.from || 'BMI University <noreply@bmiuniversities.org>';
     let response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {

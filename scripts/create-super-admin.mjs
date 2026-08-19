@@ -14,9 +14,9 @@
 
 // Uses native Node.js fetch (Node 18+)
 
-const API_URL = process.env.VITE_API_URL || 'https://bmi-api.bmi-university.workers.dev';
+const API_URL = process.env.VITE_API_URL || 'https://api.bmiuniversities.org';
 const setupKey = process.argv[2] || process.env.ADMIN_SETUP_KEY;
-const email = process.argv[3] || 'admin@bmi.edu';
+const email = process.argv[3] || 'admin@bmiuniversities.org';
 const password = process.argv[4] || '***REMOVED***';
 const firstName = process.argv[5] || 'System';
 const lastName = process.argv[6] || 'Administrator';

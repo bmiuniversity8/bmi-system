@@ -45,7 +45,7 @@ export default function PrivacyPage() {
             If there are any questions regarding this privacy policy, you may contact us using the information below:
             <br /><br />
             <strong>BMI University</strong><br />
-            admin@bmiuniversity.org<br />
+            admin@bmiuniversities.org<br />
             704-607-5540
           </p>
         </div>

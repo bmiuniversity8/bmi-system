@@ -2,7 +2,6 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import RegistrationWizard from './RegistrationWizard';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-
 import { api } from '../../lib/api';
 
 vi.mock('../../hooks/useAuth', () => ({
@@ -11,12 +10,27 @@ vi.mock('../../hooks/useAuth', () => ({
 
 vi.mock('../../lib/api', () => ({
   api: {
+    student: {
+      getRegistrationEligibility: vi.fn(),
+      getCurriculum: vi.fn(),
+    },
+    finance: {
+      getFeeAgreement: vi.fn(),
+      getFinancialAid: vi.fn(),
+    },
     registration: {
       getStatus: vi.fn(),
       getModules: vi.fn(),
       getPrograms: vi.fn(),
+      reserveSeat: vi.fn(),
+      joinWaitlist: vi.fn(),
+      dropCourse: vi.fn(),
       saveStep: vi.fn(),
       complete: vi.fn(),
+    },
+    enrollment: {
+      getStatus: vi.fn(),
+      signAgreement: vi.fn(),
     },
   },
 }));
@@ -24,10 +38,48 @@ vi.mock('../../lib/api', () => ({
 describe('RegistrationWizard Page', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(api.registration.getStatus).mockResolvedValue({ current_data: {}, completed_steps: [], next_step: 'personal_details', registration_complete: false });
-    vi.mocked(api.registration.getModules).mockResolvedValue([]);
-    vi.mocked(api.registration.getPrograms).mockResolvedValue([]);
-    vi.mocked(api.registration.saveStep).mockResolvedValue({ message: 'saved' });
+    vi.mocked(api.student.getRegistrationEligibility).mockResolvedValue({
+      eligible: true,
+      status: 'REGISTRATION_ELIGIBLE',
+      reasons: [],
+      activeHolds: [],
+      advisingReleased: true,
+      catalogYearId: 'CAT-2026',
+      term: { id: 'term-1', name: 'Fall 2026', academic_year: '2026-2027', status: 'active' },
+    });
+    vi.mocked(api.finance.getFeeAgreement).mockResolvedValue({
+      program_name: 'Theology',
+      catalog_year_id: 'CAT-2026',
+      gross_tuition: 1500,
+      financial_aid_discount: 500,
+      net_balance_due: 1000,
+      currency: 'USD',
+      payment_plans: [{ id: 'full', name: 'Single Full Payment' }],
+    });
+    vi.mocked(api.student.getCurriculum).mockResolvedValue({
+      program_name: 'Theology',
+      terms: [],
+    });
+    vi.mocked(api.registration.getStatus).mockResolvedValue({
+      current_data: {
+        personal_details: {
+          first_name: 'John',
+          last_name: 'Doe',
+          phone: '+23177000000',
+          emergency_contact_name: 'Jane Doe',
+          emergency_contact_phone: '+23177111111',
+        },
+      },
+      completed_steps: [],
+      next_step: 'personal_details',
+      registration_complete: false,
+    });
+    vi.mocked(api.registration.getModules).mockResolvedValue([
+      { id: 'c1', code: 'BIB101', name: 'Old Testament Survey', credits: 3 },
+      { id: 'c2', code: 'THE101', name: 'Systematic Theology', credits: 3 },
+    ]);
+    vi.mocked(api.registration.reserveSeat).mockResolvedValue({ status: 'reserved', sectionId: 'c1', message: 'Reserved' });
+    vi.mocked(api.enrollment.signAgreement).mockResolvedValue({ success: true, signature_id: 'sig-1', status: 'REGISTERED', message: 'Signed' });
     vi.mocked(api.registration.complete).mockResolvedValue({ message: 'completed' });
   });
 
@@ -37,139 +89,61 @@ describe('RegistrationWizard Page', () => {
         <RegistrationWizard />
       </MemoryRouter>
     );
-    await waitFor(() => {});
+    await waitFor(() => {
+      expect(screen.queryByText('Student Registration & Enrollment')).toBeInTheDocument();
+    });
   };
 
-  it('renders all step labels', async () => {
+  it('renders step labels and starts at Step 1', async () => {
     await renderPage();
-    expect(screen.getAllByText('Personal Details').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Address').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Program').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Modules').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Fees').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Confirm').length).toBeGreaterThan(0);
-  });
-
-  it('starts at step Personal Details', async () => {
-    await renderPage();
-    expect(screen.getByText('Student Registration')).toBeInTheDocument();
-    expect(screen.getByText('Save & Continue')).toBeInTheDocument();
+    expect(screen.getByText(/Profile & Emergency Contacts/i)).toBeInTheDocument();
+    expect(screen.getByText('First Name')).toBeInTheDocument();
+    expect(screen.getByText('Last Name')).toBeInTheDocument();
     expect(screen.getByText('Previous')).toBeDisabled();
   });
 
-  it('advances to next step on save & continue', async () => {
-    await renderPage();
-    fireEvent.click(screen.getByText('Save & Continue'));
+  it('shows blocker screen when student is not eligible', async () => {
+    vi.mocked(api.student.getRegistrationEligibility).mockResolvedValue({
+      eligible: false,
+      status: 'UNDER_REVIEW',
+      reasons: ['Active Hold: FINANCIAL — Unpaid prior balance'],
+      activeHolds: [{ id: 'h1', hold_type: 'financial', reason: 'Unpaid prior balance', blocks: 'registration' }],
+      advisingReleased: false,
+      catalogYearId: null,
+      term: null,
+    });
+
+    render(
+      <MemoryRouter>
+        <RegistrationWizard />
+      </MemoryRouter>
+    );
 
     await waitFor(() => {
-      expect(api.registration.saveStep).toHaveBeenCalledWith(
-        'personal_details',
-        expect.any(Object),
-      );
+      expect(screen.getByText('Registration Unavailable')).toBeInTheDocument();
+      expect(screen.getByText(/Active Hold: FINANCIAL/i)).toBeInTheDocument();
     });
   });
 
-  it('shows "Saving..." while saving step', async () => {
-    vi.mocked(api.registration.saveStep).mockImplementation(() => new Promise(() => {}));
-
+  it('advances through steps on Save & Continue', async () => {
     await renderPage();
-    fireEvent.click(screen.getByText('Save & Continue'));
-
-    expect(screen.getByText('Saving...')).toBeInTheDocument();
-  });
-
-  it('shows "Complete Registration" button on last step', async () => {
-    await renderPage();
-    const steps = 5;
-    for (let i = 0; i < steps; i++) {
-      fireEvent.click(screen.getByText('Save & Continue'));
-      await waitFor(() => {});
-    }
-
-    expect(screen.getByText('Complete Registration')).toBeInTheDocument();
-  });
-
-  it('shows error message on fetch failure', async () => {
-    vi.mocked(api.registration.saveStep).mockRejectedValue(new Error('Network error'));
-
-    await renderPage();
-    fireEvent.click(screen.getByText('Save & Continue'));
+    fireEvent.click(screen.getByText(/Save & Continue/i));
 
     await waitFor(() => {
-      expect(screen.getByText('Network error')).toBeInTheDocument();
+      expect(screen.getByText(/Curriculum & Degree Pathway/i)).toBeInTheDocument();
     });
   });
 
-  it('shows Previous button and it works', async () => {
+  it('toggles course selection and calls reserveSeat', async () => {
     await renderPage();
-    fireEvent.click(screen.getByText('Save & Continue'));
-    await waitFor(() => {});
+    // Step 0 -> Step 1
+    fireEvent.click(screen.getByText(/Save & Continue/i));
+    await waitFor(() => expect(screen.getByText(/Curriculum & Degree Pathway/i)).toBeInTheDocument());
 
-    const prevBtn = screen.getByText('Previous');
-    expect(prevBtn).not.toBeDisabled();
-    fireEvent.click(prevBtn);
+    // Step 1 -> Step 2
+    fireEvent.click(screen.getByText(/Save & Continue/i));
+    await waitFor(() => expect(screen.getByText(/Course & Section Selection/i)).toBeInTheDocument());
 
-    expect(screen.getAllByText('Personal Details').length).toBeGreaterThan(0);
-  });
-
-  it('shows first step initially', async () => {
-    await renderPage();
-    expect(screen.getByText('1')).toBeInTheDocument();
-  });
-
-  it('renders personal details form fields', async () => {
-    await renderPage();
-    expect(screen.getByText('First Name')).toBeInTheDocument();
-    expect(screen.getByText('Last Name')).toBeInTheDocument();
-    expect(screen.getByText('Date of Birth')).toBeInTheDocument();
-    expect(screen.getByText('Gender')).toBeInTheDocument();
-    expect(screen.getByText('Nationality')).toBeInTheDocument();
-    expect(screen.getByText('Phone')).toBeInTheDocument();
-  });
-
-  it('shows completion page when registration is complete', async () => {
-    vi.mocked(api.registration.getStatus).mockResolvedValue({ registration_complete: true, current_data: {} });
-
-    await renderPage();
-    await waitFor(() => {
-      expect(screen.getByText('Registration Complete!')).toBeInTheDocument();
-    });
-    expect(screen.getByText('Go to Dashboard')).toBeInTheDocument();
-  });
-
-  it('saves each step endpoint correctly', async () => {
-    await renderPage();
-    const stepKeys = ['personal_details', 'address', 'program', 'modules', 'fees'];
-
-    for (const key of stepKeys) {
-      fireEvent.click(screen.getByText('Save & Continue'));
-      await waitFor(() => {
-        expect(api.registration.saveStep).toHaveBeenCalledWith(
-          key,
-          expect.any(Object),
-        );
-      });
-    }
-  });
-
-  it('calls complete endpoint on final submission', async () => {
-    await renderPage();
-    for (let i = 0; i < 5; i++) {
-      fireEvent.click(screen.getByText('Save & Continue'));
-      await waitFor(() => {});
-    }
-
-    fireEvent.click(screen.getByText('Complete Registration'));
-    await waitFor(() => {
-      expect(api.registration.complete).toHaveBeenCalled();
-    });
-  });
-
-  it('fetches registration status and modules on mount', async () => {
-    await renderPage();
-    await waitFor(() => {
-      expect(api.registration.getStatus).toHaveBeenCalled();
-      expect(api.registration.getModules).toHaveBeenCalled();
-    });
+    expect(screen.getByText(/BIB101/i)).toBeInTheDocument();
   });
 });

@@ -14,6 +14,7 @@ vi.mock('../../lib/api', () => ({
       getDashboard: vi.fn(),
       getOnboardingStatus: vi.fn(),
       getDeadlines: vi.fn(),
+      getAttendance: vi.fn(),
     },
   },
 }));
@@ -37,6 +38,10 @@ describe('Student Dashboard Page', () => {
     vi.mocked(api.student.getOnboardingStatus).mockResolvedValue({ tasks: [], progress: 100, isComplete: true });
     vi.mocked(api.student.getDeadlines).mockResolvedValue([
       { title: 'Add/Drop Deadline', date: 'Sept 15, 2026', tag: 'Urgent', type: 'Academic', color: 'blue' }
+    ]);
+    vi.mocked(api.student.getAttendance).mockResolvedValue([
+      { id: 'att-1', status: 'present' },
+      { id: 'att-2', status: 'present' },
     ]);
   });
 
@@ -66,7 +71,7 @@ describe('Student Dashboard Page', () => {
     await waitFor(() => {
       expect(screen.getByText(/Degree Completion Pathway/i)).toBeInTheDocument();
       expect(screen.getByText(/Course Attendance & Engagement Record/i)).toBeInTheDocument();
-      expect(screen.getByText(/96% Attendance Rate/i)).toBeInTheDocument();
+      expect(screen.getByText(/100% Attendance Rate/i)).toBeInTheDocument();
       expect(screen.getByText(/BIB-101/i)).toBeInTheDocument();
     });
   });

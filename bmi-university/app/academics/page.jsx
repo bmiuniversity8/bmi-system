@@ -197,9 +197,9 @@ export default function Academics() {
           </div>
 
           <div style={{ textAlign: "center" }}>
-            <a href="https://bmiuniversity.org/apply/" target="_blank" rel="noopener noreferrer" className="btn btn-gold" style={{ fontSize: "1rem", padding: "1rem 2.5rem" }}>
+            <Link href="/apply" className="btn btn-gold" style={{ fontSize: "1rem", padding: "1rem 2.5rem" }}>
               Apply Today →
-            </a>
+            </Link>
           </div>
         </div>
       </section>

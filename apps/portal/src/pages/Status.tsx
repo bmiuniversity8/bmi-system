@@ -1,14 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../hooks/useAuth';
-import type { Application, RecommendationRequest, StatusLogEntry } from '../lib/api';
+import type { Application, RecommendationRequest, StatusLogEntry, AdmissionsDecision } from '../lib/api';
 
 const STATUS_STEPS: Record<string, { label: string; icon: string; pct: number }> = {
   draft: { label: 'Draft', icon: '📝', pct: 10 },
   submitted: { label: 'Submitted', icon: '📬', pct: 30 },
   under_review: { label: 'Under Review', icon: '🔍', pct: 60 },
-  accepted: { label: 'Accepted', icon: '🎉', pct: 100 },
+  accepted: { label: 'Offer Extended', icon: '🎉', pct: 85 },
   rejected: { label: 'Decision Made', icon: '📋', pct: 100 },
   waitlisted: { label: 'Waitlisted', icon: '⏳', pct: 80 },
 };
@@ -17,32 +17,65 @@ const DOC_TYPES = ['transcript', 'id_document', 'other'];
 
 export default function Status() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [params] = useSearchParams();
   const [app, setApp] = useState<Application | null>(null);
+  const [decision, setDecision] = useState<AdmissionsDecision | null>(null);
   const [recs, setRecs] = useState<RecommendationRequest[]>([]);
   const [logs, setLogs] = useState<StatusLogEntry[]>([]);
+  const [canonicalStatus, setCanonicalStatus] = useState<string>('PROSPECT');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [actionSuccess, setActionSuccess] = useState('');
 
+  // Provisioning progress state
+  const [provisioningData, setProvisioningData] = useState<{
+    status: string;
+    uid: string | null;
+    regNo: string | null;
+    studentEmail: string | null;
+    steps: Array<{ step: string; label: string; status: string; completedAt?: string; error?: string }>;
+  } | null>(null);
+  const [acceptingOffer, setAcceptingOffer] = useState(false);
+
+  // Document upload state
   const [uploadStatus, setUploadStatus] = useState<Record<string, string>>({});
   const [docType, setDocType] = useState('transcript');
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Referee state
   const [recName, setRecName] = useState('');
   const [recEmail, setRecEmail] = useState('');
   const [recLoading, setRecLoading] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
-      const appData = await api.applications.getMyApplication();
+      const [appData, statusRes] = await Promise.all([
+        api.applications.getMyApplication().catch(() => null),
+        api.enrollment.getStatus().catch(() => ({ status: 'PROSPECT', lastChangedAt: '', reason: null })),
+      ]);
+
       setApp(appData);
+      setCanonicalStatus(statusRes.status);
+
       if (appData) {
-        const [recData, logData] = await Promise.all([
-          api.recommendations.list(appData.id),
+        const [recData, logData, decisionData] = await Promise.all([
+          api.recommendations.list(appData.id).catch(() => [] as RecommendationRequest[]),
           api.applications.getStatusLogs(appData.id).catch(() => [] as StatusLogEntry[]),
+          api.admissions.getDecision(appData.id).catch(() => null),
         ]);
         setRecs(recData);
         setLogs(logData);
+        setDecision(decisionData);
+
+        // If offer is accepted or provisioned, query live provisioning status
+        if (
+          appData.status === 'accepted' ||
+          ['OFFER_ACCEPTED', 'PROVISIONING_IN_PROGRESS', 'PROVISIONED', 'REGISTRATION_ELIGIBLE', 'REGISTERED', 'OFFICIALLY_ENROLLED'].includes(statusRes.status)
+        ) {
+          const prov = await api.provisioning.getStatus().catch(() => null);
+          if (prov) setProvisioningData(prov);
+        }
       }
     } catch {
       setApp(null);
@@ -53,9 +86,38 @@ export default function Status() {
 
   useEffect(() => {
     loadData();
-    const id = setInterval(loadData, 30000);
+    const id = setInterval(loadData, 15000);
     return () => clearInterval(id);
   }, [loadData]);
+
+  const handleAcceptOffer = async () => {
+    if (!app) return;
+    setAcceptingOffer(true);
+    setError('');
+    setActionSuccess('');
+    try {
+      const res = await api.admissions.acceptOffer(app.id);
+      if (res.success) {
+        setActionSuccess('🎉 Congratulations! You have accepted your admission offer. Your permanent institutional accounts are being provisioned.');
+        loadData();
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to accept offer.');
+    } finally {
+      setAcceptingOffer(false);
+    }
+  };
+
+  const handleDeclineOffer = async () => {
+    if (!app || !confirm('Are you sure you want to decline this admission offer? This action cannot be undone.')) return;
+    try {
+      await api.admissions.declineOffer(app.id);
+      setActionSuccess('Offer declined.');
+      loadData();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to decline offer.');
+    }
+  };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -96,6 +158,8 @@ export default function Status() {
   };
 
   const statusInfo = app ? STATUS_STEPS[app.status] ?? STATUS_STEPS.submitted : null;
+  const isOfferExtended = app?.status === 'accepted' || canonicalStatus === 'OFFER_EXTENDED' || canonicalStatus === 'CONDITIONAL';
+  const isProvisioned = provisioningData?.status === 'completed' || ['PROVISIONED', 'REGISTRATION_ELIGIBLE', 'REGISTERED', 'OFFICIALLY_ENROLLED'].includes(canonicalStatus);
 
   if (loading) return (
     <div className="page-center">
@@ -105,19 +169,27 @@ export default function Status() {
 
   return (
     <div className="page" style={{ padding: '5rem 1.5rem 3rem', background: 'var(--bg)' }}>
-      <div style={{ maxWidth: 720, margin: '0 auto' }}>
+      <div style={{ maxWidth: 760, margin: '0 auto' }}>
         <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 'clamp(1.8rem, 4vw, 2.5rem)', fontWeight: 900, marginBottom: '0.5rem' }}>
-          My Application
+          My Application & Enrollment Status
         </h1>
-        <p style={{ color: 'var(--text-muted)', marginBottom: '2.5rem' }}>Welcome back, {user?.first_name}. Page auto-refreshes every 30 seconds.</p>
+        <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>
+          Welcome back, {user?.first_name}. System State: <strong style={{ color: 'var(--navy)', fontFamily: 'monospace' }}>{canonicalStatus}</strong>
+        </p>
 
         {params.get('submitted') && (
-          <div className="alert alert-success" style={{ marginBottom: '2rem' }} role="alert">
-            🎉 Your application has been successfully submitted! Check your email for a confirmation. Our admissions team will review it within 5–10 business days.
+          <div className="alert alert-success" style={{ marginBottom: '1.5rem' }} role="alert">
+            🎉 Your application has been successfully submitted! Our admissions committee is reviewing your materials.
           </div>
         )}
 
-        {error && <div className="alert alert-danger" style={{ marginBottom: '2rem' }} role="alert">{error}</div>}
+        {actionSuccess && (
+          <div className="alert alert-success" style={{ marginBottom: '1.5rem' }} role="alert">
+            {actionSuccess}
+          </div>
+        )}
+
+        {error && <div className="alert alert-danger" style={{ marginBottom: '1.5rem' }} role="alert">{error}</div>}
 
         {!app ? (
           <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
@@ -128,8 +200,10 @@ export default function Status() {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+
+            {/* ─── 1. Primary Status Header ─── */}
             <div className="card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem' }}>
                 <div>
                   <h2 style={{ marginBottom: '0.25rem' }}>{app.program}</h2>
                   <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textTransform: 'capitalize', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -140,7 +214,7 @@ export default function Status() {
                   </p>
                 </div>
                 <div>
-                  <span className={`badge badge-${app.status}`} style={{ fontSize: '0.85rem' }}>
+                  <span className={`badge badge-${app.status}`} style={{ fontSize: '0.85rem', padding: '6px 12px' }}>
                     {statusInfo?.icon} {statusInfo?.label}
                   </span>
                 </div>
@@ -148,22 +222,29 @@ export default function Status() {
 
               {app.reviewer_notes && (
                 <div className="alert alert-info" style={{ marginBottom: '1.5rem', background: '#eff6ff', borderLeft: '4px solid #3b82f6', padding: '1rem' }}>
-                  <strong style={{ color: '#1e40af', display: 'block', marginBottom: '0.25rem' }}>💬 Admissions Officer Message:</strong>
+                  <strong style={{ color: '#1e40af', display: 'block', marginBottom: '0.25rem' }}>💬 Admissions Committee Message:</strong>
                   <p style={{ margin: 0, color: '#1e3a8a', fontSize: '0.9rem' }}>{app.reviewer_notes}</p>
                 </div>
               )}
 
               <div style={{ marginBottom: '1rem' }}>
                 <div style={{ background: 'var(--border)', borderRadius: 999, height: 8, overflow: 'hidden' }}>
-                  <div style={{ width: `${statusInfo?.pct ?? 0}%`, background: app.status === 'accepted' ? 'var(--success)' : app.status === 'rejected' ? 'var(--danger)' : 'var(--gold)', height: '100%', borderRadius: 999, transition: 'width 0.8s ease' }} />
+                  <div style={{
+                    width: `${isProvisioned ? 100 : (statusInfo?.pct ?? 30)}%`,
+                    background: isProvisioned ? 'var(--success)' : (app.status === 'accepted' ? 'var(--gold)' : 'var(--navy)'),
+                    height: '100%',
+                    borderRadius: 999,
+                    transition: 'width 0.8s ease',
+                  }} />
                 </div>
               </div>
+
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem', textAlign: 'center' }}>
                 {[
                   { label: 'Submitted', active: true, icon: '📄' },
-                  { label: 'Documents', active: (app.documents && app.documents.length > 0) || ['under_review', 'accepted', 'rejected'].includes(app.status), icon: '📑' },
-                  { label: 'Committee Review', active: ['under_review', 'accepted', 'rejected'].includes(app.status), icon: '🔍' },
-                  { label: 'Decision', active: ['accepted', 'rejected', 'waitlisted'].includes(app.status), icon: '🎓' },
+                  { label: 'Review', active: ['under_review', 'accepted', 'rejected'].includes(app.status), icon: '🔍' },
+                  { label: 'Offer', active: app.status === 'accepted', icon: '🎓' },
+                  { label: 'Enrollment', active: isProvisioned, icon: '✅' },
                 ].map((step, idx) => (
                   <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem' }}>
                     <div style={{
@@ -188,6 +269,121 @@ export default function Status() {
               </div>
             </div>
 
+            {/* ─── 2. Offer Acceptance & Deposit Card (when offer is extended) ─── */}
+            {isOfferExtended && !isProvisioned && (
+              <div className="card" style={{ border: '2px solid var(--gold)', background: '#fffdfa' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+                  <span style={{ fontSize: '1.75rem' }}>🎉</span>
+                  <div>
+                    <h3 style={{ margin: 0, color: 'var(--navy)' }}>Congratulations! Official Admission Offer Extended</h3>
+                    <p style={{ margin: '0.25rem 0 0 0', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+                      BMI University is pleased to offer you admission into the <strong>{app.program}</strong> program.
+                    </p>
+                  </div>
+                </div>
+
+                {decision?.conditions && (
+                  <div className="alert alert-warning" style={{ marginBottom: '1.25rem' }}>
+                    <strong>Admission Conditions:</strong>
+                    <div style={{ marginTop: '0.25rem', fontSize: '0.875rem' }}>
+                      {typeof decision.conditions === 'string' ? decision.conditions : JSON.stringify(decision.conditions)}
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '1rem' }}>
+                  <button
+                    className="btn btn-gold"
+                    onClick={handleAcceptOffer}
+                    disabled={acceptingOffer}
+                    style={{ flex: 1, minWidth: 200, padding: '0.75rem 1.5rem', fontWeight: 700 }}
+                  >
+                    {acceptingOffer ? '⏳ Setting up your identity...' : '✓ Accept Admission Offer'}
+                  </button>
+                  <button
+                    className="btn btn-outline"
+                    onClick={handleDeclineOffer}
+                    disabled={acceptingOffer}
+                    style={{ padding: '0.75rem 1.25rem' }}
+                  >
+                    Decline Offer
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ─── 3. Auto-Provisioning Progress Card (Section 2 Saga) ─── */}
+            {provisioningData && provisioningData.status !== 'completed' && (
+              <div className="card" style={{ borderLeft: '4px solid var(--navy)', background: '#f8fafc' }}>
+                <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                  <span>⚙️</span> Setting Up Your Institutional Identity...
+                </h3>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: '1.25rem' }}>
+                  Please wait a moment while your permanent student UID, accounts, advisor assignment, and admission documents are generated.
+                </p>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  {provisioningData.steps.map(s => (
+                    <div key={s.step} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0.75rem', background: 'white', borderRadius: 6, border: '1px solid var(--border)' }}>
+                      <span style={{ fontSize: '0.875rem', color: 'var(--navy)', fontWeight: 600 }}>{s.label}</span>
+                      <span style={{ fontSize: '0.8rem', fontWeight: 700, color: s.status === 'completed' ? 'var(--success)' : s.status === 'in_progress' ? 'var(--gold)' : 'var(--slate)' }}>
+                        {s.status === 'completed' ? '✓ Ready' : s.status === 'in_progress' ? '⏳ In progress...' : 'Pending'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ─── 4. Provisioned Welcome & Handoff to Course Registration ─── */}
+            {isProvisioned && (
+              <div className="card" style={{ border: '2px solid var(--success)', background: '#f0fdf4' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
+                  <span style={{ fontSize: '2rem' }}>🎓</span>
+                  <div>
+                    <h3 style={{ margin: 0, color: '#166534' }}>Welcome to BMI University!</h3>
+                    <p style={{ margin: '0.25rem 0 0 0', color: '#15803d', fontSize: '0.875rem' }}>
+                      Your identity and institutional credentials have been provisioned. You are ready to register for courses.
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+                  <div style={{ background: 'white', padding: '0.75rem 1rem', borderRadius: 8, border: '1px solid #bbf7d0' }}>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Permanent System UID</span>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--navy)', fontFamily: 'monospace', marginTop: '0.25rem' }}>
+                      {provisioningData?.uid || user?.id || 'BMI-ISSUED'}
+                    </div>
+                  </div>
+
+                  <div style={{ background: 'white', padding: '0.75rem 1rem', borderRadius: 8, border: '1px solid #bbf7d0' }}>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Registration Number</span>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--navy)', fontFamily: 'monospace', marginTop: '0.25rem' }}>
+                      {provisioningData?.regNo || 'REG-PENDING'}
+                    </div>
+                  </div>
+
+                  <div style={{ background: 'white', padding: '0.75rem 1rem', borderRadius: 8, border: '1px solid #bbf7d0' }}>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Institutional Email</span>
+                    <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#1e40af', marginTop: '0.25rem', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {provisioningData?.studentEmail || `${user?.first_name?.toLowerCase()}.${user?.last_name?.toLowerCase()}@student.bmi.edu.lr`}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                  <button
+                    className="btn btn-navy"
+                    onClick={() => navigate('/registration')}
+                    style={{ flex: 1, minWidth: 220, padding: '0.85rem 1.5rem', fontWeight: 700, fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+                  >
+                    <span>Proceed to Course Registration & Fee Agreement</span> →
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ─── 5. Timeline ─── */}
             <div className="card">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
                 <h3 style={{ margin: 0, fontSize: '1.1rem' }}>Application Activity Timeline</h3>
@@ -197,7 +393,6 @@ export default function Status() {
               </div>
 
               <div style={{ position: 'relative', paddingLeft: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                {/* Continuous vertical connector line */}
                 <div style={{ position: 'absolute', left: 7, top: 10, bottom: 10, width: 2, background: 'var(--border)', zIndex: 0 }} />
 
                 {(logs.length > 0 ? logs : [
@@ -244,10 +439,11 @@ export default function Status() {
               </div>
             </div>
 
+            {/* ─── 6. Recommendations ─── */}
             <div className="card">
               <h3 style={{ marginBottom: '0.25rem' }}>Letters of Recommendation</h3>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: '1.5rem' }}>
-                Enter the contact information of your referee. They will receive a secure link to upload their recommendation letter (link expires after 30 days). Maximum 3 referees.
+                Enter the contact information of your referee. They will receive a secure link to upload their recommendation letter.
               </p>
               
               {recs.length < 3 && (
@@ -264,9 +460,6 @@ export default function Status() {
                     {recLoading ? 'Sending...' : 'Send Request'}
                   </button>
                 </form>
-              )}
-              {recs.length >= 3 && (
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: '1rem' }}>Maximum of 3 recommendation requests reached.</p>
               )}
 
               {recs.length > 0 && (
@@ -294,11 +487,12 @@ export default function Status() {
               )}
             </div>
 
+            {/* ─── 7. Supporting Documents ─── */}
             {app.status !== 'rejected' && (
               <div className="card">
                 <h3 style={{ marginBottom: '0.25rem' }}>Supporting Documents</h3>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: '1.5rem' }}>
-                  Upload your transcripts and ID documents. Accepted formats: PDF, JPEG, PNG, Word. Max 10 MB. Max 20 documents per application.
+                  Upload your transcripts and ID documents. Accepted formats: PDF, JPEG, PNG. Max 10 MB.
                 </p>
                 <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
                   <label htmlFor="doc-type-select" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0,0,0,0)' }}>Document type</label>
@@ -335,6 +529,7 @@ export default function Status() {
                 )}
               </div>
             )}
+
           </div>
         )}
       </div>

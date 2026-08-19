@@ -33,7 +33,7 @@ import { PROGRAMS, PORTAL_URL } from '@bmi/shared';
 
 ## Adding a new domain/URL
 
-Edit `src/domains.ts`. Never hardcode `bmiuniversity.org` anywhere else — CI will catch it.
+Edit `src/domains.ts`. Never hardcode `bmiuniversities.org` anywhere else — CI will catch it.
 
 ## Ownership
 

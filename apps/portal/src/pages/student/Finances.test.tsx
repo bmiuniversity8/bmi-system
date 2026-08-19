@@ -11,6 +11,9 @@ vi.mock('../../lib/api', () => ({
       getDashboard: vi.fn(),
       payInvoice: vi.fn(),
     },
+    finance: {
+      getFinancialAid: vi.fn(),
+    },
   },
 }));
 
@@ -26,6 +29,10 @@ describe('Finances Page', () => {
     vi.mocked(api.student.getDashboard).mockResolvedValue({
       id: 'STD-1001',
       user: { first_name: 'John', last_name: 'Doe' },
+    });
+    vi.mocked(api.finance.getFinancialAid).mockResolvedValue({
+      awards: [{ id: 'aid-1', amount: 500, aid_type: 'scholarship' }],
+      total_awarded: 500,
     });
     vi.mocked(api.student.payInvoice).mockResolvedValue({ success: true });
   });

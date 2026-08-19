@@ -13,7 +13,7 @@ const API_BASE = (_viteApiUrl && _viteApiUrl.trim() !== ''
   : (_isDev ? 'http://127.0.0.1:8787' : API_WORKER_URL)
 ) + '/api';
 
-const STEPS = ['Program', 'Personal Info', 'Background', 'Statement', 'Documents', 'Review & Submit'];
+const STEPS = ['Personal Info', 'Academic Program', 'Background', 'Statement', 'Documents', 'Review & Submit'];
 const STORAGE_KEY = 'bmi_apply_form';
 
 const COUNTRIES_LIST = [

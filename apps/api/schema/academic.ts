@@ -5,6 +5,8 @@ export const students = pgTable('students', {
   user_id: text('user_id').primaryKey(),
   student_id: text('student_id'),
   uid: text('uid'),
+  official_student_id: text('official_student_id'),
+  catalog_year_id: text('catalog_year_id'),
   reg_no: text('reg_no').notNull(),
   previous_reg_no: text('previous_reg_no'),
   gender: text('gender'),
@@ -153,6 +155,8 @@ export const courseSections = pgTable('course_sections', {
   section_code: text('section_code').notNull(),
   instructor_id: text('instructor_id'),
   capacity: integer('capacity').notNull().default(0),
+  seats_taken: integer('seats_taken').notNull().default(0),
+  seats_held: integer('seats_held').notNull().default(0),
   room: text('room'),
   schedule: text('schedule'),
   is_active: integer('is_active').notNull().default(1),
@@ -165,17 +169,44 @@ export const courseSections = pgTable('course_sections', {
   index('idx_course_sections_instr').on(t.instructor_id),
 ]);
 
+export const courseSectionWaitlists = pgTable('course_section_waitlists', {
+  id: text('id').primaryKey(),
+  section_id: text('section_id').notNull(),
+  student_id: text('student_id').notNull(),
+  position: integer('position').notNull().default(1),
+  added_at: timestamp('added_at').notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('course_section_waitlists_section_student_unique').on(t.section_id, t.student_id),
+  index('idx_waitlist_section').on(t.section_id),
+  index('idx_waitlist_student').on(t.student_id),
+]);
+
 export const studentHolds = pgTable('student_holds', {
   id: text('id').primaryKey(),
   student_id: text('student_id').notNull(),
-  hold_type: text('hold_type').notNull(),
+  hold_type: text('hold_type').notNull(), // 'financial' | 'academic' | 'disciplinary' | 'immunization' | 'advising'
   reason: text('reason').notNull(),
+  blocks: text('blocks').notNull().default('registration'), // comma-separated or json: 'registration,transcripts'
+  placed_by: text('placed_by'),
   is_active: integer('is_active').notNull().default(1),
   metadata: text('metadata'),
   created_at: timestamp('created_at').notNull().defaultNow(),
   resolved_at: timestamp('resolved_at'),
 }, (t) => [
   index('idx_student_holds_student').on(t.student_id),
+  index('idx_student_holds_active').on(t.student_id, t.is_active),
+]);
+
+export const advisingReleases = pgTable('advising_releases', {
+  id: text('id').primaryKey(),
+  student_id: text('student_id').notNull(),
+  term_id: text('term_id').notNull(),
+  advisor_id: text('advisor_id').notNull(),
+  released_at: timestamp('released_at').notNull().defaultNow(),
+  pin: text('pin'),
+}, (t) => [
+  uniqueIndex('advising_releases_student_term_unique').on(t.student_id, t.term_id),
+  index('idx_advising_releases_student').on(t.student_id),
 ]);
 
 export const studentCourseRegistrations = pgTable('student_course_registrations', {

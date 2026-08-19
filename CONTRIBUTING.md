@@ -147,7 +147,7 @@ bmi-system/
 
 ## 🔒 Security Reporting
 
-Do **not** open public GitHub issues for security vulnerabilities. Email `security@bmiuniversity.org` with:
+Do **not** open public GitHub issues for security vulnerabilities. Email `security@bmiuniversities.org` with:
 - Description of the vulnerability
 - Steps to reproduce
 - Potential impact

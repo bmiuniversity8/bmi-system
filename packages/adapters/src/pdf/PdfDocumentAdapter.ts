@@ -1,7 +1,7 @@
 import { IDocumentGenerator, Document, DocumentRequest } from '@bmi/ports';
 import { PDFDocument, rgb, StandardFonts, PDFFont, PDFImage } from 'pdf-lib';
 
-const LOGO_URL = 'https://bmi-portal.hkmministries.org/bmi-logo.png';
+const LOGO_URL = 'https://portal.bmiuniversities.org/bmi-logo.png';
 
 export class PdfDocumentAdapter implements IDocumentGenerator {
   private static readonly PAGE_W = 612;
@@ -315,7 +315,7 @@ export class PdfDocumentAdapter implements IDocumentGenerator {
 
     page.drawText('BMI University', { x: logo ? 160 : 50, y: 720, size: 32, font: bold, color: PdfDocumentAdapter.GOLD });
     page.drawText('Excellence in Education', { x: logo ? 160 : 50, y: 690, size: 14, font, color: PdfDocumentAdapter.WHITE });
-    page.drawText('www.bmi.edu | admissions@bmi.edu', { x: logo ? 160 : 50, y: 668, size: 12, font, color: PdfDocumentAdapter.LIGHT_GRAY });
+    page.drawText('www.bmiuniversities.org | admissions@bmiuniversities.org', { x: logo ? 160 : 50, y: 668, size: 12, font, color: PdfDocumentAdapter.LIGHT_GRAY });
 
     this.drawHLine(page, 645, PdfDocumentAdapter.GOLD, 0, 612, 3);
   }

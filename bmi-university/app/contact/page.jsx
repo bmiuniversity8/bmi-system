@@ -30,8 +30,8 @@ export default function Contact() {
     {
       icon: "✉️",
       label: "Email",
-      value: "admin@bmiuniversity.org",
-      href: "mailto:admin@bmiuniversity.org",
+      value: "admin@bmiuniversities.org",
+      href: "mailto:admin@bmiuniversities.org",
     },
     {
       icon: "🕐",

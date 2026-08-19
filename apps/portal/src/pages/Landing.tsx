@@ -138,7 +138,7 @@ export default function Landing() {
       <footer style={{ background: '#060d1a', padding: '2.5rem 1.5rem', textAlign: 'center' }}>
         <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.85rem' }}>
           © {new Date().getFullYear()} BMI University. All Rights Reserved. |{' '}
-          <a href="mailto:admissions@bmiuniversity.org" style={{ color: 'rgba(255,255,255,0.4)' }}>admissions@bmiuniversity.org</a>
+          <a href="mailto:admissions@bmiuniversities.org" style={{ color: 'rgba(255,255,255,0.4)' }}>admissions@bmiuniversities.org</a>
         </p>
       </footer>
     </div>

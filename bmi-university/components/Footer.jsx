@@ -172,7 +172,7 @@ export default function Footer() {
             {[
               { label: "US Branch", value: "704-607-5540", href: "tel:+17046075540", icon: "📍" },
               { label: "East Africa Branch", value: "+254-726-912577", href: "tel:+254726912577", icon: "🌍" },
-              { label: "Email", value: "admin@bmiuniversity.org", href: "mailto:admin@bmiuniversity.org", icon: "✉️" },
+              { label: "Email", value: "admin@bmiuniversities.org", href: "mailto:admin@bmiuniversities.org", icon: "✉️" },
             ].map((c) => (
               <div key={c.label} style={{ display: "flex", gap: "12px", alignItems: "flex-start" }}>
                 <span style={{ fontSize: "0.95rem", marginTop: "2px" }}>{c.icon}</span>

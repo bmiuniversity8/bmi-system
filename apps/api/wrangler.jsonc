@@ -67,10 +67,19 @@
 		}
 	],
 
+	// ─── Custom Domain Routing ────────────────────────────────────────────────
+	"routes": [
+		{
+			"pattern": "api.bmiuniversities.org/*",
+			"zone_name": "bmiuniversities.org",
+			"custom_domain": true
+		}
+	],
+
 	// ─── Public Environment Variables ─────────────────────────────────────────
 	"vars": {
 		"ENVIRONMENT": "production",
-		"ALLOWED_ORIGINS_OVERRIDE": "https://bmiuniversities.org,https://www.bmiuniversities.org,https://portal.bmiuniversities.org,https://ums.bmiuniversities.org,https://bmi-portal.pages.dev,https://bmi-ums.pages.dev,https://bmi-university.pages.dev,https://bmi-ums-88m.pages.dev,https://bmi-portal-b0i.pages.dev,https://bmi-university-bzd.pages.dev,https://bmi-portal.hkmministries.org,https://bmi-ums.hkmministries.org"
+		"ALLOWED_ORIGINS_OVERRIDE": "https://bmiuniversities.org,https://www.bmiuniversities.org,https://portal.bmiuniversities.org,https://ums.bmiuniversities.org,https://api.bmiuniversities.org,https://verify.bmiuniversities.org,https://admin.bmiuniversities.org,https://apply.bmiuniversities.org,https://bmi-portal.pages.dev,https://bmi-ums.pages.dev,https://bmi-university.pages.dev,https://portal.bmi-university.pages.dev,https://ums.bmi-university.pages.dev,https://main.bmi-university.pages.dev"
 	},
 
 	// ─── Cron Triggers ────────────────────────────────────────────────────────

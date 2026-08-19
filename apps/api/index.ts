@@ -49,7 +49,29 @@ import { handleClaimAccount } from './routes/claim';
 import { handleGetOnboardingStatus, handleUploadStudentDocument } from './routes/onboarding';
 import { handleLmsCourses, handleLmsGrades } from './routes/lms';
 import { handleCreatePaymentIntent, handlePaymentWebhook } from './routes/payment';
-import { handleSaveRegistrationStep, handleGetRegistrationStatus, handleCompleteRegistration, handleGetAvailableModules } from './routes/registration';
+import {
+  handleSaveRegistrationStep,
+  handleGetRegistrationStatus,
+  handleCompleteRegistration,
+  handleGetAvailableModules,
+  handleGetRegistrationEligibility,
+  handleReserveSeat,
+  handleWaitlistSeat,
+  handleDropSectionSeat,
+  handleGetFinancialAid,
+  handleGetFeeAgreement,
+  handleSignEnrollmentAgreement,
+  handleGetCanonicalEnrollmentStatus,
+  handleRunCensusJob,
+} from './routes/registration';
+import {
+  handleRecordDecision,
+  handleGetDecision,
+  handleAcceptOffer,
+  handlePayDeposit,
+  handleDeclineOffer,
+} from './routes/admissions';
+import { handleGetProvisioningStatus } from './routes/provisioning';
 import {
   handleGetMyHolds,
   handleGetProgramCurriculum,
@@ -298,6 +320,24 @@ const ROUTES: Route[] = [
   { method: 'POST', path: /^\/api\/registration\/complete$/, roles: ['student'], handler: async (req, env, _p, auth, ctx) => handleCompleteRegistration(req, env, auth!.user.sub, ctx) },
   { method: 'GET', path: /^\/api\/registration\/modules$/, roles: ['student'], handler: async (req, env, _p, auth) => handleGetAvailableModules(req, env, auth!.user.sub) },
   { method: 'POST', path: /^\/api\/registration\/([^/]+)$/, roles: ['student'], handler: async (req, env, p, auth) => handleSaveRegistrationStep(req, env, auth!.user.sub, p[1]) },
+  // Admissions & Decision Routes
+  { method: 'POST', path: /^\/api\/admissions\/decide$/, roles: ['admin', 'staff'], handler: async (req, env, _p, auth) => handleRecordDecision(req, env, auth!.user.sub) },
+  { method: 'GET', path: /^\/api\/admissions\/decision(?:\/([^/]+))?$/, roles: ['applicant', 'student', 'admin', 'staff'], handler: async (req, env, _p, auth) => handleGetDecision(req, env, auth!.user.sub) },
+  { method: 'POST', path: /^\/api\/admissions\/accept$/, roles: ['applicant', 'student'], handler: async (req, env, _p, auth, ctx) => handleAcceptOffer(req, env, auth!.user.sub, ctx) },
+  { method: 'POST', path: /^\/api\/admissions\/deposit$/, roles: ['applicant', 'student'], handler: async (req, env, _p, auth) => handlePayDeposit(req, env, auth!.user.sub) },
+  { method: 'POST', path: /^\/api\/admissions\/decline$/, roles: ['applicant', 'student'], handler: async (req, env, _p, auth) => handleDeclineOffer(req, env, auth!.user.sub) },
+  // Provisioning Progress Status Route
+  { method: 'GET', path: /^\/api\/provisioning\/status$/, roles: ['applicant', 'student', 'admin', 'staff'], handler: async (req, env, _p, auth) => handleGetProvisioningStatus(req, env, auth!.user.sub) },
+  // Registration State Machine & Eligibility Services
+  { method: 'GET', path: /^\/api\/student\/registration-eligibility$/, roles: ['applicant', 'student'], handler: async (req, env, _p, auth) => handleGetRegistrationEligibility(req, env, auth!.user.sub) },
+  { method: 'POST', path: /^\/api\/registration\/reserve-seat$/, roles: ['student'], handler: async (req, env, _p, auth) => handleReserveSeat(req, env, auth!.user.sub) },
+  { method: 'POST', path: /^\/api\/registration\/waitlist$/, roles: ['student'], handler: async (req, env, _p, auth) => handleWaitlistSeat(req, env, auth!.user.sub) },
+  { method: 'POST', path: /^\/api\/registration\/drop$/, roles: ['student'], handler: async (req, env, _p, auth) => handleDropSectionSeat(req, env, auth!.user.sub) },
+  { method: 'GET', path: /^\/api\/finance\/financial-aid$/, roles: ['student'], handler: async (req, env, _p, auth) => handleGetFinancialAid(req, env, auth!.user.sub) },
+  { method: 'GET', path: /^\/api\/finance\/fee-agreement$/, roles: ['student'], handler: async (req, env, _p, auth) => handleGetFeeAgreement(req, env, auth!.user.sub) },
+  { method: 'POST', path: /^\/api\/enrollment\/sign-agreement$/, roles: ['student'], handler: async (req, env, _p, auth) => handleSignEnrollmentAgreement(req, env, auth!.user.sub) },
+  { method: 'GET', path: /^\/api\/enrollment\/status$/, roles: ['applicant', 'student', 'admin', 'staff'], handler: async (req, env, _p, auth) => handleGetCanonicalEnrollmentStatus(req, env, auth!.user.sub) },
+  { method: 'POST', path: /^\/api\/admin\/census\/run$/, roles: ['admin'], handler: async (req, env, _p, auth) => handleRunCensusJob(req, env, auth!.user.sub) },
   // Onboarding Flow Routes
   { method: 'GET', path: /^\/api\/student\/holds$/, roles: ['student'], handler: async (req, env, _p, auth) => handleGetMyHolds(req, env, auth!.user.sub) },
   { method: 'GET', path: /^\/api\/student\/registration-progress$/, roles: ['student'], handler: async (req, env, _p, auth) => handleGetRegistrationProgress(req, env, auth!.user.sub) },

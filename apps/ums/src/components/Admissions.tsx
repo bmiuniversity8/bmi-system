@@ -13,7 +13,9 @@ import {
   CheckSquare,
   Square,
   FileCheck,
-  GraduationCap
+  GraduationCap,
+  Gavel,
+  DollarSign
 } from "lucide-react";
 import { admissionsService, Application, StatusLogEntry } from "../services/admissionsService";
 import { PROGRAMS as FALLBACK_PROGRAMS, API_WORKER_URL } from "@bmi/shared";
@@ -54,6 +56,18 @@ export default function Admissions() {
   const [logs, setLogs] = useState<StatusLogEntry[]>([]);
   const [notes, setNotes] = useState("");
   const [updating, setUpdating] = useState(false);
+
+  // Formal Decision Modal state
+  const [showDecisionModal, setShowDecisionModal] = useState(false);
+  const [decisionTarget, setDecisionTarget] = useState<Application | null>(null);
+  const [decisionForm, setDecisionForm] = useState({
+    decision: 'admit' as 'admit' | 'conditional' | 'waitlist' | 'deny',
+    conditions: '' as string,
+    offer_expires_in_days: 14,
+    deposit_required: false,
+    deposit_amount: 0,
+    reviewer_notes: '',
+  });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -167,6 +181,54 @@ export default function Admissions() {
       setTimeout(() => setSuccess(""), 4000);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to update status");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const openFormalDecisionModal = (app: Application) => {
+    setDecisionTarget(app);
+    setDecisionForm({
+      decision: 'admit',
+      conditions: '',
+      offer_expires_in_days: 14,
+      deposit_required: false,
+      deposit_amount: 0,
+      reviewer_notes: '',
+    });
+    setShowDecisionModal(true);
+  };
+
+  const handleFormalDecision = async () => {
+    if (!decisionTarget) return;
+    setUpdating(true);
+    try {
+      const conditionsArray = decisionForm.conditions.trim()
+        ? decisionForm.conditions.split('\n').map(c => c.trim()).filter(Boolean)
+        : undefined;
+
+      await admissionsService.recordFormalDecision({
+        application_id: decisionTarget.id,
+        decision: decisionForm.decision,
+        conditions: conditionsArray,
+        offer_expires_in_days: decisionForm.offer_expires_in_days || undefined,
+        deposit_required: decisionForm.deposit_required || undefined,
+        deposit_amount: decisionForm.deposit_required ? decisionForm.deposit_amount : undefined,
+        reviewer_notes: decisionForm.reviewer_notes || undefined,
+      });
+
+      const decisionLabel = decisionForm.decision === 'admit' ? 'Admitted'
+        : decisionForm.decision === 'conditional' ? 'Conditionally Admitted'
+        : decisionForm.decision === 'waitlist' ? 'Waitlisted'
+        : 'Denied';
+      setSuccess(`Formal decision recorded: ${decisionTarget.first_name} ${decisionTarget.last_name} — ${decisionLabel}`);
+      setShowDecisionModal(false);
+      setDecisionTarget(null);
+      setSelectedApp(null);
+      loadApplications();
+      setTimeout(() => setSuccess(""), 5000);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to record formal admissions decision');
     } finally {
       setUpdating(false);
     }
@@ -767,6 +829,19 @@ export default function Admissions() {
                       </button>
                     ))}
                   </div>
+                  {/* Formal Decision Button — available for under_review / submitted apps */}
+                  {(selectedApp.status === 'under_review' || selectedApp.status === 'submitted') && (
+                    <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-800">
+                      <button
+                        onClick={() => openFormalDecisionModal(selectedApp)}
+                        className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-black uppercase tracking-wider text-white bg-gradient-to-r from-[#2E004F] via-purple-800 to-indigo-900 hover:from-purple-950 hover:to-indigo-950 rounded-lg shadow-lg transition-all active:scale-95"
+                      >
+                        <Gavel size={16} className="text-[#FFD700]" />
+                        Issue Formal Admissions Decision
+                      </button>
+                      <p className="text-[10px] text-gray-400 mt-1 text-center">Records in the enrollment state machine with conditions, deposit, and offer expiry</p>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="text-center text-xs text-gray-500 p-3 border border-dashed border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
@@ -924,6 +999,182 @@ export default function Admissions() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ───── Formal Admissions Decision Modal ───── */}
+      {showDecisionModal && decisionTarget && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-[60] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-xl w-full border border-gray-200 dark:border-gray-800 animate-scale-up overflow-hidden">
+            {/* Header */}
+            <div className="p-5 border-b border-gray-200 dark:border-gray-800 bg-gradient-to-r from-[#2E004F] to-purple-900">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <span className="p-2 bg-[#FFD700]/20 rounded-lg">
+                    <Gavel size={20} className="text-[#FFD700]" />
+                  </span>
+                  <div>
+                    <h3 className="text-sm font-black text-white uppercase tracking-tight">Formal Admissions Decision</h3>
+                    <p className="text-[10px] text-purple-200 font-medium mt-0.5">
+                      {decisionTarget.first_name} {decisionTarget.last_name} — {decisionTarget.program}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => { setShowDecisionModal(false); setDecisionTarget(null); }}
+                  className="p-1.5 text-purple-300 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+                >
+                  <XCircle size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Form Body */}
+            <div className="p-6 space-y-5 max-h-[60vh] overflow-y-auto">
+              {/* Decision Type */}
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-2">
+                  Committee Decision
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    { value: 'admit', label: 'Admit', color: 'bg-emerald-600 hover:bg-emerald-700 border-emerald-700', icon: '✓' },
+                    { value: 'conditional', label: 'Conditional', color: 'bg-amber-600 hover:bg-amber-700 border-amber-700', icon: '⚠' },
+                    { value: 'waitlist', label: 'Waitlist', color: 'bg-purple-600 hover:bg-purple-700 border-purple-700', icon: '⏳' },
+                    { value: 'deny', label: 'Deny', color: 'bg-rose-600 hover:bg-rose-700 border-rose-700', icon: '✕' },
+                  ] as const).map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setDecisionForm(f => ({ ...f, decision: opt.value }))}
+                      className={`py-2.5 px-3 rounded-lg text-xs font-black uppercase tracking-wider border-2 transition-all ${
+                        decisionForm.decision === opt.value
+                          ? `${opt.color} text-white shadow-md scale-[1.02]`
+                          : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:border-gray-400'
+                      }`}
+                    >
+                      {opt.icon} {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Conditional Admission Conditions */}
+              {decisionForm.decision === 'conditional' && (
+                <div className="animate-fade-in">
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-1">
+                    <AlertCircle size={12} className="inline mr-1 text-amber-500" />
+                    Admission Conditions (one per line)
+                  </label>
+                  <textarea
+                    value={decisionForm.conditions}
+                    onChange={(e) => setDecisionForm(f => ({ ...f, conditions: e.target.value }))}
+                    rows={3}
+                    placeholder={"Submit official WAEC results by enrollment deadline\nMaintain minimum 2.5 GPA during first semester\nComplete English proficiency verification"}
+                    className="w-full bg-amber-50/50 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-800 rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-amber-400 outline-none dark:text-white font-medium"
+                  />
+                </div>
+              )}
+
+              {/* Offer Expiry Window */}
+              {(decisionForm.decision === 'admit' || decisionForm.decision === 'conditional') && (
+                <div className="animate-fade-in">
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-1">
+                    <Clock size={12} className="inline mr-1" /> Offer Acceptance Window
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={1}
+                      max={90}
+                      value={decisionForm.offer_expires_in_days}
+                      onChange={(e) => setDecisionForm(f => ({ ...f, offer_expires_in_days: parseInt(e.target.value) || 14 }))}
+                      className="w-20 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg p-2 text-xs font-bold text-center focus:ring-2 focus:ring-[#FFD700] outline-none dark:text-white"
+                    />
+                    <span className="text-xs text-gray-500 font-semibold">days from today</span>
+                    <span className="text-[10px] text-gray-400 ml-auto">
+                      Expires: {new Date(Date.now() + (decisionForm.offer_expires_in_days || 14) * 86400000).toLocaleDateString()}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Enrollment Deposit */}
+              {(decisionForm.decision === 'admit' || decisionForm.decision === 'conditional') && (
+                <div className="animate-fade-in">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-[10px] font-black uppercase tracking-wider text-gray-700 dark:text-gray-300 flex items-center gap-1">
+                      <DollarSign size={12} /> Enrollment Deposit Required
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setDecisionForm(f => ({ ...f, deposit_required: !f.deposit_required }))}
+                      className={`relative w-11 h-6 rounded-full transition-colors ${
+                        decisionForm.deposit_required ? 'bg-emerald-600' : 'bg-gray-300 dark:bg-gray-700'
+                      }`}
+                    >
+                      <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                        decisionForm.deposit_required ? 'translate-x-5' : ''
+                      }`} />
+                    </button>
+                  </div>
+                  {decisionForm.deposit_required && (
+                    <div className="flex items-center gap-2 animate-fade-in">
+                      <span className="text-sm font-bold text-gray-500">$</span>
+                      <input
+                        type="number"
+                        min={0}
+                        step={50}
+                        value={decisionForm.deposit_amount}
+                        onChange={(e) => setDecisionForm(f => ({ ...f, deposit_amount: parseFloat(e.target.value) || 0 }))}
+                        className="w-32 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg p-2 text-xs font-bold focus:ring-2 focus:ring-[#FFD700] outline-none dark:text-white"
+                        placeholder="500.00"
+                      />
+                      <span className="text-[10px] text-gray-400">USD — non-refundable enrollment deposit</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Committee Notes */}
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-1">
+                  Committee Review Notes
+                </label>
+                <textarea
+                  value={decisionForm.reviewer_notes}
+                  onChange={(e) => setDecisionForm(f => ({ ...f, reviewer_notes: e.target.value }))}
+                  rows={2}
+                  placeholder="Decision rationale, scholarship recommendations, or special notes for the registrar..."
+                  className="w-full bg-white dark:bg-[#1a1a1a] border border-gray-300 dark:border-gray-700 rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-[#FFD700] outline-none dark:text-white font-medium"
+                />
+              </div>
+            </div>
+
+            {/* Footer Actions */}
+            <div className="p-5 border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/80 flex justify-between items-center">
+              <button
+                type="button"
+                onClick={() => { setShowDecisionModal(false); setDecisionTarget(null); }}
+                className="px-4 py-2 text-xs font-bold text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={updating}
+                onClick={handleFormalDecision}
+                className={`inline-flex items-center gap-2 px-6 py-2.5 text-xs font-black uppercase tracking-wider text-white rounded-lg shadow-lg transition-all active:scale-95 ${
+                  decisionForm.decision === 'admit' ? 'bg-emerald-600 hover:bg-emerald-700'
+                  : decisionForm.decision === 'conditional' ? 'bg-amber-600 hover:bg-amber-700'
+                  : decisionForm.decision === 'waitlist' ? 'bg-purple-700 hover:bg-purple-800'
+                  : 'bg-rose-600 hover:bg-rose-700'
+                }`}
+              >
+                <Gavel size={14} />
+                {updating ? 'Recording...' : `Record ${decisionForm.decision === 'admit' ? 'Admission' : decisionForm.decision === 'conditional' ? 'Conditional Admission' : decisionForm.decision === 'waitlist' ? 'Waitlist' : 'Denial'} Decision`}
+              </button>
+            </div>
           </div>
         </div>
       )}

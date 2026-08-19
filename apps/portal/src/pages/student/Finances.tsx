@@ -11,14 +11,18 @@ export default function Finances() {
   const [showTaxModal, setShowTaxModal] = useState(false);
   const [planSubmitted, setPlanSubmitted] = useState(false);
 
+  const [financialAid, setFinancialAid] = useState<{ awards: any[]; total_awarded: number }>({ awards: [], total_awarded: 0 });
+
   const loadFinances = async () => {
     try {
-      const [finResult, dashResult] = await Promise.all([
+      const [finResult, dashResult, aidResult] = await Promise.all([
         api.student.getFinances().catch(() => null),
-        api.student.getDashboard().catch(() => null)
+        api.student.getDashboard().catch(() => null),
+        api.finance.getFinancialAid().catch(() => ({ awards: [], total_awarded: 0 })),
       ]);
       setData(finResult);
       setDashboardData(dashResult);
+      setFinancialAid(aidResult);
     } catch (e: any) {
       setAlert({ type: 'danger', msg: e.message || 'Failed to load finances' });
     } finally {

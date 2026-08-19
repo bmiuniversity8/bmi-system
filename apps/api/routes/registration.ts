@@ -405,3 +405,263 @@ export async function handleGetAvailableModules(_req: Request, env: Env, userId:
     return error('Failed to get modules', 500);
   }
 }
+
+// ─── Unified State Machine & Registration Services ────────────────────────────
+
+import { checkRegistrationEligibility } from '../lib/eligibility-service';
+import { reserveSectionSeat, dropSectionSeat } from '../lib/seat-allocation-service';
+import { setEnrollmentStatus, getEnrollmentStatus, ENROLLMENT_STATUS } from '../lib/state-machine';
+import { runTermCensusJob } from '../lib/census-job';
+
+export async function handleGetRegistrationEligibility(
+  req: Request,
+  env: Env,
+  userId: string
+): Promise<Response> {
+  try {
+    const url = new URL(req.url);
+    const termId = url.searchParams.get('term_id') || undefined;
+
+    const result = await checkRegistrationEligibility(env.PLATFORM_CONTEXT!.db, userId, termId);
+    return ok(result);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to evaluate registration eligibility';
+    return error(message, 500);
+  }
+}
+
+export async function handleReserveSeat(
+  req: Request,
+  env: Env,
+  userId: string
+): Promise<Response> {
+  if (req.method !== 'POST') return error('Method not allowed', 405);
+  try {
+    // 1. Verify eligibility first
+    const eligibility = await checkRegistrationEligibility(env.PLATFORM_CONTEXT!.db, userId);
+    if (!eligibility.eligible) {
+      return error(`Ineligible to register: ${eligibility.reasons.join(', ')}`, 403);
+    }
+
+    const body = await typedJson<{ section_id: string; term_id?: string }>(req);
+    if (!body.section_id) {
+      return error('section_id is required', 400);
+    }
+
+    const result = await reserveSectionSeat(env.PLATFORM_CONTEXT!.db, {
+      sectionId: body.section_id,
+      studentId: userId,
+      termId: body.term_id,
+    });
+
+    return ok(result);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to reserve seat';
+    return error(message, 500);
+  }
+}
+
+export async function handleWaitlistSeat(
+  req: Request,
+  env: Env,
+  userId: string
+): Promise<Response> {
+  if (req.method !== 'POST') return error('Method not allowed', 405);
+  try {
+    const body = await typedJson<{ section_id: string }>(req);
+    if (!body.section_id) return error('section_id is required', 400);
+
+    const result = await reserveSectionSeat(env.PLATFORM_CONTEXT!.db, {
+      sectionId: body.section_id,
+      studentId: userId,
+    });
+
+    return ok(result);
+  } catch (err: unknown) {
+    return error('Failed to join waitlist', 500);
+  }
+}
+
+export async function handleDropSectionSeat(
+  req: Request,
+  env: Env,
+  userId: string
+): Promise<Response> {
+  if (req.method !== 'POST') return error('Method not allowed', 405);
+  try {
+    const body = await typedJson<{ course_id: string; section_id?: string }>(req);
+    if (!body.course_id) return error('course_id is required', 400);
+
+    const result = await dropSectionSeat(env.PLATFORM_CONTEXT!.db, {
+      courseId: body.course_id,
+      sectionId: body.section_id,
+      studentId: userId,
+    });
+
+    return ok(result);
+  } catch (err: unknown) {
+    return error('Failed to drop course', 500);
+  }
+}
+
+export async function handleGetFinancialAid(
+  req: Request,
+  env: Env,
+  userId: string
+): Promise<Response> {
+  try {
+    const url = new URL(req.url);
+    const termId = url.searchParams.get('term_id');
+
+    let query = `SELECT * FROM financial_aid_awards WHERE student_id = ?`;
+    const bindings: unknown[] = [userId];
+    if (termId) {
+      query += ` AND term_id = ?`;
+      bindings.push(termId);
+    }
+
+    const { results } = await env.PLATFORM_CONTEXT!.db.prepare(query).bind(...bindings).all();
+    const awards = results || [];
+    const totalAwarded = awards.reduce((sum: number, a: any) => sum + (a.amount || 0), 0);
+
+    return ok({ awards, total_awarded: totalAwarded });
+  } catch {
+    return ok({ awards: [], total_awarded: 0 });
+  }
+}
+
+export async function handleGetFeeAgreement(
+  _req: Request,
+  env: Env,
+  userId: string
+): Promise<Response> {
+  try {
+    const db = env.PLATFORM_CONTEXT!.db;
+    const student = await db.prepare(
+      `SELECT s.program, s.program_id, s.catalog_year_id FROM students s WHERE s.user_id = ?`
+    ).bind(userId).first<{ program: string; program_id: string; catalog_year_id: string }>();
+
+    let grossTuition = 1500; // default base tuition
+    if (student?.program_id) {
+      const feeRow = await db.prepare(
+        `SELECT amount FROM program_fees WHERE program_id = ? LIMIT 1`
+      ).bind(student.program_id).first<{ amount: number }>();
+      if (feeRow?.amount) grossTuition = feeRow.amount;
+    }
+
+    // Query financial aid to calculate net balance
+    const aidRow = await db.prepare(
+      `SELECT SUM(amount) as total_aid FROM financial_aid_awards WHERE student_id = ? AND status != 'cancelled'`
+    ).bind(userId).first<{ total_aid: number }>();
+
+    const totalAid = aidRow?.total_aid || 0;
+    const netBalance = Math.max(0, grossTuition - totalAid);
+
+    return ok({
+      program_name: student?.program || 'Academic Program',
+      catalog_year_id: student?.catalog_year_id || 'CAT-2026',
+      gross_tuition: grossTuition,
+      financial_aid_discount: totalAid,
+      net_balance_due: netBalance,
+      currency: 'USD',
+      payment_plans: [
+        { id: 'full', name: 'Single Full Payment', discount: '5% early discount' },
+        { id: 'installments_2', name: 'Two Installments (50% now, 50% midterm)' },
+        { id: 'installments_4', name: 'Four Monthly Installments' },
+      ],
+    });
+  } catch (err: unknown) {
+    return error('Failed to retrieve fee agreement', 500);
+  }
+}
+
+export async function handleSignEnrollmentAgreement(
+  req: Request,
+  env: Env,
+  userId: string
+): Promise<Response> {
+  if (req.method !== 'POST') return error('Method not allowed', 405);
+  try {
+    const body = await typedJson<{
+      document_id: string;
+      signed_name: string;
+      document_version_hash: string;
+    }>(req);
+
+    if (!body.document_id || !body.signed_name || !body.document_version_hash) {
+      return error('document_id, signed_name, and document_version_hash are required', 400);
+    }
+
+    const ipAddress = req.headers.get('CF-Connecting-IP') || req.headers.get('X-Forwarded-For') || '127.0.0.1';
+    const userAgent = req.headers.get('User-Agent') || 'Unknown';
+    const sigId = crypto.randomUUID();
+    const now = new Date().toISOString();
+
+    const db = env.PLATFORM_CONTEXT!.db;
+
+    // Record legally binding e-signature
+    await db.prepare(
+      `INSERT INTO esignatures (
+         id, document_id, user_id, signed_name, signed_at, ip_address, user_agent, document_version_hash, created_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+      sigId,
+      body.document_id,
+      userId,
+      body.signed_name,
+      now,
+      ipAddress,
+      userAgent,
+      body.document_version_hash,
+      now
+    ).run();
+
+    // Transition state machine to REGISTERED
+    await setEnrollmentStatus(db, {
+      userId,
+      status: ENROLLMENT_STATUS.REGISTERED,
+      changedBy: userId,
+      reason: `Terms of enrollment agreement signed electronically by ${body.signed_name}`,
+    });
+
+    return ok({
+      success: true,
+      signature_id: sigId,
+      status: ENROLLMENT_STATUS.REGISTERED,
+      message: 'Enrollment agreement successfully signed. Status updated to REGISTERED.',
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to sign enrollment agreement';
+    return error(message, 500);
+  }
+}
+
+export async function handleGetCanonicalEnrollmentStatus(
+  _req: Request,
+  env: Env,
+  userId: string
+): Promise<Response> {
+  try {
+    const status = await getEnrollmentStatus(env.PLATFORM_CONTEXT!.db, userId);
+    return ok(status);
+  } catch (err: unknown) {
+    return error('Failed to retrieve enrollment status', 500);
+  }
+}
+
+export async function handleRunCensusJob(
+  req: Request,
+  env: Env,
+  adminId: string
+): Promise<Response> {
+  if (req.method !== 'POST') return error('Method not allowed', 405);
+  try {
+    const body = await typedJson<{ term_id?: string }>(req).catch(() => ({ term_id: undefined }));
+    const result = await runTermCensusJob(env.PLATFORM_CONTEXT!.db, body.term_id, adminId);
+    return ok(result);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to run census job';
+    return error(message, 500);
+  }
+}
+

@@ -44,7 +44,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
                             Institutional Finance Division
                           </p>
                           <div className="mt-4 space-y-0.5 text-[9px] font-semibold text-gray-400 uppercase tracking-widest">
-                            <p>980-259-3680 • hkmministries.org</p>
+                            <p>980-259-3680 • bmiuniversities.org</p>
                             <p>East Africa Hub: +254 704 500 872</p>
                           </div>
                         </div>

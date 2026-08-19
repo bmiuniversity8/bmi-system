@@ -1,6 +1,6 @@
-import { PORTAL_URL } from '@bmi/shared';
+import { PORTAL_URL, ADMISSIONS_EMAIL } from '@bmi/shared';
 
-const FROM_ADDRESS = 'BMI University <admissions@hkmministries.org>';
+const FROM_ADDRESS = `BMI University <${ADMISSIONS_EMAIL}>`;
 
 import type { Env } from './types';
 
@@ -174,7 +174,7 @@ export function buildEmailLayout(subtitle: string, content: string): string {
   return `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f8fafc; padding: 40px 20px;">
       <div style="background: #ffffff; padding: 28px 24px 20px; border-radius: 8px 8px 0 0; border-bottom: 3px solid #d4af37; text-align: center;">
-        <img src="https://bmi-portal.hkmministries.org/bmi-logo.png" alt="BMI University" style="height: 72px; width: auto; margin-bottom: 12px; display: block; margin-left: auto; margin-right: auto;" />
+        <img src="${PORTAL_URL}/bmi-logo.png" alt="BMI University" style="height: 72px; width: auto; margin-bottom: 12px; display: block; margin-left: auto; margin-right: auto;" />
         <h1 style="color: #0f172a; margin: 0; font-size: 22px; letter-spacing: 0.5px;">BMI University</h1>
         <p style="color: #475569; margin: 4px 0 0; font-size: 13px;">${subtitle}</p>
       </div>
@@ -182,7 +182,7 @@ export function buildEmailLayout(subtitle: string, content: string): string {
         ${content}
         <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 32px 0;">
         <p style="color: #94a3b8; font-size: 13px;">
-          Questions? Email us at <a href="mailto:bmiuniversity8@gmail.com" style="color: #d4af37;">bmiuniversity8@gmail.com</a><br>
+          Questions? Email us at <a href="mailto:${ADMISSIONS_EMAIL}" style="color: #d4af37;">${ADMISSIONS_EMAIL}</a><br>
           or call us at 704-607-5540
         </p>
       </div>
@@ -322,10 +322,10 @@ export function registrationRejectionEmail(
       This decision is not a reflection of your worth or potential. We encourage you to continue pursuing your academic goals and hope you'll consider BMI University again in the future.
     </p>
     <p style="color: #475569; line-height: 1.7; margin-top: 20px;">
-      If you have questions about this decision or would like feedback on strengthening your application, please contact our admissions office at <a href="mailto:bmiuniversity8@gmail.com" style="color: #d4af37;">bmiuniversity8@gmail.com</a>.
+      If you have questions about this decision or would like feedback on strengthening your application, please contact our admissions office at <a href="mailto:${ADMISSIONS_EMAIL}" style="color: #d4af37;">${ADMISSIONS_EMAIL}</a>.
     </p>
     <div style="text-align: center; margin-top: 28px;">
-      <a href="mailto:bmiuniversity8@gmail.com"
+      <a href="mailto:${ADMISSIONS_EMAIL}"
          style="display: inline-block; background: #f1f5f9; color: #0f172a; padding: 12px 28px; border-radius: 6px; text-decoration: none; font-weight: 600; border: 1px solid #cbd5e1;">
         Contact Admissions Team
       </a>
@@ -799,7 +799,7 @@ export function accountClaimedWelcomeEmail(
       Go to Student Portal →
     </a>
     <p style="color: #64748b; font-size: 13px; margin-top: 24px;">
-      If you have any questions, contact our admissions office at bmiuniversity8@gmail.com or call 704-607-5540.
+      If you have any questions, contact our admissions office at <a href="mailto:${ADMISSIONS_EMAIL}" style="color: #d4af37;">${ADMISSIONS_EMAIL}</a> or call 704-607-5540.
     </p>
   `;
   return buildEmailLayout('Account Activated', content);

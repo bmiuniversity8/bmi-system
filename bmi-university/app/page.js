@@ -140,10 +140,10 @@ export default function HomePage() {
                 <div style={{ width: "40px", height: "4px", borderRadius: "999px", background: "linear-gradient(90deg, #d4af37, #b5952f)", marginBottom: "0.5rem" }} />
                 <h3 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: "1.1rem", color: "#0f172a", lineHeight: 1.3 }}>{p.title}</h3>
                 <p style={{ color: "#64748b", fontSize: "0.9rem", lineHeight: 1.7, flexGrow: 1 }}>{p.desc}</p>
-                <a href="https://bmiuniversity.org/apply/" target="_blank" rel="noopener noreferrer"
+                <Link href="/apply"
                   style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", color: "#d4af37", fontWeight: 700, fontSize: "0.85rem", marginTop: "0.5rem", borderBottom: "2px solid transparent", paddingBottom: "2px", width: "fit-content", transition: "border-color 0.2s" }}>
                   Apply Today →
-                </a>
+                </Link>
               </article>
             ))}
           </div>

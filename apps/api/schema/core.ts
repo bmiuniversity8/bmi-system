@@ -176,12 +176,88 @@ export const applications = pgTable('applications', {
   high_school: text('high_school'),
   graduation_year: integer('graduation_year'),
   gpa: real('gpa'),
+  possible_duplicate_of: text('possible_duplicate_of'),
   created_at: timestamp('created_at').notNull().defaultNow(),
   updated_at: timestamp('updated_at').notNull().defaultNow(),
 }, (t) => [
   index('idx_apps_user_id').on(t.user_id),
   index('idx_apps_status').on(t.status),
   uniqueIndex('idx_applications_number').on(t.application_number),
+]);
+
+export const admissionsDecisions = pgTable('admissions_decisions', {
+  id: text('id').primaryKey(),
+  application_id: text('application_id').notNull(),
+  decision: text('decision').notNull(), // 'admit' | 'conditional' | 'waitlist' | 'deny'
+  decided_by: text('decided_by').notNull(),
+  decided_at: timestamp('decided_at').notNull().defaultNow(),
+  conditions: text('conditions'),
+  offer_expires_at: timestamp('offer_expires_at'),
+  deposit_required: integer('deposit_required').notNull().default(0),
+  deposit_amount: real('deposit_amount').notNull().default(0),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+  updated_at: timestamp('updated_at').notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('admissions_decisions_app_id_unique').on(t.application_id),
+  index('idx_admissions_decisions_decision').on(t.decision),
+]);
+
+export const enrollmentDeposits = pgTable('enrollment_deposits', {
+  id: text('id').primaryKey(),
+  application_id: text('application_id').notNull(),
+  user_id: text('user_id').notNull(),
+  amount: real('amount').notNull(),
+  paid_at: timestamp('paid_at').notNull().defaultNow(),
+  payment_reference: text('payment_reference').notNull(),
+  status: text('status').notNull().default('confirmed'),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+}, (t) => [
+  index('idx_enrollment_deposits_app_id').on(t.application_id),
+  index('idx_enrollment_deposits_user_id').on(t.user_id),
+]);
+
+export const enrollmentStatusLogs = pgTable('enrollment_status_logs', {
+  id: text('id').primaryKey(),
+  user_id: text('user_id').notNull(),
+  person_id: text('person_id'),
+  status: text('status').notNull(),
+  term_id: text('term_id'),
+  changed_by: text('changed_by').notNull(),
+  reason: text('reason'),
+  changed_at: timestamp('changed_at').notNull().defaultNow(),
+}, (t) => [
+  index('idx_enrollment_status_user').on(t.user_id),
+  index('idx_enrollment_status_current').on(t.user_id, t.status),
+]);
+
+export const esignatures = pgTable('esignatures', {
+  id: text('id').primaryKey(),
+  document_id: text('document_id').notNull(),
+  user_id: text('user_id').notNull(),
+  person_id: text('person_id'),
+  signed_name: text('signed_name').notNull(),
+  signed_at: timestamp('signed_at').notNull().defaultNow(),
+  ip_address: text('ip_address'),
+  user_agent: text('user_agent'),
+  document_version_hash: text('document_version_hash').notNull(),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+}, (t) => [
+  index('idx_esignatures_user_id').on(t.user_id),
+  index('idx_esignatures_doc_id').on(t.document_id),
+]);
+
+export const financialAidAwards = pgTable('financial_aid_awards', {
+  id: text('id').primaryKey(),
+  student_id: text('student_id').notNull(),
+  aid_type: text('aid_type').notNull(),
+  amount: real('amount').notNull(),
+  status: text('status').notNull().default('awarded'),
+  term_id: text('term_id'),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+  updated_at: timestamp('updated_at').notNull().defaultNow(),
+}, (t) => [
+  index('idx_financial_aid_student').on(t.student_id),
+  index('idx_financial_aid_term').on(t.term_id),
 ]);
 
 export const applicationDrafts = pgTable('application_drafts', {
@@ -219,6 +295,10 @@ export const documents = pgTable('documents', {
   r2_key: text('r2_key').notNull(),
   mime_type: text('mime_type').notNull(),
   file_size_bytes: integer('file_size_bytes').notNull().default(0),
+  verification_status: text('verification_status').notNull().default('self_reported'),
+  verified_by: text('verified_by'),
+  verified_at: timestamp('verified_at'),
+  source: text('source').default('upload'),
   uploaded_at: timestamp('uploaded_at').notNull().defaultNow(),
   archived_at: timestamp('archived_at'),
   expires_at: timestamp('expires_at'),

@@ -127,6 +127,59 @@ export const admissionsService = {
       throw new Error(err?.error || 'Failed to create application');
     }
     return response.json();
+  },
+
+  /**
+   * Record a formal admissions committee decision via the enrollment state machine.
+   * Uses POST /api/admissions/decide — which records the decision, updates enrollment_status,
+   * and writes to the admissions_decisions table with conditions, deposit requirements, and offer expiry.
+   */
+  async recordFormalDecision(params: {
+    application_id: string;
+    decision: 'admit' | 'conditional' | 'waitlist' | 'deny';
+    conditions?: string[];
+    offer_expires_in_days?: number;
+    deposit_required?: boolean;
+    deposit_amount?: number;
+    reviewer_notes?: string;
+  }) {
+    const response = await authFetch(`${API_URL.replace('/v1', '')}/admissions/decide`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+    if (!response.ok) {
+      const err = (await parseJsonSafe(response)) as { error?: string };
+      throw new Error(err?.error || 'Failed to record admissions decision');
+    }
+    const result = await response.json() as { success: boolean; data: any };
+    return result.data;
+  },
+
+  /**
+   * Get the provisioning pipeline status for a given person.
+   */
+  async getProvisioningStatus(personId: string) {
+    const response = await authFetch(`${API_URL.replace('/v1', '')}/provisioning/status?person_id=${encodeURIComponent(personId)}`);
+    if (!response.ok) return null;
+    const result = await response.json() as { success: boolean; data: any };
+    return result.data;
+  },
+
+  /**
+   * Trigger the census job to convert REGISTERED → OFFICIALLY_ENROLLED.
+   */
+  async runCensusJob(termId: string) {
+    const response = await authFetch(`${API_URL.replace('/v1', '')}/admin/census/run`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ term_id: termId }),
+    });
+    if (!response.ok) {
+      const err = (await parseJsonSafe(response)) as { error?: string };
+      throw new Error(err?.error || 'Failed to run census job');
+    }
+    const result = await response.json() as { success: boolean; data: any };
+    return result.data;
   }
 };
-

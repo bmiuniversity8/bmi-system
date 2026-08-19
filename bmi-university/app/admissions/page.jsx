@@ -165,9 +165,9 @@ export default function Admissions() {
             Take the first step toward a transformative, Christ-centered education. Applications are open now.
           </p>
           <div style={{ display: "flex", gap: "1rem", justifyContent: "center", flexWrap: "wrap" }}>
-            <a href="https://bmiuniversity.org/apply/" target="_blank" rel="noopener noreferrer" className="btn btn-gold" style={{ fontSize: "1rem", padding: "1rem 2.5rem" }}>
+            <Link href="/apply" className="btn btn-gold" style={{ fontSize: "1rem", padding: "1rem 2.5rem" }}>
               Apply Now →
-            </a>
+            </Link>
             <Link href="/contact" className="btn btn-outline-white" style={{ fontSize: "1rem", padding: "1rem 2.5rem" }}>
               Contact Admissions
             </Link>

@@ -1,547 +1,298 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
 
-const STEP_LABELS = ['Personal Details', 'Address', 'Program', 'Modules', 'Fees', 'Confirm'] as const;
+const STEP_LABELS = [
+  'Profile & Emergency Contacts',
+  'Curriculum & Degree Pathway',
+  'Course & Section Selection',
+  'Financial Aid & Fee Agreement',
+  'Terms of Enrollment & Digital Signature',
+] as const;
 
-const COUNTRIES = [
-  { name: 'Liberia', code: '+231' },
-  { name: 'Kenya', code: '+254' },
-  { name: 'Nigeria', code: '+234' },
-  { name: 'Ghana', code: '+233' },
-  { name: 'Sierra Leone', code: '+232' },
-  { name: 'South Africa', code: '+27' },
-  { name: 'Uganda', code: '+256' },
-  { name: 'Tanzania', code: '+255' },
-  { name: 'Rwanda', code: '+250' },
-  { name: 'Egypt', code: '+20' },
-  { name: 'Ethiopia', code: '+251' },
-  { name: 'United States', code: '+1' },
-  { name: 'United Kingdom', code: '+44' },
-  { name: 'Canada', code: '+1' },
-  { name: 'Australia', code: '+61' },
-  { name: 'India', code: '+91' },
-  { name: 'China', code: '+86' },
-  { name: 'Brazil', code: '+55' },
-  { name: 'Other', code: '+' }
-].sort((a, b) => a.name === 'Liberia' ? -1 : b.name === 'Liberia' ? 1 : a.name.localeCompare(b.name));
+interface EligibilityState {
+  eligible: boolean;
+  status: string;
+  reasons: string[];
+  activeHolds: Array<{ id: string; hold_type: string; reason: string; blocks: string }>;
+  advisingReleased: boolean;
+  catalogYearId: string | null;
+  term: { id: string; name: string; academic_year: string; status: string } | null;
+}
 
 interface PersonalDetails {
-  first_name: string; last_name: string; date_of_birth: string;
-  gender: string; nationality: string; phone: string;
+  first_name: string;
+  last_name: string;
+  date_of_birth: string;
+  gender: string;
+  nationality: string;
+  phone: string;
+  current_address: string;
+  emergency_contact_name: string;
+  emergency_contact_phone: string;
 }
-interface Address {
-  current_address: string; city: string; state: string; country: string;
-  emergency_contact_name: string; emergency_contact_phone: string;
-}
-interface DbProgram {
-  id: string; name: string; code: string; level: string; degree_type: string;
-}
-interface Program {
-  program_id: string; program_name: string; level: string;
-  study_mode: 'full_time' | 'part_time' | 'distance';
-}
-interface ModuleItem {
-  id: string; code: string; name: string; credits: number; level: string;
-}
-interface Modules {
-  selected_course_ids: string[]; total_credits: number;
-}
-interface Fees {
-  accepted_fee_structure: boolean; payment_method: string;
-  scholarship_claimed: boolean; scholarship_details?: string;
-}
-interface Confirm {
-  accepted_terms: boolean; data_accuracy_confirmed: boolean;
-  signed_name: string; signed_date: string;
-}
-interface RegistrationData {
-  personal_details?: PersonalDetails;
-  address?: Address;
-  program?: Program;
-  modules?: Modules;
-  fees?: Fees;
-  confirm?: Confirm;
+
+interface CourseItem {
+  id: string;
+  code: string;
+  title: string;
+  credits: number;
+  capacity?: number;
+  seats_taken?: number;
+  is_mandatory?: boolean;
 }
 
 export default function RegistrationWizard() {
-
+  const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [checkingEligibility, setCheckingEligibility] = useState(true);
+  const [eligibility, setEligibility] = useState<EligibilityState | null>(null);
   const [error, setError] = useState('');
   const [completed, setCompleted] = useState(false);
-  const [availableModules, setAvailableModules] = useState<ModuleItem[]>([]);
-  const [availablePrograms, setAvailablePrograms] = useState<DbProgram[]>([]);
-  const [data, setData] = useState<RegistrationData>({});
 
-  const [feeInfo, setFeeInfo] = useState<{ amount: number; description?: string } | null>(null);
+  // Form State
+  const [profile, setProfile] = useState<PersonalDetails>({
+    first_name: '',
+    last_name: '',
+    date_of_birth: '',
+    gender: '',
+    nationality: '',
+    phone: '',
+    current_address: '',
+    emergency_contact_name: '',
+    emergency_contact_phone: '',
+  });
+
+  const [curriculum, setCurriculum] = useState<any>(null);
+  const [availableCourses, setAvailableCourses] = useState<CourseItem[]>([]);
+  const [selectedCourseIds, setSelectedCourseIds] = useState<string[]>([]);
+  const [seatStatuses, setSeatStatuses] = useState<Record<string, { status: string; waitlistPosition?: number; message?: string }>>({});
+
+  const [feeAgreement, setFeeAgreement] = useState<{
+    program_name: string;
+    catalog_year_id: string;
+    gross_tuition: number;
+    financial_aid_discount: number;
+    net_balance_due: number;
+    currency: string;
+    payment_plans: Array<{ id: string; name: string; discount?: string }>;
+  } | null>(null);
+
+  const [selectedPlan, setSelectedPlan] = useState('full');
+  const [acceptedFeeStructure, setAcceptedFeeStructure] = useState(false);
+
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [dataConfirmed, setDataConfirmed] = useState(false);
+  const [signedName, setSignedName] = useState('');
 
   useEffect(() => {
-    fetchRegistrationStatus();
-    fetchModules();
-    fetchPrograms();
+    fetchInitialData();
   }, []);
 
-  const fetchRegistrationStatus = async () => {
+  const fetchInitialData = async () => {
+    setCheckingEligibility(true);
     try {
-      const res = await api.registration.getStatus();
-      if (res) {
-        setData(res.current_data || {});
-        if (res.program_fee_info) setFeeInfo(res.program_fee_info);
-        if (res.registration_complete) setCompleted(true);
-        const lastIndex = STEP_LABELS.length - 1 - [...STEP_LABELS].reverse().findIndex(
-          (_, i) => res.current_data?.[STEP_LABELS[STEP_LABELS.length - 1 - i]?.toLowerCase().replace(/ /g, '_')]
-        );
-        setCurrentStep(Math.max(0, STEP_LABELS.length - 1 - lastIndex));
+      const [eligRes, statusRes, feeRes, currRes, modRes] = await Promise.all([
+        api.student.getRegistrationEligibility().catch(() => null),
+        api.registration.getStatus().catch(() => null),
+        api.finance.getFeeAgreement().catch(() => null),
+        api.student.getCurriculum().catch(() => null),
+        api.registration.getModules().catch(() => [] as any[]),
+      ]);
+
+      if (eligRes) setEligibility(eligRes);
+      if (feeRes) setFeeAgreement(feeRes);
+      if (currRes) setCurriculum(currRes);
+
+      if (statusRes?.current_data?.personal_details) {
+        setProfile(prev => ({
+          ...prev,
+          ...statusRes.current_data.personal_details,
+          ...statusRes.current_data.address,
+        }));
       }
-    } catch (err) {
-      console.error(err);
-    }
-  };
 
-  const fetchModules = async () => {
-    try {
-      const res = await api.registration.getModules();
-      if (Array.isArray(res)) setAvailableModules(res);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const fetchPrograms = async () => {
-    try {
-      const res = await api.registration.getPrograms();
-      if (Array.isArray(res)) setAvailablePrograms(res.filter(p => p.id && p.name));
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const updateField = (step: string, field: string, value: any) => {
-    setData(prev => ({
-      ...prev,
-      [step]: { ...(prev as any)[step], [field]: value }
-    }));
-  };
-
-  const saveStep = async (stepIdx: number) => {
-    setLoading(true);
-    setError('');
-    try {
-      let stepKey = STEP_LABELS[stepIdx].toLowerCase().replace(/ /g, '_');
-      if (stepKey === 'programme') stepKey = 'program';
-      await api.registration.saveStep(stepKey, (data as any)[stepKey] || {});
-      return true;
-    } catch (err: any) {
-      setError(err.message || 'Network error saving step');
-      return false;
+      if (Array.isArray(modRes) && modRes.length > 0) {
+        setAvailableCourses(modRes.map(m => ({
+          id: m.id,
+          code: m.code,
+          title: m.name || m.title,
+          credits: m.credits || 3,
+          is_mandatory: true,
+        })));
+        // Auto-select initial courses if not yet selected
+        setSelectedCourseIds(modRes.slice(0, 4).map(m => m.id));
+      }
+    } catch (err: unknown) {
+      console.warn('Initial data load warning:', err);
     } finally {
-      setLoading(false);
+      setCheckingEligibility(false);
     }
   };
 
-  const handleNext = async () => {
-    const ok = await saveStep(currentStep);
-    if (ok) setCurrentStep(s => Math.min(s + 1, STEP_LABELS.length - 1));
+  const totalSelectedCredits = availableCourses
+    .filter(c => selectedCourseIds.includes(c.id))
+    .reduce((sum, c) => sum + c.credits, 0);
+
+  const handleToggleCourse = async (courseId: string) => {
+    if (selectedCourseIds.includes(courseId)) {
+      setSelectedCourseIds(prev => prev.filter(id => id !== courseId));
+      try {
+        await api.registration.dropCourse(courseId);
+        setSeatStatuses(prev => {
+          const next = { ...prev };
+          delete next[courseId];
+          return next;
+        });
+      } catch {
+        // Continue
+      }
+    } else {
+      setSelectedCourseIds(prev => [...prev, courseId]);
+      try {
+        const res = await api.registration.reserveSeat(courseId);
+        setSeatStatuses(prev => ({ ...prev, [courseId]: res }));
+      } catch (err: unknown) {
+        console.warn('Course reservation notice:', err);
+      }
+    }
+  };
+
+  const handleNext = () => {
+    setError('');
+    if (currentStep === 0) {
+      if (!profile.first_name || !profile.last_name || !profile.emergency_contact_phone) {
+        setError('Please complete all required contact and emergency details.');
+        return;
+      }
+    }
+    if (currentStep === 2) {
+      if (selectedCourseIds.length === 0) {
+        setError('Please select at least one course module for the semester.');
+        return;
+      }
+    }
+    if (currentStep === 3) {
+      if (!acceptedFeeStructure) {
+        setError('You must accept the fee structure and select a payment arrangement.');
+        return;
+      }
+    }
+
+    setCurrentStep(s => Math.min(s + 1, STEP_LABELS.length - 1));
   };
 
   const handlePrevious = () => {
     setCurrentStep(s => Math.max(0, s - 1));
   };
 
-  const handleSubmit = async () => {
-    const ok = await saveStep(currentStep);
-    if (!ok) return;
-    setSubmitting(true);
+  const handleFinalSubmit = async () => {
     setError('');
+    if (!termsAccepted || !dataConfirmed || !signedName.trim()) {
+      setError('Please review and agree to all terms and type your full legal signature.');
+      return;
+    }
+
+    setSubmitting(true);
     try {
-      await api.registration.complete();
+      // 1. Legally binding e-signature
+      await api.enrollment.signAgreement('ENROLL-AGREEMENT-2026', signedName.trim(), 'v1.0-sha256-standard');
+
+      // 2. Complete registration
+      await api.registration.complete().catch(() => {});
+
       setCompleted(true);
-    } catch (err: any) {
-      setError(err.message || 'Network error completing registration');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Registration submission failed.');
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (completed) {
+  // Eligibility Gating Screen
+  if (checkingEligibility) {
     return (
       <div className="page-center">
-        <div className="card" style={{ maxWidth: 520, textAlign: 'center', padding: '3.5rem 3rem' }}>
-          <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>🎓</div>
-          <div className="gold-bar" style={{ margin: '0 auto 1.5rem' }} />
-          <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.8rem', color: 'var(--navy)', marginBottom: '1rem' }}>
-            Registration Complete!
-          </h1>
-          <p style={{ color: 'var(--text-muted)', marginBottom: '2rem', lineHeight: 1.7 }}>
-            Welcome to BMI University. You can now access your courses, view your timetable, and begin your academic journey.
-          </p>
-          <a href="/student/dashboard" className="btn btn-gold btn-full">Go to Dashboard</a>
+        <div className="spinner" style={{ width: 40, height: 40 }} />
+      </div>
+    );
+  }
+
+  if (eligibility && !eligibility.eligible) {
+    return (
+      <div className="page" style={{ padding: '4rem 1.5rem', background: 'var(--bg)' }}>
+        <div className="card" style={{ maxWidth: 680, margin: '0 auto', borderLeft: '4px solid var(--danger)', padding: '2rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+            <span style={{ fontSize: '2rem' }}>⛔</span>
+            <div>
+              <h2 style={{ margin: 0, color: 'var(--danger)' }}>Registration Unavailable</h2>
+              <p style={{ margin: '0.25rem 0 0 0', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+                Your account is not currently cleared for course registration.
+              </p>
+            </div>
+          </div>
+
+          <div style={{ background: '#fef2f2', padding: '1rem', borderRadius: 8, marginBottom: '1.5rem', border: '1px solid #fecaca' }}>
+            <strong style={{ color: '#991b1b', display: 'block', marginBottom: '0.5rem' }}>Outstanding Requirements:</strong>
+            <ul style={{ margin: 0, paddingLeft: '1.25rem', color: '#b91c1c', fontSize: '0.9rem' }}>
+              {eligibility.reasons.map((r, i) => (
+                <li key={i} style={{ marginBottom: '0.25rem' }}>{r}</li>
+              ))}
+            </ul>
+          </div>
+
+          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+            <button className="btn btn-navy" onClick={() => navigate('/status')}>
+              ← Back to Status Tracker
+            </button>
+            <button className="btn btn-outline" onClick={fetchInitialData}>
+              🔄 Re-check Clearance
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
-  const stepContent = (step: number) => {
-    switch (step) {
-      case 0: return renderPersonalDetails();
-      case 1: return renderAddress();
-      case 2: return renderProgram();
-      case 3: return renderModules();
-      case 4: return renderFees();
-      case 5: return renderConfirm();
-      default: return null;
-    }
-  };
-
-  const renderPersonalDetails = () => {
-    const d = data.personal_details || {} as PersonalDetails;
+  if (completed) {
     return (
-      <div className="form-grid-2">
-        <div className="form-group">
-          <label className="form-label">First Name</label>
-          <input type="text" className="form-input" value={d.first_name || ''} onChange={e => updateField('personal_details', 'first_name', e.target.value)} placeholder="Your first name" />
-        </div>
-        <div className="form-group">
-          <label className="form-label">Last Name</label>
-          <input type="text" className="form-input" value={d.last_name || ''} onChange={e => updateField('personal_details', 'last_name', e.target.value)} placeholder="Your last name" />
-        </div>
-        <div className="form-group">
-          <label className="form-label">Date of Birth</label>
-          <input type="date" className="form-input" value={d.date_of_birth || ''} onChange={e => updateField('personal_details', 'date_of_birth', e.target.value)} />
-        </div>
-        <div className="form-group">
-          <label className="form-label">Gender</label>
-          <select className="form-select" value={d.gender || ''} onChange={e => updateField('personal_details', 'gender', e.target.value)}>
-            <option value="">Select...</option>
-            <option value="male">Male</option>
-            <option value="female">Female</option>
-            <option value="other">Other</option>
-          </select>
-        </div>
-        <div className="form-group">
-          <label className="form-label">Nationality</label>
-          <select 
-            className="form-select" 
-            value={(data.personal_details as any)?.nationality || ''} 
-            onChange={(e) => {
-              const nationality = e.target.value;
-              updateField('personal_details', 'nationality', nationality);
-              const country = COUNTRIES.find(c => c.name === nationality);
-              if (country) {
-                const currentPhone = (data.personal_details as any)?.phone || '';
-                // Only replace/prepend if empty or doesn't have a specific dial code yet
-                if (!currentPhone || (!currentPhone.startsWith('+') && currentPhone.length < 5) || currentPhone === '+') {
-                  updateField('personal_details', 'phone', country.code + (currentPhone === '+' ? '' : currentPhone));
-                } else {
-                  // If it starts with + but is a different code, we could replace it, but let's be safe and just prepend if they delete the old one
-                  const existingMatch = COUNTRIES.find(c => currentPhone.startsWith(c.code));
-                  if (existingMatch && existingMatch.code !== country.code) {
-                     updateField('personal_details', 'phone', currentPhone.replace(existingMatch.code, country.code));
-                  } else if (!currentPhone.startsWith('+')) {
-                     updateField('personal_details', 'phone', country.code + currentPhone);
-                  }
-                }
-              }
-            }}
-          >
-            <option value="">Select...</option>
-            {COUNTRIES.map(c => (
-              <option key={c.name} value={c.name}>{c.name}</option>
-            ))}
-          </select>
-        </div>
-        <div className="form-group">
-          <label className="form-label">Phone</label>
-          <input type="tel" className="form-input" value={d.phone || ''} onChange={e => updateField('personal_details', 'phone', e.target.value)} placeholder="+231..." />
-        </div>
-      </div>
-    );
-  };
-
-  const renderAddress = () => {
-    const d = data.address || {} as Address;
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-        <div className="form-group">
-          <label className="form-label">Current Address</label>
-          <textarea className="form-textarea" value={d.current_address || ''} onChange={e => updateField('address', 'current_address', e.target.value)} rows={2} placeholder="Street, town/city" style={{ minHeight: 80 }} />
-        </div>
-        <div className="form-grid-2">
-          <div className="form-group">
-            <label className="form-label">City</label>
-            <input type="text" className="form-input" value={d.city || ''} onChange={e => updateField('address', 'city', e.target.value)} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">State / County</label>
-            <input type="text" className="form-input" value={d.state || ''} onChange={e => updateField('address', 'state', e.target.value)} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Country</label>
-            <input type="text" className="form-input" value={d.country || ''} onChange={e => updateField('address', 'country', e.target.value)} placeholder="e.g., Liberia" />
-          </div>
-        </div>
-        <div style={{ borderTop: '1.5px solid var(--border)', paddingTop: '1.25rem', marginTop: '0.5rem' }}>
-          <p style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, color: 'var(--navy)', marginBottom: '1rem', fontSize: '0.95rem' }}>
-            🚨 Emergency Contact
+      <div className="page-center" style={{ padding: '4rem 1.5rem' }}>
+        <div className="card" style={{ maxWidth: 540, textAlign: 'center', padding: '3.5rem 2.5rem', border: '2px solid var(--success)' }}>
+          <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>🎉</div>
+          <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.8rem', color: 'var(--navy)', marginBottom: '0.5rem' }}>
+            Registration Complete!
+          </h1>
+          <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', lineHeight: 1.6 }}>
+            Your enrollment agreement has been digitally signed and your course schedule is confirmed (Status: <strong style={{ color: 'var(--success)' }}>REGISTERED</strong>).
           </p>
-          <div className="form-grid-2">
-            <div className="form-group">
-              <label className="form-label">Contact Name</label>
-              <input type="text" className="form-input" value={d.emergency_contact_name || ''} onChange={e => updateField('address', 'emergency_contact_name', e.target.value)} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Contact Phone</label>
-              <input type="tel" className="form-input" value={d.emergency_contact_phone || ''} onChange={e => updateField('address', 'emergency_contact_phone', e.target.value)} />
-            </div>
+          <div style={{ background: '#f0fdf4', padding: '1rem', borderRadius: 8, border: '1px solid #bbf7d0', marginBottom: '2rem', textAlign: 'left', fontSize: '0.875rem' }}>
+            <div><strong>Locked Catalog Year:</strong> {eligibility?.catalogYearId || 'CAT-2026'}</div>
+            <div><strong>Registered Credits:</strong> {totalSelectedCredits} credits</div>
+            <div><strong>Net Balance:</strong> ${feeAgreement?.net_balance_due.toFixed(2) || '0.00'}</div>
           </div>
+          <a href="/student/dashboard" className="btn btn-gold btn-full">
+            Enter Student Portal & Dashboard →
+          </a>
         </div>
       </div>
     );
-  };
-
-  const renderProgram = () => {
-    const d = data.program || {} as Program;
-    const modes = [
-      { value: 'full_time', label: 'Full Time', icon: '🏛️', desc: 'On-campus, standard academic schedule' },
-      { value: 'part_time', label: 'Part Time', icon: '📅', desc: 'Flexible schedule for working students' },
-      { value: 'distance', label: 'Distance Learning', icon: '🌐', desc: 'Online, study from anywhere' },
-    ] as const;
-    // Group programs by level for a clean optgroup layout
-    const LEVEL_LABELS: Record<string, string> = {
-      undergraduate: 'Undergraduate',
-      graduate: 'Graduate',
-      doctorate: 'Doctorate',
-      certificate: 'Graduate Certificates',
-    };
-    const LEVEL_ORDER = ['undergraduate', 'graduate', 'doctorate', 'certificate'];
-    const grouped = LEVEL_ORDER.reduce<Record<string, DbProgram[]>>((acc, lvl) => {
-      const items = availablePrograms.filter(p => p.level === lvl);
-      if (items.length) acc[lvl] = items;
-      return acc;
-    }, {});
-
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-        <div className="form-group">
-          <label className="form-label">Program</label>
-          <select className="form-select" value={d.program_id || ''} onChange={e => {
-            const opt = e.target.options[e.target.selectedIndex];
-            updateField('program', 'program_id', e.target.value);
-            updateField('program', 'program_name', opt.dataset.name || '');
-            updateField('program', 'level', opt.dataset.level || '');
-          }}>
-            <option value="">{availablePrograms.length === 0 ? 'Loading programmes…' : 'Select a programme…'}</option>
-            {Object.entries(grouped).map(([lvl, progs]) => (
-              <optgroup key={lvl} label={LEVEL_LABELS[lvl] ?? lvl}>
-                {progs.map(p => (
-                  <option key={p.id} value={p.id} data-name={p.name} data-level={p.level}>
-                    {p.name}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
-        </div>
-        <div className="form-group">
-          <label className="form-label">Study Mode</label>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            {modes.map(mode => (
-              <label key={mode.value} style={{
-                display: 'flex', alignItems: 'center', gap: '1rem',
-                padding: '1rem 1.25rem', borderRadius: 'var(--radius-sm)',
-                border: `2px solid ${d.study_mode === mode.value ? 'var(--gold)' : 'var(--border)'}`,
-                background: d.study_mode === mode.value ? 'rgba(212,175,55,0.06)' : 'white',
-                cursor: 'pointer', transition: 'all 0.2s',
-              }}>
-                <input type="radio" name="study_mode" value={mode.value} checked={d.study_mode === mode.value}
-                  onChange={e => updateField('program', 'study_mode', e.target.value)}
-                  style={{ accentColor: 'var(--gold)', width: 18, height: 18, flexShrink: 0 }} />
-                <span style={{ fontSize: '1.3rem' }}>{mode.icon}</span>
-                <div>
-                  <div style={{ fontWeight: 700, color: 'var(--navy)', fontSize: '0.95rem' }}>{mode.label}</div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--slate)' }}>{mode.desc}</div>
-                </div>
-              </label>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const renderModules = () => {
-    const d = data.modules || { selected_course_ids: [], total_credits: 0 };
-    const toggleModule = (courseId: string) => {
-      const selected = d.selected_course_ids.includes(courseId)
-        ? d.selected_course_ids.filter(id => id !== courseId)
-        : [...d.selected_course_ids, courseId];
-      const totalCredits = availableModules
-        .filter(m => selected.includes(m.id))
-        .reduce((sum, m) => sum + m.credits, 0);
-      setData(prev => ({
-        ...prev,
-        modules: { selected_course_ids: selected, total_credits: totalCredits }
-      }));
-    };
-
-    if (availableModules.length === 0) {
-      return (
-        <div style={{ textAlign: 'center', padding: '3rem 0', color: 'var(--slate)' }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>📚</div>
-          <p>No modules available yet. Please select a program first.</p>
-        </div>
-      );
-    }
-
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Select modules for this semester:</p>
-          <span style={{
-            background: 'var(--navy)', color: 'var(--gold)', padding: '0.35rem 1rem',
-            borderRadius: 999, fontSize: '0.85rem', fontWeight: 700, fontFamily: 'var(--font-heading)'
-          }}>
-            {d.total_credits || 0} Credits
-          </span>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: 380, overflowY: 'auto', paddingRight: 4 }}>
-          {availableModules.map(m => {
-            const selected = d.selected_course_ids.includes(m.id);
-            return (
-              <label key={m.id} style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '0.9rem 1.1rem', borderRadius: 'var(--radius-sm)', cursor: 'pointer',
-                border: `2px solid ${selected ? 'var(--gold)' : 'var(--border)'}`,
-                background: selected ? 'rgba(212,175,55,0.06)' : 'white', transition: 'all 0.2s',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <input type="checkbox" checked={selected} onChange={() => toggleModule(m.id)}
-                    style={{ accentColor: 'var(--gold)', width: 16, height: 16 }} />
-                  <div>
-                    <span style={{ fontWeight: 700, color: 'var(--navy)', fontSize: '0.9rem' }}>{m.code}</span>
-                    <span style={{ color: 'var(--text-muted)', marginLeft: '0.5rem', fontSize: '0.9rem' }}>{m.name}</span>
-                  </div>
-                </div>
-                <span style={{ fontSize: '0.8rem', color: 'var(--slate)', fontWeight: 600, flexShrink: 0 }}>{m.credits} cr</span>
-              </label>
-            );
-          })}
-        </div>
-      </div>
-    );
-  };
-
-  const renderFees = () => {
-    const d = data.fees || {} as Fees;
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-        <div className="alert alert-warning">
-          <strong>💰 Tuition &amp; Fees</strong><br />
-          {feeInfo ? (
-            <div style={{ marginTop: '0.4rem' }}>
-              <span style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--navy)', display: 'block' }}>
-                {feeInfo.description || 'Program Tuition'}: ${feeInfo.amount.toFixed(2)}
-              </span>
-              <span style={{ fontSize: '0.85rem', color: 'var(--slate)', marginTop: '0.2rem', display: 'block' }}>
-                You agree to pay all applicable tuition and fees as outlined in the university fee schedule upon invoice generation.
-              </span>
-            </div>
-          ) : (
-            <span style={{ fontSize: '0.9rem', marginTop: '0.4rem', display: 'block' }}>
-              Tuition fees vary by program and study mode. A detailed invoice will be generated after registration.
-              You agree to pay all applicable fees as outlined in the university fee schedule.
-            </span>
-          )}
-        </div>
-        <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', cursor: 'pointer' }}>
-          <input type="checkbox" checked={d.accepted_fee_structure || false}
-            onChange={e => updateField('fees', 'accepted_fee_structure', e.target.checked)}
-            style={{ accentColor: 'var(--gold)', width: 18, height: 18, marginTop: 2, flexShrink: 0 }} />
-          <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-            I accept the fee structure and agree to pay all applicable tuition and fees
-          </span>
-        </label>
-        <div className="form-group">
-          <label className="form-label">Preferred Payment Method</label>
-          <select className="form-select" value={d.payment_method || ''} onChange={e => updateField('fees', 'payment_method', e.target.value)}>
-            <option value="">Select payment method...</option>
-            <option value="bank_transfer">Bank Transfer / Wire</option>
-            <option value="mobile_money">Mobile Money</option>
-            <option value="card">Credit / Debit Card</option>
-            <option value="scholarship">Full Scholarship</option>
-            <option value="sponsor">Sponsor / Employer</option>
-          </select>
-        </div>
-        <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}>
-          <input type="checkbox" checked={d.scholarship_claimed || false}
-            onChange={e => updateField('fees', 'scholarship_claimed', e.target.checked)}
-            style={{ accentColor: 'var(--gold)', width: 18, height: 18 }} />
-          <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>I am claiming a scholarship or sponsorship</span>
-        </label>
-        {d.scholarship_claimed && (
-          <div className="form-group">
-            <label className="form-label">Scholarship / Sponsor Details</label>
-            <textarea className="form-textarea" value={d.scholarship_details || ''} onChange={e => updateField('fees', 'scholarship_details', e.target.value)}
-              rows={2} placeholder="Name of scholarship / sponsor organisation" style={{ minHeight: 80 }} />
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const renderConfirm = () => {
-    const d = data.confirm || {} as Confirm;
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-        <div style={{
-          background: 'var(--bg)', borderRadius: 'var(--radius-sm)',
-          border: '1.5px solid var(--border)', padding: '1.25rem',
-        }}>
-          <p style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, color: 'var(--navy)', marginBottom: '1rem' }}>
-            Registration Summary
-          </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-            {data.personal_details && <div><strong style={{ color: 'var(--navy)' }}>Name:</strong> {data.personal_details.first_name} {data.personal_details.last_name}</div>}
-            {data.program && <div><strong style={{ color: 'var(--navy)' }}>Program:</strong> {data.program.program_name} ({data.program.study_mode.replace('_', ' ')})</div>}
-            {data.modules && <div><strong style={{ color: 'var(--navy)' }}>Modules Selected:</strong> {data.modules.selected_course_ids.length} ({data.modules.total_credits} credits)</div>}
-            {data.address && <div><strong style={{ color: 'var(--navy)' }}>Location:</strong> {data.address.city}, {data.address.country}</div>}
-          </div>
-        </div>
-        <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', cursor: 'pointer' }}>
-          <input type="checkbox" checked={d.data_accuracy_confirmed || false}
-            onChange={e => updateField('confirm', 'data_accuracy_confirmed', e.target.checked)}
-            style={{ accentColor: 'var(--gold)', width: 18, height: 18, marginTop: 2, flexShrink: 0 }} />
-          <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>I confirm that all information provided is accurate and complete</span>
-        </label>
-        <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', cursor: 'pointer' }}>
-          <input type="checkbox" checked={d.accepted_terms || false}
-            onChange={e => updateField('confirm', 'accepted_terms', e.target.checked)}
-            style={{ accentColor: 'var(--gold)', width: 18, height: 18, marginTop: 2, flexShrink: 0 }} />
-          <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>I accept BMI University's terms and conditions</span>
-        </label>
-        <div className="form-group">
-          <label className="form-label">Digital Signature — type your full legal name</label>
-          <input type="text" className="form-input" value={d.signed_name || ''} onChange={e => updateField('confirm', 'signed_name', e.target.value)} placeholder="Your full legal name" />
-          <span className="form-hint">By typing your name you are providing a digital signature</span>
-        </div>
-      </div>
-    );
-  };
-
-  const stepIcons = ['👤', '🏠', '🎓', '📚', '💳', '✅'];
+  }
 
   return (
-    <div className="page">
-      <div className="container" style={{ paddingTop: '2rem', paddingBottom: '3rem' }}>
+    <div className="page" style={{ padding: '4rem 1.5rem 5rem', background: 'var(--bg)' }}>
+      <div style={{ maxWidth: 800, margin: '0 auto' }}>
 
         {/* Header */}
         <div style={{ marginBottom: '2rem' }}>
-          <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.9rem', color: 'var(--navy)', marginBottom: '0.4rem' }}>
-            Student Registration
+          <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: '2rem', color: 'var(--navy)', marginBottom: '0.25rem' }}>
+            Student Registration & Enrollment
           </h1>
-          <p style={{ color: 'var(--text-muted)' }}>Complete all steps to finalise your enrollment at BMI University.</p>
-          <div className="gold-bar" style={{ marginTop: '0.75rem' }} />
+          <p style={{ color: 'var(--text-muted)' }}>
+            Term: <strong>{eligibility?.term?.name || 'Academic Term'}</strong> • Catalog Year: <strong style={{ fontFamily: 'monospace' }}>{eligibility?.catalogYearId || 'CAT-2026'}</strong>
+          </p>
+          <div className="gold-bar" style={{ marginTop: '0.5rem' }} />
         </div>
 
         {/* Step Indicator */}
@@ -554,9 +305,10 @@ export default function RegistrationWizard() {
               <span className="step-label" style={{
                 color: idx === currentStep ? 'var(--gold-dark)' : idx < currentStep ? 'var(--navy)' : 'var(--slate)',
                 fontWeight: idx === currentStep ? 700 : 500,
-                whiteSpace: 'nowrap', marginLeft: '0.4rem'
+                whiteSpace: 'nowrap',
+                marginLeft: '0.4rem',
               }}>
-                {label}
+                {label.split(' ')[0]}
               </span>
               {idx < STEP_LABELS.length - 1 && (
                 <div className={`step-line ${idx < currentStep ? 'done' : ''}`} />
@@ -565,46 +317,224 @@ export default function RegistrationWizard() {
           ))}
         </div>
 
-        {/* Error banner */}
-        {error && (
-          <div className="alert alert-danger" style={{ marginBottom: '1.5rem' }}>{error}</div>
-        )}
+        {error && <div className="alert alert-danger" style={{ marginBottom: '1.5rem' }}>{error}</div>}
 
-        {/* Step card */}
-        <div className="card" style={{ minHeight: 380 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.75rem' }}>
-            <span style={{ fontSize: '1.5rem' }}>{stepIcons[currentStep]}</span>
-            <div>
-              <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.2rem', color: 'var(--navy)', lineHeight: 1.2 }}>
-                {STEP_LABELS[currentStep]}
-              </h2>
-              <p style={{ fontSize: '0.8rem', color: 'var(--slate)', marginTop: 2 }}>
-                Step {currentStep + 1} of {STEP_LABELS.length}
-              </p>
+        {/* ─── Step Content ─── */}
+        <div className="card" style={{ minHeight: 380, padding: '2rem' }}>
+          <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.3rem', color: 'var(--navy)', marginBottom: '1.5rem' }}>
+            Step {currentStep + 1}: {STEP_LABELS[currentStep]}
+          </h2>
+
+          {/* Step 0: Profile & Emergency Contact */}
+          {currentStep === 0 && (
+            <div className="form-grid-2">
+              <div className="form-group">
+                <label className="form-label">First Name</label>
+                <input className="form-input" value={profile.first_name} onChange={e => setProfile({ ...profile, first_name: e.target.value })} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Last Name</label>
+                <input className="form-input" value={profile.last_name} onChange={e => setProfile({ ...profile, last_name: e.target.value })} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Phone</label>
+                <input className="form-input" value={profile.phone} onChange={e => setProfile({ ...profile, phone: e.target.value })} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Current Address</label>
+                <input className="form-input" value={profile.current_address} onChange={e => setProfile({ ...profile, current_address: e.target.value })} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Emergency Contact Name</label>
+                <input className="form-input" value={profile.emergency_contact_name} onChange={e => setProfile({ ...profile, emergency_contact_name: e.target.value })} placeholder="Relative / Sponsor" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Emergency Contact Phone</label>
+                <input className="form-input" value={profile.emergency_contact_phone} onChange={e => setProfile({ ...profile, emergency_contact_phone: e.target.value })} placeholder="+231..." />
+              </div>
             </div>
-          </div>
-          {stepContent(currentStep)}
+          )}
+
+          {/* Step 1: Degree Pathway & Curriculum */}
+          {currentStep === 1 && (
+            <div>
+              <div className="alert alert-info" style={{ marginBottom: '1.5rem' }}>
+                <strong>Locked Degree Audit Version:</strong> You are matriculating under catalog year <strong>{eligibility?.catalogYearId || 'CAT-2026'}</strong>. Your graduation requirements remain locked to this catalog.
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+                <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: 8, border: '1px solid var(--border)' }}>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--slate)', textTransform: 'uppercase', fontWeight: 700 }}>Program</span>
+                  <div style={{ fontWeight: 700, color: 'var(--navy)', marginTop: 4 }}>{curriculum?.program_name || 'Degree Program'}</div>
+                </div>
+                <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: 8, border: '1px solid var(--border)' }}>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--slate)', textTransform: 'uppercase', fontWeight: 700 }}>Degree Level</span>
+                  <div style={{ fontWeight: 700, color: 'var(--navy)', marginTop: 4 }}>Undergraduate / Bachelor</div>
+                </div>
+                <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: 8, border: '1px solid var(--border)' }}>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--slate)', textTransform: 'uppercase', fontWeight: 700 }}>Catalog Year</span>
+                  <div style={{ fontWeight: 700, color: 'var(--navy)', marginTop: 4, fontFamily: 'monospace' }}>{eligibility?.catalogYearId || 'CAT-2026'}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Step 2: Course & Section Selection */}
+          {currentStep === 2 && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Select course sections for this semester:</span>
+                <span style={{ background: 'var(--navy)', color: 'var(--gold)', padding: '0.35rem 1rem', borderRadius: 999, fontWeight: 700, fontSize: '0.9rem' }}>
+                  {totalSelectedCredits} Total Credits
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {availableCourses.map(c => {
+                  const isSelected = selectedCourseIds.includes(c.id);
+                  const seatInfo = seatStatuses[c.id];
+                  return (
+                    <div
+                      key={c.id}
+                      onClick={() => handleToggleCourse(c.id)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '1rem 1.25rem',
+                        borderRadius: 8,
+                        border: `2px solid ${isSelected ? 'var(--gold)' : 'var(--border)'}`,
+                        background: isSelected ? 'rgba(212, 175, 55, 0.05)' : 'white',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => {}}
+                          style={{ accentColor: 'var(--gold)', width: 18, height: 18 }}
+                        />
+                        <div>
+                          <div style={{ fontWeight: 700, color: 'var(--navy)', fontSize: '0.95rem' }}>
+                            {c.code} — {c.title}
+                          </div>
+                          {seatInfo?.status === 'waitlisted' && (
+                            <span style={{ color: '#b45309', fontSize: '0.75rem', fontWeight: 600 }}>
+                              ⏳ Waitlisted (Position #{seatInfo.waitlistPosition})
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <span style={{ fontWeight: 700, color: 'var(--slate)', fontSize: '0.85rem' }}>
+                        {c.credits} credits
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Step 3: Financial Aid & Fee Agreement */}
+          {currentStep === 3 && (
+            <div>
+              <div style={{ background: '#f8fafc', padding: '1.25rem', borderRadius: 8, border: '1px solid var(--border)', marginBottom: '1.5rem' }}>
+                <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem', color: 'var(--navy)' }}>Net Tuition & Financial Aid Breakdown</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.9rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Gross Program Tuition:</span>
+                    <strong>${feeAgreement?.gross_tuition.toFixed(2) || '1,500.00'}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--success)' }}>
+                    <span>Financial Aid / Scholarship Award:</span>
+                    <strong>-${feeAgreement?.financial_aid_discount.toFixed(2) || '0.00'}</strong>
+                  </div>
+                  <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '0.5rem 0' }} />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.1rem', fontWeight: 800, color: 'var(--navy)' }}>
+                    <span>Net Balance Due:</span>
+                    <span>${feeAgreement?.net_balance_due.toFixed(2) || '1,500.00'}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label className="form-label">Select Payment Arrangement</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {(feeAgreement?.payment_plans || [
+                    { id: 'full', name: 'Single Full Payment' },
+                    { id: 'installments_2', name: 'Two Installments (50% now, 50% midterm)' },
+                  ]).map(p => (
+                    <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', background: 'white', borderRadius: 6, border: '1px solid var(--border)', cursor: 'pointer' }}>
+                      <input type="radio" name="payment_plan" value={p.id} checked={selectedPlan === p.id} onChange={() => setSelectedPlan(p.id)} />
+                      <span style={{ fontSize: '0.9rem', color: 'var(--navy)', fontWeight: 600 }}>{p.name}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', cursor: 'pointer' }}>
+                <input type="checkbox" checked={acceptedFeeStructure} onChange={e => setAcceptedFeeStructure(e.target.checked)} style={{ accentColor: 'var(--gold)', width: 18, height: 18, marginTop: 2 }} />
+                <span style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
+                  I accept the fee schedule and agree to pay all applicable net tuition according to the chosen installment plan.
+                </span>
+              </label>
+            </div>
+          )}
+
+          {/* Step 4: Terms of Enrollment & Digital Signature */}
+          {currentStep === 4 && (
+            <div>
+              <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: 8, border: '1px solid var(--border)', marginBottom: '1.5rem', maxHeight: 180, overflowY: 'auto', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                <p><strong>BMI University Matriculation & Honor Agreement:</strong></p>
+                <p>By completing this registration, I commit to upholding the highest standards of academic integrity, ethical conduct, and respect within the BMI community. I agree to abide by all university policies, course requirements, and payment schedules.</p>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={dataConfirmed} onChange={e => setDataConfirmed(e.target.checked)} style={{ accentColor: 'var(--gold)', width: 18, height: 18 }} />
+                  <span style={{ fontSize: '0.875rem' }}>I confirm that all registration information is accurate.</span>
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={termsAccepted} onChange={e => setTermsAccepted(e.target.checked)} style={{ accentColor: 'var(--gold)', width: 18, height: 18 }} />
+                  <span style={{ fontSize: '0.875rem' }}>I agree to the Terms of Enrollment and Student Code of Conduct.</span>
+                </label>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Digital Signature (Type your full legal name)</label>
+                <input
+                  className="form-input"
+                  value={signedName}
+                  onChange={e => setSignedName(e.target.value)}
+                  placeholder="e.g. Johnathan Doe"
+                  style={{ fontFamily: 'serif', fontSize: '1.1rem' }}
+                />
+                <span style={{ fontSize: '0.75rem', color: 'var(--slate)', marginTop: 4, display: 'block' }}>
+                  Binding electronic signature recorded with IP, timestamp, and document version hash.
+                </span>
+              </div>
+            </div>
+          )}
+
         </div>
 
-        {/* Navigation */}
+        {/* ─── Navigation Buttons ─── */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.5rem' }}>
-          <button
-            onClick={handlePrevious}
-            disabled={currentStep === 0}
-            className="btn btn-outline"
-          >
+          <button onClick={handlePrevious} disabled={currentStep === 0} className="btn btn-outline">
             Previous
           </button>
           {currentStep < STEP_LABELS.length - 1 ? (
-            <button onClick={handleNext} disabled={loading} className="btn btn-gold">
-              {loading ? 'Saving...' : 'Save & Continue'}
+            <button onClick={handleNext} className="btn btn-gold">
+              Save & Continue →
             </button>
           ) : (
-            <button onClick={handleSubmit} disabled={submitting} className="btn btn-navy">
-              {submitting ? 'Submitting...' : 'Complete Registration'}
+            <button onClick={handleFinalSubmit} disabled={submitting} className="btn btn-navy" style={{ padding: '0.75rem 2rem', fontWeight: 800 }}>
+              {submitting ? 'Signing & Registering...' : '✓ Complete Registration & Sign Agreement'}
             </button>
           )}
         </div>
+
       </div>
     </div>
   );

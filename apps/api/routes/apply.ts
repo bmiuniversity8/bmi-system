@@ -1,4 +1,5 @@
 import type { IDatabase } from '@bmi/ports';
+import { REGISTRAR_EMAIL } from '@bmi/shared';
 import { ok, error, logAdminAction } from '../lib/types';
 import {
   applicationSubmittedEmail,
@@ -651,7 +652,7 @@ export async function handleUpdateStatus(
                     Student LMS enrollment, email provisioning, and course registration are being processed. You will see the student appear in your class rosters within 24 hours. Please update your syllabi and prepare welcome materials.
                   </p>
                   <p style="color: #64748b; font-size: 13px;">
-                    If you have questions about this student's placement, contact the Registrar's Office at <a href="mailto:bmiuniversity8@gmail.com" style="color: #d4af37;">bmiuniversity8@gmail.com</a>.
+                    If you have questions about this student's placement, contact the Registrar's Office at <a href="mailto:${REGISTRAR_EMAIL}" style="color: #d4af37;">${REGISTRAR_EMAIL}</a>.
                   </p>
                 `),
                 templateName: 'instructor_new_student_notice',
