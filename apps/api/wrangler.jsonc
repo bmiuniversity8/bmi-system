@@ -70,8 +70,7 @@
 	// ─── Custom Domain Routing ────────────────────────────────────────────────
 	"routes": [
 		{
-			"pattern": "api.bmiuniversities.org/*",
-			"zone_name": "bmiuniversities.org",
+			"pattern": "api.bmiuniversities.org",
 			"custom_domain": true
 		}
 	],
