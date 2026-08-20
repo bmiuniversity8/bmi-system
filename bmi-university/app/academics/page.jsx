@@ -5,8 +5,7 @@ import { PROGRAMS as FALLBACK_PROGRAMS, API_WORKER_URL } from "@bmi/shared";
 import PageHero from "@/components/PageHero";
 
 export default function Academics() {
-  // ── DB-as-SSOT: load programs from the authoritative public endpoint.
-  //    Fallback ensures instant first paint and keeps tests green.
+  // ── Authoritative program catalog from @bmi/shared with live API fallback ──
   const [programs, setPrograms] = useState(FALLBACK_PROGRAMS);
   useEffect(() => {
     let cancelled = false;
@@ -15,7 +14,8 @@ export default function Academics() {
         const res = await fetch(`${API_WORKER_URL}/api/public/programs`, { cache: 'force-cache' });
         if (!res.ok) return;
         const body = await res.json();
-        if (!body?.success || !Array.isArray(body.data)) return;
+        // Only override if the API returned a non-empty array of valid programs
+        if (!body?.success || !Array.isArray(body.data) || body.data.length === 0) return;
         if (cancelled) return;
         setPrograms(body.data.map(p => ({
           label: p.label ?? p.name,
@@ -23,18 +23,18 @@ export default function Academics() {
           description: p.description,
           icon: p.icon ?? undefined,
         })));
-      } catch { /* silently keep fallback */ }
+      } catch { /* silently keep complete catalog */ }
     })();
     return () => { cancelled = true; };
   }, []);
 
-  const bachelors = useMemo(() => programs.filter(p => p.level === 'undergraduate').map(p => ({ title: p.label, desc: p.description, icon: p.icon })), [programs]);
-  const masters = useMemo(() => programs.filter(p => p.level === 'graduate').map(p => ({ title: p.label, desc: p.description, icon: p.icon })), [programs]);
-  const doctorates = useMemo(() => programs.filter(p => p.level === 'doctorate').map(p => ({ title: p.label, desc: p.description, icon: p.icon })), [programs]);
-  const certificates = useMemo(() => programs.filter(p => p.level === 'certificate').map(p => ({ title: p.label, desc: p.description, icon: p.icon })), [programs]);
+  const bachelors = useMemo(() => programs.filter(p => p.level === 'undergraduate').map(p => ({ title: p.label, desc: p.description })), [programs]);
+  const masters = useMemo(() => programs.filter(p => p.level === 'graduate').map(p => ({ title: p.label, desc: p.description })), [programs]);
+  const doctorates = useMemo(() => programs.filter(p => p.level === 'doctorate').map(p => ({ title: p.label, desc: p.description })), [programs]);
+  const certificates = useMemo(() => programs.filter(p => p.level === 'certificate').map(p => ({ title: p.label, desc: p.description })), [programs]);
 
-  const renderCards = (programs) =>
-    programs.map((p, i) => (
+  const renderCards = (items) =>
+    items.map((p, i) => (
       <article
         key={i}
         className="program-card"
@@ -50,28 +50,26 @@ export default function Academics() {
           transition: "transform 0.25s ease, box-shadow 0.25s ease",
         }}
       >
-        {p.icon && (
-          <div style={{ marginBottom: "0.5rem" }}>
-            <img 
-              src={p.icon} 
-              alt="" 
-              style={{ 
-                width: "48px", 
-                height: "48px", 
-                objectFit: "contain" 
-              }} 
-              loading="lazy" 
-            />
-          </div>
-        )}
-        <div style={{ width: "40px", height: "4px", borderRadius: "999px", background: "linear-gradient(90deg,#d4af37,#b5952f)" }} />
-        <h3 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: "1.1rem", color: "#0f172a", lineHeight: 1.3 }}>
+        <div style={{ width: "40px", height: "4px", borderRadius: "999px", background: "linear-gradient(90deg, #c5a048, #e5c578)", marginBottom: "0.25rem" }} />
+        <h3 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: "1.15rem", color: "#0f172a", lineHeight: 1.3 }}>
           {p.title}
         </h3>
-        <p style={{ color: "#64748b", fontSize: "0.9rem", lineHeight: 1.7, flexGrow: 1 }}>{p.desc}</p>
+        <p style={{ color: "#64748b", fontSize: "0.92rem", lineHeight: 1.7, flexGrow: 1 }}>
+          {p.desc}
+        </p>
         <Link
           href="/apply"
-          style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", color: "#d4af37", fontWeight: 700, fontSize: "0.85rem", marginTop: "0.5rem", textDecoration: "underline", width: "fit-content" }}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.4rem",
+            color: "var(--color-gold-dark, #a07e2c)",
+            fontWeight: 700,
+            fontSize: "0.88rem",
+            marginTop: "0.5rem",
+            textDecoration: "underline",
+            width: "fit-content",
+          }}
         >
           Apply Today →
         </Link>
@@ -95,12 +93,12 @@ export default function Academics() {
             Programs of Study
           </h2>
           <p style={{ color: "#64748b", fontSize: "1.1rem", lineHeight: 1.8 }}>
-            BMI University offers degree programs at the Bachelor&apos;s, Master&apos;s, and Doctoral level, along with
+            Bethel Ministries International University offers degree programs at the Bachelor&apos;s, Master&apos;s, and Doctoral level, along with
             Graduate Certificates. All programs are designed to develop Christ-centered leaders with the values,
             knowledge, and skills essential to impact the world.
           </p>
-          <div style={{ marginTop: "1.5rem", padding: "1rem 1.5rem", background: "#f0f9ff", borderRadius: "12px", border: "1px solid #bae6fd", display: "inline-block" }}>
-            <p style={{ color: "#0369a1", fontSize: "0.9rem", fontWeight: 600, margin: 0 }}>
+          <div style={{ marginTop: "1.5rem", padding: "1rem 1.5rem", background: "rgba(197, 160, 72, 0.1)", borderRadius: "12px", border: "1px solid rgba(197, 160, 72, 0.3)", display: "inline-block" }}>
+            <p style={{ color: "#0f172a", fontSize: "0.9rem", fontWeight: 700, margin: 0 }}>
               🏅 Fully accredited by QAHE — International Association for Quality Assurance in Higher Education
             </p>
           </div>
@@ -108,10 +106,10 @@ export default function Academics() {
       </section>
 
       {/* Bachelor's */}
-      <section aria-labelledby="bachelors-heading" style={{ background: "#f8fafc", padding: "5rem 2rem" }}>
+      <section id="undergraduate" aria-labelledby="bachelors-heading" style={{ background: "#f8fafc", padding: "5rem 2rem", scrollMarginTop: "120px" }}>
         <div style={{ maxWidth: "1280px", margin: "0 auto" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "2.5rem" }}>
-            <div style={{ width: "70px", height: "70px", background: "#0f172a", borderRadius: "14px", display: "flex", alignItems: "center", justifyContent: "center", padding: "8px", flexShrink: 0 }}>
+            <div style={{ width: "70px", height: "70px", background: "#091223", borderRadius: "14px", display: "flex", alignItems: "center", justifyContent: "center", padding: "8px", flexShrink: 0 }}>
               <img src="/images/bachelor-icon.png" alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} loading="lazy" />
             </div>
             <div>
@@ -128,10 +126,10 @@ export default function Academics() {
       </section>
 
       {/* Master's */}
-      <section aria-labelledby="masters-heading" style={{ background: "#fff", padding: "5rem 2rem" }}>
+      <section id="graduate" aria-labelledby="masters-heading" style={{ background: "#fff", padding: "5rem 2rem", scrollMarginTop: "120px" }}>
         <div style={{ maxWidth: "1280px", margin: "0 auto" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "2.5rem" }}>
-            <div style={{ width: "70px", height: "70px", background: "#d4af37", borderRadius: "14px", display: "flex", alignItems: "center", justifyContent: "center", padding: "8px", flexShrink: 0 }}>
+            <div style={{ width: "70px", height: "70px", background: "#c5a048", borderRadius: "14px", display: "flex", alignItems: "center", justifyContent: "center", padding: "8px", flexShrink: 0 }}>
               <img src="/images/masters-icon.png" alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} loading="lazy" />
             </div>
             <div>
@@ -148,10 +146,10 @@ export default function Academics() {
       </section>
 
       {/* Doctorate */}
-      <section aria-labelledby="doctorate-heading" style={{ background: "#f8fafc", padding: "5rem 2rem" }}>
+      <section id="doctorate" aria-labelledby="doctorate-heading" style={{ background: "#f8fafc", padding: "5rem 2rem", scrollMarginTop: "120px" }}>
         <div style={{ maxWidth: "1280px", margin: "0 auto" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "2.5rem" }}>
-            <div style={{ width: "70px", height: "70px", background: "#1e293b", borderRadius: "14px", display: "flex", alignItems: "center", justifyContent: "center", padding: "8px", flexShrink: 0 }}>
+            <div style={{ width: "70px", height: "70px", background: "#091223", borderRadius: "14px", display: "flex", alignItems: "center", justifyContent: "center", padding: "8px", flexShrink: 0 }}>
               <img src="/images/phd-icon.png" alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} loading="lazy" />
             </div>
             <div>
@@ -168,28 +166,28 @@ export default function Academics() {
       </section>
 
       {/* Certificates */}
-      <section aria-labelledby="certificates-heading" style={{ background: "#0f172a", padding: "5rem 2rem" }}>
+      <section id="certificate" aria-labelledby="certificates-heading" style={{ background: "#091223", padding: "5rem 2rem", scrollMarginTop: "120px" }}>
         <div style={{ maxWidth: "1280px", margin: "0 auto" }}>
           <div style={{ textAlign: "center", marginBottom: "3rem" }}>
             <h2 id="certificates-heading" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: "clamp(1.6rem, 2.5vw, 2.2rem)", color: "#fff", marginBottom: "0.75rem" }}>
               Graduate Certificates
             </h2>
-            <p style={{ color: "rgba(255,255,255,0.65)", fontSize: "1rem" }}>Focused credentials for continued growth and ministry preparation</p>
+            <p style={{ color: "rgba(255,255,255,0.75)", fontSize: "1rem" }}>Focused credentials for continued growth and ministry preparation</p>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "1.5rem", marginBottom: "3rem" }}>
             {certificates.map((c, i) => (
-              <div key={i} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(212,175,55,0.2)", borderRadius: "16px", padding: "2rem" }}>
-                <div style={{ width: "40px", height: "4px", background: "#d4af37", borderRadius: "999px", marginBottom: "1rem" }} />
+              <div key={i} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(197,160,72,0.25)", borderRadius: "16px", padding: "2rem" }}>
+                <div style={{ width: "40px", height: "4px", background: "#c5a048", borderRadius: "999px", marginBottom: "1rem" }} />
                 <h3 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, color: "#fff", fontSize: "1.1rem", marginBottom: "0.75rem" }}>{c.title}</h3>
-                <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "0.9rem", lineHeight: 1.7 }}>{c.desc}</p>
+                <p style={{ color: "rgba(255,255,255,0.7)", fontSize: "0.9rem", lineHeight: 1.7 }}>{c.desc}</p>
               </div>
             ))}
           </div>
 
           {/* Disclaimer */}
           <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "12px", padding: "1.5rem 2rem", marginBottom: "3rem" }}>
-            <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.8rem", lineHeight: 1.7 }}>
-              Degree Program(s) of study offered by BMI University have been declared by the appropriate state authority exempt from the requirements for licensure, under provisions of North Carolina General Statutes (G.S.) 116-15 (d) for exemption from licensure with respect to religious education. Exemption from licensure is not based upon any assessment of program quality under established licensing standards.
+            <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.8rem", lineHeight: 1.7, margin: 0 }}>
+              Degree Program(s) of study offered by Bethel Ministries International University have been declared by the appropriate state authority exempt from the requirements for licensure, under provisions of North Carolina General Statutes (G.S.) 116-15 (d) for exemption from licensure with respect to religious education. Exemption from licensure is not based upon any assessment of program quality under established licensing standards.
             </p>
           </div>
 

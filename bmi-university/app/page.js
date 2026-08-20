@@ -18,7 +18,7 @@ export default function HomePage() {
   const intervalRef = useRef(null);
   const canvasRef = useRef(null);
 
-  // ── Load authoritative program data from API worker (with fallback) ──
+  // ── Authoritative program catalog with live API fallback ──
   const [programs, setPrograms] = useState(FALLBACK_PROGRAMS);
   useEffect(() => {
     let cancelled = false;
@@ -27,7 +27,8 @@ export default function HomePage() {
         const res = await fetch(`${API_WORKER_URL}/api/public/programs`, { cache: 'force-cache' });
         if (!res.ok) return;
         const body = await res.json();
-        if (!body?.success || !Array.isArray(body.data)) return;
+        // Only update if the API returned a non-empty array
+        if (!body?.success || !Array.isArray(body.data) || body.data.length === 0) return;
         if (cancelled) return;
         setPrograms(body.data.map(p => ({
           label: p.label ?? p.name,
@@ -35,7 +36,7 @@ export default function HomePage() {
           description: p.description,
           icon: p.icon ?? undefined,
         })));
-      } catch { /* keep fallback */ }
+      } catch { /* silently keep complete catalog */ }
     })();
     return () => { cancelled = true; };
   }, []);
@@ -43,7 +44,12 @@ export default function HomePage() {
   const bachelors = useMemo(() => programs.filter(p => p.level === 'undergraduate').map(p => ({ title: p.label, desc: p.description })), [programs]);
   const masters   = useMemo(() => programs.filter(p => p.level === 'graduate').map(p => ({ title: p.label, desc: p.description })), [programs]);
   const doctorates= useMemo(() => programs.filter(p => p.level === 'doctorate').map(p => ({ title: p.label, desc: p.description })), [programs]);
-  const programMap = { bachelors, masters, doctorates };
+  
+  const programMap = useMemo(() => ({
+    bachelors: bachelors.length > 0 ? bachelors : FALLBACK_PROGRAMS.filter(p => p.level === 'undergraduate').map(p => ({ title: p.label, desc: p.description })),
+    masters:   masters.length > 0 ? masters : FALLBACK_PROGRAMS.filter(p => p.level === 'graduate').map(p => ({ title: p.label, desc: p.description })),
+    doctorates:doctorates.length > 0 ? doctorates : FALLBACK_PROGRAMS.filter(p => p.level === 'doctorate').map(p => ({ title: p.label, desc: p.description })),
+  }), [bachelors, masters, doctorates]);
 
   // Slider auto-advance
   useEffect(() => {
@@ -128,6 +134,8 @@ export default function HomePage() {
     if (!verifyCode.trim()) return;
     window.open(`https://verify.bmiuniversities.org/verify?code=${encodeURIComponent(verifyCode.trim())}`, '_blank');
   };
+
+  const currentCards = programMap[activeTab] || programMap.bachelors;
 
   return (
     <main id="main-content">
@@ -327,20 +335,21 @@ export default function HomePage() {
             {[["bachelors", "Bachelors"], ["masters", "Masters"], ["doctorates", "Doctorate"]].map(([key, label]) => (
               <button
                 key={key}
+                type="button"
                 onClick={() => setActiveTab(key)}
                 style={{
-                  padding: "0.7rem 2rem",
+                  padding: "0.75rem 2.2rem",
                   borderRadius: "999px",
                   border: "2px solid",
-                  fontWeight: 700,
+                  fontWeight: 800,
                   fontSize: "0.95rem",
                   fontFamily: "'Outfit', sans-serif",
                   cursor: "pointer",
-                  transition: "all 0.25s ease",
-                  background: activeTab === key ? "#091223" : "transparent",
+                  transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                  background: activeTab === key ? "#091223" : "#ffffff",
                   color: activeTab === key ? "#e5c578" : "#091223",
                   borderColor: activeTab === key ? "#091223" : "#cbd5e1",
-                  boxShadow: activeTab === key ? "0 6px 20px rgba(9, 18, 35, 0.15)" : "none",
+                  boxShadow: activeTab === key ? "0 6px 20px rgba(9, 18, 35, 0.18)" : "none",
                 }}
               >
                 {label}
@@ -350,9 +359,9 @@ export default function HomePage() {
 
           {/* Program Cards Grid */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "1.5rem" }}>
-            {programMap[activeTab].map((p, i) => (
+            {currentCards.map((p, i) => (
               <article
-                key={i}
+                key={`${activeTab}-${i}`}
                 className="program-card"
                 style={{
                   background: "#ffffff",
