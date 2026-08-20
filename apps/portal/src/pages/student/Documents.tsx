@@ -238,7 +238,7 @@ export default function Documents() {
                     ||||| | |||| ||| ||||| || |||
                   </div>
                   <span style={{ fontSize: '0.65rem', color: 'var(--gold)', fontWeight: 700 }}>
-                    verify.bmiuniversities.org
+                    bmiuniversities.org/verify
                   </span>
                 </div>
               </div>
@@ -454,7 +454,7 @@ export default function Documents() {
                     BMI UNIVERSITY • OFFICE OF THE REGISTRAR & ADMISSIONS
                   </div>
                   <div style={{ fontSize: '0.72rem', color: 'var(--slate)', marginTop: '0.15rem' }}>
-                    www.bmiuniversities.org • admissions@bmiuniversities.org • verify.bmiuniversities.org
+                    www.bmiuniversities.org • admissions@bmiuniversities.org • bmiuniversities.org/verify
                   </div>
                 </div>
               </div>
@@ -615,7 +615,7 @@ export default function Documents() {
             {/* Modal Bottom Footer */}
             <div style={{ marginTop: '1.75rem', paddingTop: '1rem', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: 'var(--slate)' }}>
               <div>
-                🔒 Verification Code: <strong style={{ color: 'var(--navy)' }}>{verificationCode}</strong> • Validate at <strong>verify.bmiuniversities.org</strong>
+                🔒 Verification Code: <strong style={{ color: 'var(--navy)' }}>{verificationCode}</strong> • Validate at <strong>bmiuniversities.org/verify</strong>
               </div>
               <button className="btn btn-outline btn-sm" onClick={() => setActiveModal(null)}>
                 Close Window

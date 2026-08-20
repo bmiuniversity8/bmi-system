@@ -63,16 +63,14 @@ export default function Navbar() {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "1.25rem" }}>
-            <a
-              href="https://verify.bmiuniversities.org"
-              target="_blank"
-              rel="noopener noreferrer"
+            <Link
+              href="/verify"
               style={{ color: "rgba(255,255,255,0.85)", display: "flex", alignItems: "center", gap: "0.3rem", transition: "color 0.2s" }}
               onMouseEnter={(e) => e.currentTarget.style.color = "#c5a048"}
               onMouseLeave={(e) => e.currentTarget.style.color = "rgba(255,255,255,0.85)"}
             >
               <span>🛡️</span> Verify Credentials
-            </a>
+            </Link>
             <span style={{ color: "rgba(255,255,255,0.3)" }}>|</span>
             <a
               href="https://portal.bmiuniversities.org"

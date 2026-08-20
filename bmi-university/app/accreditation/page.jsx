@@ -1,3 +1,4 @@
+import Link from "next/link";
 import PageHero from "@/components/PageHero";
 
 export default function AccreditationPage() {
@@ -28,15 +29,13 @@ export default function AccreditationPage() {
                 This accreditation underscores our dedication to providing a rigorous, faith-based education that equips students for global ministry and leadership.
               </p>
               <div style={{ marginTop: "1.75rem" }}>
-                <a
-                  href="https://verify.bmiuniversities.org"
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <Link
+                  href="/verify"
                   className="btn btn-gold"
                   style={{ fontSize: "0.9rem", padding: "0.65rem 1.4rem" }}
                 >
                   Verify QAHE Accreditation →
-                </a>
+                </Link>
               </div>
             </section>
 

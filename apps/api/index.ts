@@ -16,7 +16,7 @@ import type { Env } from './lib/types';
 import backupWorker from './backup';
 import { runArchivalJob } from './archival';
 // Integration routes
-import { handlePublicPrograms, handlePublicFaculties, handlePublicDepartments, handlePublicStats, handlePublicListPosts, handlePublicGetPost, handlePublicGetPage, handlePublicContact, handlePublicNewsletter } from './routes/public';
+import { handlePublicPrograms, handlePublicFaculties, handlePublicDepartments, handlePublicStats, handlePublicListPosts, handlePublicGetPost, handlePublicGetPage, handlePublicContact, handlePublicNewsletter, handlePublicVerifyDocument } from './routes/public';
 import { handleListPosts, handleCreatePost, handleUpdatePost, handleDeletePost, handleListPages, handleCreatePage, handleDeletePage } from './routes/cms';
 import { handleInboundWebhook, handleListEvents, handleListDeadLetters, handleRetryDeadLetter } from './routes/webhooks';
 // UMS routes
@@ -217,6 +217,7 @@ const ROUTES: Route[] = [
   { method: 'GET', path: /^\/api\/public\/cms\/pages\/([^/]+)$/, roles: undefined, handler: async (req, env, p) => handlePublicGetPage(req, env, p[1]) },
   { method: 'POST', path: /^\/api\/public\/contact$/, roles: undefined, handler: async (req, env) => handlePublicContact(req, env) },
   { method: 'POST', path: /^\/api\/public\/newsletter$/, roles: undefined, handler: async (req, env) => handlePublicNewsletter(req, env) },
+  { method: 'GET', path: /^\/api\/public\/verify$/, roles: undefined, handler: async (req, env) => handlePublicVerifyDocument(req, env) },
   { method: 'GET', path: /^\/api\/cms\/posts$/, roles: ['admin', 'staff'], handler: async (req, env) => handleListPosts(req, env) },
   { method: 'POST', path: /^\/api\/cms\/posts$/, roles: ['admin', 'staff'], handler: async (req, env, _p, auth) => handleCreatePost(req, env, auth!.user.sub) },
   { method: ['PUT', 'PATCH'], path: /^\/api\/cms\/posts\/([^/]+)$/, roles: ['admin', 'staff'], handler: async (req, env, p, auth) => handleUpdatePost(req, env, p[1], auth!.user.sub) },

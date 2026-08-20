@@ -20,8 +20,11 @@ export const MARKETING_URL_WWW = 'https://www.bmiuniversities.org' as const;
 /** The canonical production URL of the backend API Gateway / Worker. */
 export const API_WORKER_URL = 'https://api.bmiuniversities.org' as const;
 
-/** The canonical URL for public document & credential verification. */
+/** The canonical origin for public document & credential verification. */
 export const VERIFY_URL = 'https://verify.bmiuniversities.org' as const;
+
+/** The direct web path for public document & credential verification. */
+export const VERIFY_PAGE_URL = 'https://bmiuniversities.org/verify' as const;
 
 /** The administrative portal URL. */
 export const ADMIN_URL = 'https://admin.bmiuniversities.org' as const;

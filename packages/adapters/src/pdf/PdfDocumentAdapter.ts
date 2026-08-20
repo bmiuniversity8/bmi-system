@@ -2,7 +2,7 @@ import { IDocumentGenerator, Document, DocumentRequest } from '@bmi/ports';
 import { PDFDocument, rgb, StandardFonts, PDFFont, PDFImage } from 'pdf-lib';
 
 const LOGO_URL = 'https://portal.bmiuniversities.org/bmi-logo.png';
-const VERIFY_BASE_URL = 'https://verify.bmiuniversities.org';
+const VERIFY_BASE_URL = 'https://bmiuniversities.org/verify';
 
 export class PdfDocumentAdapter implements IDocumentGenerator {
   public static readonly PAGE_W = 612; // Standard US Letter Width (8.5in @ 72dpi)
@@ -392,7 +392,7 @@ export class PdfDocumentAdapter implements IDocumentGenerator {
       barX += w + 1;
     }
 
-    page.drawText(`VERIFY: verify.bmiuniversities.org`, { x: 170, y: 22, size: 6.5, font: bold, color: PdfDocumentAdapter.NAVY });
+    page.drawText(`VERIFY: bmiuniversities.org/verify`, { x: 170, y: 22, size: 6.5, font: bold, color: PdfDocumentAdapter.NAVY });
     page.drawText(`SEC CODE: ${verificationCode}`, { x: 170, y: 12, size: 6.5, font: helvetica, color: PdfDocumentAdapter.DARK_GRAY });
   }
 
@@ -703,7 +703,7 @@ export class PdfDocumentAdapter implements IDocumentGenerator {
     const textX = logo ? 115 : 45;
     page.drawText('BETHEL MINISTRIES INTERNATIONAL UNIVERSITY', { x: textX, y: 760, size: 15, font: bold, color: PdfDocumentAdapter.WHITE });
     page.drawText('BMI UNIVERSITY • OFFICE OF THE REGISTRAR & ADMISSIONS', { x: textX, y: 742, size: 8.5, font: bold, color: PdfDocumentAdapter.GOLD });
-    page.drawText('www.bmiuniversities.org  |  admissions@bmiuniversities.org  |  verify.bmiuniversities.org', { x: textX, y: 725, size: 7.5, font, color: PdfDocumentAdapter.LIGHT_GRAY });
+    page.drawText('www.bmiuniversities.org  |  admissions@bmiuniversities.org  |  bmiuniversities.org/verify', { x: textX, y: 725, size: 7.5, font, color: PdfDocumentAdapter.LIGHT_GRAY });
   }
 
   private drawFooter(_pdf: PDFDocument, page: any, font: PDFFont, _bold: PDFFont, verificationCode?: string): void {
@@ -711,7 +711,7 @@ export class PdfDocumentAdapter implements IDocumentGenerator {
     page.drawText(`Official University Document • Bethel Ministries International University (BMI) • Accredited Higher Education`, {
       x: 45, y: 32, size: 7, font, color: PdfDocumentAdapter.DARK_GRAY,
     });
-    page.drawText(`Digital Verification Code: ${verificationCode || 'VERIFIED'} • Verify at https://verify.bmiuniversities.org`, {
+    page.drawText(`Digital Verification Code: ${verificationCode || 'VERIFIED'} • Verify at https://bmiuniversities.org/verify`, {
       x: 45, y: 22, size: 7, font, color: PdfDocumentAdapter.LIGHT_GRAY,
     });
   }

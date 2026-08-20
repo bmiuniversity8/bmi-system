@@ -132,7 +132,7 @@ export default function HomePage() {
   const handleVerifySubmit = (e) => {
     e.preventDefault();
     if (!verifyCode.trim()) return;
-    window.open(`https://verify.bmiuniversities.org/verify?code=${encodeURIComponent(verifyCode.trim())}`, '_blank');
+    window.location.href = `/verify?code=${encodeURIComponent(verifyCode.trim())}`;
   };
 
   const currentCards = programMap[activeTab] || programMap.bachelors;
@@ -518,7 +518,7 @@ export default function HomePage() {
               </button>
             </form>
             <div style={{ marginTop: "1rem", fontSize: "0.72rem", color: "rgba(255,255,255,0.5)", textAlign: "center" }}>
-              Cryptographically secured via verify.bmiuniversities.org
+              Cryptographically secured via bmiuniversities.org/verify
             </div>
           </div>
 
