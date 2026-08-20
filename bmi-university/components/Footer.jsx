@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 
 const quickLinks = [
@@ -29,6 +29,71 @@ const institutionalPortals = [
 export default function Footer() {
   const [email, setEmail] = useState("");
   const [subscribed, setSubscribed] = useState(false);
+  const canvasRef = useRef(null);
+
+  // Dynamic golden particle system for the footer
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    let animId;
+    let particles = [];
+    const PARTICLE_COUNT = 35;
+
+    const resize = () => {
+      if (!canvas.parentElement) return;
+      canvas.width = canvas.parentElement.offsetWidth;
+      canvas.height = canvas.parentElement.offsetHeight;
+    };
+    resize();
+    window.addEventListener("resize", resize);
+
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      particles.push({
+        x: Math.random() * (canvas.width || 1200),
+        y: Math.random() * (canvas.height || 400),
+        r: Math.random() * 1.8 + 0.5,
+        dx: (Math.random() - 0.5) * 0.35,
+        dy: -(Math.random() * 0.35 + 0.15),
+        baseAlpha: Math.random() * 0.4 + 0.2,
+        twinkleSpeed: Math.random() * 0.03 + 0.015,
+        twinkleOffset: Math.random() * Math.PI * 2,
+      });
+    }
+
+    let frame = 0;
+    const draw = () => {
+      frame++;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      for (const p of particles) {
+        p.x += p.dx;
+        p.y += p.dy;
+
+        if (p.y < -5) p.y = canvas.height + 5;
+        if (p.x < -5) p.x = canvas.width + 5;
+        if (p.x > canvas.width + 5) p.x = -5;
+
+        const currentAlpha = p.baseAlpha * (0.65 + 0.35 * Math.sin(frame * p.twinkleSpeed + p.twinkleOffset));
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(229, 197, 120, ${currentAlpha})`;
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = "rgba(229, 197, 120, 0.6)";
+        ctx.fill();
+      }
+
+      animId = requestAnimationFrame(draw);
+    };
+
+    draw();
+    return () => {
+      cancelAnimationFrame(animId);
+      window.removeEventListener("resize", resize);
+    };
+  }, []);
 
   const handleSubscribe = (e) => {
     e.preventDefault();
@@ -36,23 +101,46 @@ export default function Footer() {
   };
 
   return (
-    <footer style={{ background: "linear-gradient(180deg, #091223 0%, #050a14 100%)", color: "#ffffff", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+    <footer
+      style={{
+        position: "relative",
+        background: "linear-gradient(135deg, rgba(85, 12, 24, 0.95) 0%, rgba(35, 10, 20, 0.96) 35%, #091223 75%, #040812 100%)",
+        color: "#ffffff",
+        fontFamily: "'Plus Jakarta Sans', sans-serif",
+        overflow: "hidden",
+      }}
+    >
+      {/* ── Background Particle Canvas ── */}
+      <canvas
+        ref={canvasRef}
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          zIndex: 1,
+          pointerEvents: "none",
+        }}
+      />
 
       {/* ── Gold Accent Top Border ── */}
-      <div style={{ height: "4px", background: "linear-gradient(90deg, #c5a048 0%, #e5c578 50%, #c5a048 100%)" }} />
+      <div style={{ height: "4px", background: "linear-gradient(90deg, #c5a048 0%, #e5c578 50%, #c5a048 100%)", position: "relative", zIndex: 2 }} />
 
       {/* ── Main Footer Grid ── */}
-      <div style={{
-        maxWidth: "1280px",
-        margin: "0 auto",
-        padding: "64px 32px 48px",
-        display: "grid",
-        gridTemplateColumns: "repeat(4, 1fr)",
-        gap: "48px",
-      }}
+      <div
+        style={{
+          position: "relative",
+          zIndex: 2,
+          maxWidth: "1280px",
+          margin: "0 auto",
+          padding: "64px 32px 48px",
+          display: "grid",
+          gridTemplateColumns: "repeat(4, 1fr)",
+          gap: "48px",
+        }}
         className="footer-grid"
       >
-
         {/* Column 1 — Brand & Accreditation */}
         <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
           <Link href="/" aria-label="BMI University — Home" style={{ display: "flex", alignItems: "center", gap: "12px", textDecoration: "none" }}>
@@ -63,7 +151,7 @@ export default function Footer() {
             </div>
           </Link>
 
-          <p style={{ color: "rgba(255,255,255,0.7)", fontSize: "0.88rem", lineHeight: 1.7, margin: 0 }}>
+          <p style={{ color: "rgba(255,255,255,0.75)", fontSize: "0.88rem", lineHeight: 1.7, margin: 0 }}>
             Bethel Ministries International University is dedicated to empowering Christ-centered scholars with biblical truth, academic excellence, and servant leadership.
           </p>
 
@@ -97,9 +185,9 @@ export default function Footer() {
               <li key={item.label}>
                 <Link
                   href={item.href}
-                  style={{ color: "rgba(255,255,255,0.75)", fontSize: "0.88rem", transition: "color 0.2s" }}
+                  style={{ color: "rgba(255,255,255,0.8)", fontSize: "0.88rem", transition: "color 0.2s" }}
                   onMouseEnter={(e) => e.currentTarget.style.color = "#e5c578"}
-                  onMouseLeave={(e) => e.currentTarget.style.color = "rgba(255,255,255,0.75)"}
+                  onMouseLeave={(e) => e.currentTarget.style.color = "rgba(255,255,255,0.8)"}
                 >
                   {item.label}
                 </Link>
@@ -121,18 +209,18 @@ export default function Footer() {
                     href={item.href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    style={{ color: "rgba(255,255,255,0.75)", fontSize: "0.88rem", transition: "color 0.2s" }}
+                    style={{ color: "rgba(255,255,255,0.8)", fontSize: "0.88rem", transition: "color 0.2s" }}
                     onMouseEnter={(e) => e.currentTarget.style.color = "#e5c578"}
-                    onMouseLeave={(e) => e.currentTarget.style.color = "rgba(255,255,255,0.75)"}
+                    onMouseLeave={(e) => e.currentTarget.style.color = "rgba(255,255,255,0.8)"}
                   >
                     {item.label} ↗
                   </a>
                 ) : (
                   <Link
                     href={item.href}
-                    style={{ color: "rgba(255,255,255,0.75)", fontSize: "0.88rem", transition: "color 0.2s" }}
+                    style={{ color: "rgba(255,255,255,0.8)", fontSize: "0.88rem", transition: "color 0.2s" }}
                     onMouseEnter={(e) => e.currentTarget.style.color = "#e5c578"}
-                    onMouseLeave={(e) => e.currentTarget.style.color = "rgba(255,255,255,0.75)"}
+                    onMouseLeave={(e) => e.currentTarget.style.color = "rgba(255,255,255,0.8)"}
                   >
                     {item.label}
                   </Link>
@@ -147,7 +235,7 @@ export default function Footer() {
           <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: "1.1rem", fontWeight: 800, color: "#e5c578", letterSpacing: "-0.01em", margin: 0 }}>
             Admissions Office
           </h3>
-          <p style={{ color: "rgba(255,255,255,0.75)", fontSize: "0.88rem", lineHeight: 1.6, margin: 0 }}>
+          <p style={{ color: "rgba(255,255,255,0.8)", fontSize: "0.88rem", lineHeight: 1.6, margin: 0 }}>
             Office of Admissions & Student Records<br />
             Bethel Ministries International University<br />
             <strong>Email:</strong> admin@bmiuniversities.org<br />
@@ -175,18 +263,21 @@ export default function Footer() {
             </button>
           </form>
         </div>
-
       </div>
 
       {/* ── Bottom Bar ── */}
-      <div style={{
-        borderTop: "1px solid rgba(255,255,255,0.08)",
-        padding: "24px 32px",
-        background: "#04070d",
-        fontSize: "0.78rem",
-        color: "rgba(255,255,255,0.5)",
-        textAlign: "center",
-      }}>
+      <div
+        style={{
+          position: "relative",
+          zIndex: 2,
+          borderTop: "1px solid rgba(255,255,255,0.08)",
+          padding: "24px 32px",
+          background: "rgba(4, 7, 13, 0.85)",
+          fontSize: "0.78rem",
+          color: "rgba(255,255,255,0.6)",
+          textAlign: "center",
+        }}
+      >
         <div style={{ maxWidth: "1280px", margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
           <div>
             © {new Date().getFullYear()} Bethel Ministries International University (BMI University). All rights reserved.
