@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
+import { PROGRAMS as FALLBACK_PROGRAMS, API_WORKER_URL } from "@bmi/shared";
 
 const slides = [
   { bg: "/images/home-hero/home-hero-1-graduation.jpg", tagline: "Empowering Christ-Centered Scholars & Global Leaders" },
@@ -12,14 +13,108 @@ const slides = [
 
 export default function HomePage() {
   const [current, setCurrent] = useState(0);
+  const [activeTab, setActiveTab] = useState("bachelors");
   const [verifyCode, setVerifyCode] = useState("");
   const intervalRef = useRef(null);
+  const canvasRef = useRef(null);
 
+  // ── Load authoritative program data from API worker (with fallback) ──
+  const [programs, setPrograms] = useState(FALLBACK_PROGRAMS);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_WORKER_URL}/api/public/programs`, { cache: 'force-cache' });
+        if (!res.ok) return;
+        const body = await res.json();
+        if (!body?.success || !Array.isArray(body.data)) return;
+        if (cancelled) return;
+        setPrograms(body.data.map(p => ({
+          label: p.label ?? p.name,
+          level: p.level,
+          description: p.description,
+          icon: p.icon ?? undefined,
+        })));
+      } catch { /* keep fallback */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const bachelors = useMemo(() => programs.filter(p => p.level === 'undergraduate').map(p => ({ title: p.label, desc: p.description })), [programs]);
+  const masters   = useMemo(() => programs.filter(p => p.level === 'graduate').map(p => ({ title: p.label, desc: p.description })), [programs]);
+  const doctorates= useMemo(() => programs.filter(p => p.level === 'doctorate').map(p => ({ title: p.label, desc: p.description })), [programs]);
+  const programMap = { bachelors, masters, doctorates };
+
+  // Slider auto-advance
   useEffect(() => {
     intervalRef.current = setInterval(() => {
       setCurrent((p) => (p + 1) % slides.length);
     }, 6500);
     return () => clearInterval(intervalRef.current);
+  }, []);
+
+  // Floating particles canvas for homepage hero
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    let animId;
+    let particles = [];
+    const PARTICLE_COUNT = 50;
+
+    const resize = () => {
+      if (!canvas.parentElement) return;
+      canvas.width = canvas.parentElement.offsetWidth;
+      canvas.height = canvas.parentElement.offsetHeight;
+    };
+    resize();
+    window.addEventListener("resize", resize);
+
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      particles.push({
+        x: Math.random() * (canvas.width || 1200),
+        y: Math.random() * (canvas.height || 800),
+        r: Math.random() * 2.2 + 0.6,
+        dx: (Math.random() - 0.5) * 0.4,
+        dy: -(Math.random() * 0.5 + 0.2),
+        baseAlpha: Math.random() * 0.5 + 0.25,
+        twinkleSpeed: Math.random() * 0.035 + 0.015,
+        twinkleOffset: Math.random() * Math.PI * 2,
+      });
+    }
+
+    let frame = 0;
+    const draw = () => {
+      frame++;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      for (const p of particles) {
+        p.x += p.dx;
+        p.y += p.dy;
+
+        if (p.y < -5) p.y = canvas.height + 5;
+        if (p.x < -5) p.x = canvas.width + 5;
+        if (p.x > canvas.width + 5) p.x = -5;
+
+        const currentAlpha = p.baseAlpha * (0.65 + 0.35 * Math.sin(frame * p.twinkleSpeed + p.twinkleOffset));
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(229, 197, 120, ${currentAlpha})`;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = "rgba(229, 197, 120, 0.7)";
+        ctx.fill();
+      }
+
+      animId = requestAnimationFrame(draw);
+    };
+
+    draw();
+    return () => {
+      cancelAnimationFrame(animId);
+      window.removeEventListener("resize", resize);
+    };
   }, []);
 
   const goTo = (i) => {
@@ -38,7 +133,21 @@ export default function HomePage() {
     <main id="main-content">
 
       {/* ─── HERO SECTION ─── */}
-      <section aria-label="Hero" style={{ position: "relative", width: "100%", height: "100vh", minHeight: "680px", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <section
+        aria-label="Hero"
+        style={{
+          position: "relative",
+          width: "100%",
+          height: "100vh",
+          minHeight: "680px",
+          overflow: "hidden",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          paddingTop: "112px",
+          margin: 0,
+        }}
+      >
         {slides.map((s, i) => (
           <div
             key={i}
@@ -50,16 +159,38 @@ export default function HomePage() {
               backgroundSize: "cover",
               backgroundPosition: "center",
               opacity: i === current ? 1 : 0,
-              transition: "opacity 1.5s cubic-bezier(0.4, 0, 0.2, 1)",
-              transform: i === current ? "scale(1)" : "scale(1.04)",
-              transitionProperty: "opacity, transform",
+              transition: "opacity 1.5s cubic-bezier(0.4, 0, 0.2, 1), transform 6.5s ease",
+              transform: i === current ? "scale(1.04)" : "scale(1)",
             }}
           />
         ))}
-        {/* Deep Oxford Navy Gradient Vignette */}
-        <div aria-hidden="true" style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, rgba(9, 18, 35, 0.65) 0%, rgba(9, 18, 35, 0.85) 65%, #091223 100%)" }} />
 
-        <div style={{ position: "relative", zIndex: 1, maxWidth: "1020px", padding: "0 2rem", textAlign: "center" }}>
+        {/* Deep Oxford Navy Gradient Vignette */}
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "linear-gradient(to bottom, rgba(9, 18, 35, 0.65) 0%, rgba(9, 18, 35, 0.85) 65%, #091223 100%)",
+            zIndex: 1,
+          }}
+        />
+
+        {/* Dynamic Glowing Gold Particles */}
+        <canvas
+          ref={canvasRef}
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            zIndex: 2,
+            pointerEvents: "none",
+          }}
+        />
+
+        <div style={{ position: "relative", zIndex: 3, maxWidth: "1020px", padding: "0 2rem", textAlign: "center" }}>
           <div className="animate-hero">
             <span style={{
               display: "inline-flex",
@@ -125,7 +256,7 @@ export default function HomePage() {
         </div>
 
         {/* Slide navigation indicators */}
-        <div style={{ position: "absolute", bottom: "2.5rem", left: "50%", transform: "translateX(-50%)", display: "flex", gap: "0.75rem", zIndex: 2 }}>
+        <div style={{ position: "absolute", bottom: "2.5rem", left: "50%", transform: "translateX(-50%)", display: "flex", gap: "0.75rem", zIndex: 3 }}>
           {slides.map((_, i) => (
             <button
               key={i}
@@ -178,178 +309,121 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ─── DEGREE PATHWAYS ─── */}
-      <section aria-labelledby="programs-heading" style={{ background: "#ffffff", padding: "7rem 2rem" }}>
+      {/* ─── ORIGINAL TABBED DEGREE PROGRAMS SECTION ─── */}
+      <section aria-labelledby="programs-heading" style={{ background: "#f8fafc", padding: "6rem 2rem" }}>
         <div style={{ maxWidth: "1280px", margin: "0 auto" }}>
-
-          <div style={{ textAlign: "center", marginBottom: "5rem" }}>
+          <div style={{ textAlign: "center", marginBottom: "3rem" }}>
             <div className="gold-bar" style={{ margin: "0 auto 1.25rem" }} />
-            <span style={{ fontSize: "0.82rem", fontWeight: 800, color: "#a07e2c", textTransform: "uppercase", letterSpacing: "0.14em" }}>
-              ACADEMIC DEGREE PATHWAYS
-            </span>
-            <h2 id="programs-heading" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: "clamp(2.2rem, 3.8vw, 3.2rem)", color: "#091223", marginTop: "0.4rem", letterSpacing: "-0.03em" }}>
-              Programs Offered at BMI University
+            <h2 id="programs-heading" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: "clamp(2rem, 3.5vw, 3rem)", color: "#0f172a", marginBottom: "1rem", letterSpacing: "-0.02em" }}>
+              Degree Programs Offered
             </h2>
+            <p style={{ color: "#64748b", fontSize: "1.1rem", maxWidth: "680px", margin: "0 auto", lineHeight: 1.7 }}>
+              Choose from a full range of accredited biblical and theological programs at the bachelor&apos;s, master&apos;s, and doctoral level.
+            </p>
           </div>
 
-          {/* ── UNDERGRADUATE ── */}
-          <div style={{ marginBottom: "5rem" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "1.25rem", marginBottom: "2rem" }}>
-              <div style={{ background: "linear-gradient(135deg, #091223, #0e1d38)", color: "#e5c578", width: 44, height: 44, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.3rem", flexShrink: 0 }}>🎓</div>
-              <div>
-                <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "#a07e2c", textTransform: "uppercase", letterSpacing: "0.12em" }}>UNDERGRADUATE</div>
-                <div style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: "1.45rem", color: "#091223", lineHeight: 1.1 }}>Bachelor&apos;s Degrees — 4 Years</div>
-              </div>
-              <div style={{ flex: 1, height: 1, background: "linear-gradient(90deg, rgba(197,160,72,0.4), transparent)", marginLeft: "0.5rem" }} />
-            </div>
+          {/* Tab Buttons */}
+          <div style={{ display: "flex", justifyContent: "center", gap: "0.75rem", marginBottom: "3rem", flexWrap: "wrap" }}>
+            {[["bachelors", "Bachelors"], ["masters", "Masters"], ["doctorates", "Doctorate"]].map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setActiveTab(key)}
+                style={{
+                  padding: "0.7rem 2rem",
+                  borderRadius: "999px",
+                  border: "2px solid",
+                  fontWeight: 700,
+                  fontSize: "0.95rem",
+                  fontFamily: "'Outfit', sans-serif",
+                  cursor: "pointer",
+                  transition: "all 0.25s ease",
+                  background: activeTab === key ? "#091223" : "transparent",
+                  color: activeTab === key ? "#e5c578" : "#091223",
+                  borderColor: activeTab === key ? "#091223" : "#cbd5e1",
+                  boxShadow: activeTab === key ? "0 6px 20px rgba(9, 18, 35, 0.15)" : "none",
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "1.25rem" }}>
-              {[
-                { title: "Bachelor of Biblical Studies", tag: "B.B.S." },
-                { title: "Bachelor of Theology", tag: "B.Th." },
-                { title: "Bachelor of Arts — Christian Ministry", tag: "B.A." },
-                { title: "Bachelor of Arts — Christian Counseling", tag: "B.A." },
-                { title: "Bachelor of Arts — Missions & Evangelism", tag: "B.A." },
-                { title: "Bachelor of Arts — Pastoral Leadership", tag: "B.A." },
-              ].map((p, i) => (
-                <Link key={i} href="/apply" style={{ textDecoration: "none" }}>
-                  <div style={{
-                    background: "#f8fafc",
-                    border: "1.5px solid #e2e8f0",
-                    borderRadius: "16px",
-                    padding: "1.5rem 1.75rem",
-                    display: "flex",
+          {/* Program Cards Grid */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "1.5rem" }}>
+            {programMap[activeTab].map((p, i) => (
+              <article
+                key={i}
+                className="program-card"
+                style={{
+                  background: "#ffffff",
+                  borderRadius: "16px",
+                  padding: "2rem",
+                  border: "1px solid rgba(0,0,0,0.06)",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+                  transition: "transform 0.25s ease, box-shadow 0.25s ease",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.75rem",
+                }}
+              >
+                <div style={{ width: "40px", height: "4px", borderRadius: "999px", background: "linear-gradient(90deg, #c5a048, #e5c578)", marginBottom: "0.5rem" }} />
+                <h3 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: "1.15rem", color: "#091223", lineHeight: 1.3 }}>
+                  {p.title}
+                </h3>
+                <p style={{ color: "#64748b", fontSize: "0.9rem", lineHeight: 1.7, flexGrow: 1 }}>
+                  {p.desc}
+                </p>
+                <Link
+                  href="/apply"
+                  style={{
+                    display: "inline-flex",
                     alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: "1rem",
-                    transition: "all 0.25s ease",
-                    cursor: "pointer",
+                    gap: "0.4rem",
+                    color: "var(--color-gold-dark, #a07e2c)",
+                    fontWeight: 700,
+                    fontSize: "0.85rem",
+                    marginTop: "0.5rem",
+                    textDecoration: "underline",
+                    width: "fit-content",
                   }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = "#c5a048"; e.currentTarget.style.background = "#fffdf5"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(197,160,72,0.12)"; }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = "#e2e8f0"; e.currentTarget.style.background = "#f8fafc"; e.currentTarget.style.boxShadow = "none"; }}
-                  >
-                    <div>
-                      <div style={{ fontSize: "0.68rem", fontWeight: 800, color: "#a07e2c", letterSpacing: "0.08em", marginBottom: "0.35rem" }}>{p.tag} • 120 CR HRS</div>
-                      <div style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: "1rem", color: "#091223", lineHeight: 1.3 }}>{p.title}</div>
-                    </div>
-                    <span style={{ color: "#c5a048", fontSize: "1.1rem", flexShrink: 0 }}>→</span>
-                  </div>
+                >
+                  Apply Today →
                 </Link>
-              ))}
-            </div>
+              </article>
+            ))}
           </div>
 
-          {/* ── GRADUATE ── */}
-          <div style={{ marginBottom: "5rem" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "1.25rem", marginBottom: "2rem" }}>
-              <div style={{ background: "linear-gradient(135deg, #c5a048, #e5c578)", color: "#091223", width: 44, height: 44, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.3rem", flexShrink: 0 }}>📖</div>
-              <div>
-                <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "#a07e2c", textTransform: "uppercase", letterSpacing: "0.12em" }}>GRADUATE</div>
-                <div style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: "1.45rem", color: "#091223", lineHeight: 1.1 }}>Master&apos;s Degrees — 2 Years</div>
-              </div>
-              <div style={{ flex: 1, height: 1, background: "linear-gradient(90deg, rgba(197,160,72,0.4), transparent)", marginLeft: "0.5rem" }} />
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "1.25rem" }}>
-              {[
-                { title: "Master of Divinity", tag: "M.Div." },
-                { title: "Master of Theology", tag: "M.Th." },
-                { title: "Master of Arts — Christian Leadership", tag: "M.A." },
-                { title: "Master of Arts — Biblical Counseling", tag: "M.A." },
-                { title: "Master of Arts — Missions & Global Ministry", tag: "M.A." },
-                { title: "Master of Ministry", tag: "M.Min." },
-              ].map((p, i) => (
-                <Link key={i} href="/apply" style={{ textDecoration: "none" }}>
-                  <div style={{
-                    background: "#fffdf5",
-                    border: "1.5px solid rgba(197,160,72,0.25)",
-                    borderRadius: "16px",
-                    padding: "1.5rem 1.75rem",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: "1rem",
-                    transition: "all 0.25s ease",
-                    cursor: "pointer",
-                  }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = "#c5a048"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(197,160,72,0.18)"; }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(197,160,72,0.25)"; e.currentTarget.style.boxShadow = "none"; }}
-                  >
-                    <div>
-                      <div style={{ fontSize: "0.68rem", fontWeight: 800, color: "#a07e2c", letterSpacing: "0.08em", marginBottom: "0.35rem" }}>{p.tag} • 48 CR HRS</div>
-                      <div style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: "1rem", color: "#091223", lineHeight: 1.3 }}>{p.title}</div>
-                    </div>
-                    <span style={{ color: "#c5a048", fontSize: "1.1rem", flexShrink: 0 }}>→</span>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
-
-          {/* ── DOCTORAL ── */}
-          <div style={{ marginBottom: "4rem" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "1.25rem", marginBottom: "2rem" }}>
-              <div style={{ background: "linear-gradient(135deg, #172a4d, #233c66)", color: "#e5c578", width: 44, height: 44, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.3rem", flexShrink: 0 }}>🏛️</div>
-              <div>
-                <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "#a07e2c", textTransform: "uppercase", letterSpacing: "0.12em" }}>DOCTORAL STUDIES</div>
-                <div style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: "1.45rem", color: "#091223", lineHeight: 1.1 }}>Doctoral Degrees — 3 Years</div>
-              </div>
-              <div style={{ flex: 1, height: 1, background: "linear-gradient(90deg, rgba(197,160,72,0.4), transparent)", marginLeft: "0.5rem" }} />
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "1.25rem" }}>
-              {[
-                { title: "Doctor of Ministry", tag: "D.Min." },
-                { title: "Doctor of Philosophy in Biblical Studies", tag: "Ph.D." },
-                { title: "Doctor of Theology", tag: "Th.D." },
-                { title: "Doctor of Philosophy in Christian Leadership", tag: "Ph.D." },
-              ].map((p, i) => (
-                <Link key={i} href="/apply" style={{ textDecoration: "none" }}>
-                  <div style={{
-                    background: "linear-gradient(135deg, #091223 0%, #0e1d38 100%)",
-                    border: "1.5px solid rgba(197,160,72,0.2)",
-                    borderRadius: "16px",
-                    padding: "1.5rem 1.75rem",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: "1rem",
-                    transition: "all 0.25s ease",
-                    cursor: "pointer",
-                  }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = "#c5a048"; e.currentTarget.style.boxShadow = "0 8px 28px rgba(9,18,35,0.35)"; }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(197,160,72,0.2)"; e.currentTarget.style.boxShadow = "none"; }}
-                  >
-                    <div>
-                      <div style={{ fontSize: "0.68rem", fontWeight: 800, color: "#e5c578", letterSpacing: "0.08em", marginBottom: "0.35rem" }}>{p.tag} • 60 CR HRS</div>
-                      <div style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: "1rem", color: "#ffffff", lineHeight: 1.3 }}>{p.title}</div>
-                    </div>
-                    <span style={{ color: "#e5c578", fontSize: "1.1rem", flexShrink: 0 }}>→</span>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
-
-          {/* ── CTA Strip ── */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1.5rem", padding: "2.5rem 3rem", background: "linear-gradient(135deg, #091223 0%, #0e1d38 100%)", borderRadius: "20px", border: "1px solid rgba(197,160,72,0.3)" }}>
+          {/* Graduate Certificates Card */}
+          <div
+            style={{
+              marginTop: "3rem",
+              background: "linear-gradient(135deg, #091223 0%, #0e1d38 100%)",
+              borderRadius: "20px",
+              padding: "2.5rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: "2rem",
+              border: "1px solid rgba(197, 160, 72, 0.3)",
+              boxShadow: "0 10px 30px rgba(9, 18, 35, 0.2)",
+            }}
+          >
             <div>
-              <div style={{ fontSize: "0.8rem", fontWeight: 800, color: "#e5c578", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "0.4rem" }}>
-                ALSO AVAILABLE: GRADUATE CERTIFICATES
-              </div>
-              <div style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: "1.5rem", color: "#ffffff" }}>
-                Christian Studies • Spiritual Formation • Theological Leadership
-              </div>
+              <h3 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: "1.4rem", color: "#e5c578", marginBottom: "0.75rem" }}>
+                Graduate Certificates
+              </h3>
+              <p style={{ color: "rgba(255,255,255,0.75)", marginBottom: "0.5rem" }}>✦ Christian Studies</p>
+              <p style={{ color: "rgba(255,255,255,0.75)", margin: 0 }}>✦ Spiritual Formation</p>
             </div>
-            <Link href="/apply" className="btn btn-gold" style={{ fontSize: "1rem", padding: "1rem 2.25rem", whiteSpace: "nowrap" }}>
-              View All Programs →
+            <Link href="/apply" className="btn btn-gold">
+              Apply for a Certificate →
             </Link>
           </div>
-
         </div>
       </section>
 
-      {/* ─── CHANCELLOR'S INSTITUTIONAL WELCOME ─── */}
+      {/* ─── CHANCELLOR'S INSTITUTIONAL WELCOME & VERIFICATION ─── */}
       <section style={{ background: "#ffffff", padding: "7rem 2rem", borderTop: "1px solid #e2e8f0" }}>
         <div style={{ maxWidth: "1280px", margin: "0 auto", display: "grid", gridTemplateColumns: "1.1fr 0.9fr", gap: "5rem", alignItems: "center" }} className="split-section">
           

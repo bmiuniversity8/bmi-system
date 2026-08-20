@@ -147,39 +147,53 @@ img {
 
 /* ─── Page Header (Inner Pages) ─── */
 .page-header {
-  height: 48vh;
-  min-height: 380px;
+  height: 60vh;
+  min-height: 440px;
   position: relative;
   display: flex;
   align-items: flex-end;
   padding-bottom: 4rem;
   padding-left: 2rem;
   padding-right: 2rem;
+  padding-top: 112px; /* absorb fixed navbar height — hero starts at very top */
   color: #ffffff;
-  margin-top: 80px;
+  margin-top: 0; /* flush against navbar */
   background-size: cover;
   background-position: center;
+  overflow: hidden;
 }
 .page-header::before {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(to top, rgba(9, 18, 35, 0.94) 0%, rgba(9, 18, 35, 0.5) 60%, rgba(9, 18, 35, 0.25) 100%);
+  background: linear-gradient(to top, rgba(9, 18, 35, 0.95) 0%, rgba(9, 18, 35, 0.55) 55%, rgba(9, 18, 35, 0.3) 100%);
+  z-index: 1;
+}
+/* Particle canvas layer */
+.page-header canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  pointer-events: none;
 }
 .page-header-content {
   position: relative;
-  z-index: 1;
+  z-index: 3;
   max-width: 1280px;
   margin: 0 auto;
   width: 100%;
 }
 .page-header h1 {
   color: #ffffff;
-  font-size: clamp(2.5rem, 5vw, 4.2rem);
+  font-family: 'Outfit', sans-serif;
+  font-size: clamp(2.8rem, 6vw, 4.8rem);
   font-weight: 900;
   margin-bottom: 1rem;
-  letter-spacing: -0.03em;
-  text-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  letter-spacing: -0.04em;
+  line-height: 1.05;
+  text-shadow: 0 4px 24px rgba(0,0,0,0.5);
 }
 .page-header p {
   color: rgba(255,255,255,0.9);
@@ -187,6 +201,32 @@ img {
   max-width: 650px;
   line-height: 1.7;
 }
+/* Gold accent eyebrow tag above h1 */
+.page-header-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #e5c578;
+  background: rgba(197, 160, 72, 0.15);
+  border: 1px solid rgba(197, 160, 72, 0.5);
+  padding: 0.4rem 1rem;
+  border-radius: 999px;
+  margin-bottom: 1.25rem;
+  backdrop-filter: blur(8px);
+}
+
+/* Particle animations */
+@keyframes particleFloat {
+  0%   { transform: translateY(0) translateX(0); opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 0.6; }
+  100% { transform: translateY(-120px) translateX(30px); opacity: 0; }
+}
+
 
 /* ─── Hero Slider ─── */
 .hero-slide-bg {

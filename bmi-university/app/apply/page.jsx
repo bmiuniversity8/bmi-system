@@ -80,7 +80,7 @@ export default function ApplyPage() {
   };
 
   return (
-    <main id="main-content" style={{ background: "#f8fafc", minHeight: "100vh", padding: "6rem 2rem" }}>
+    <main id="main-content" style={{ background: "#f8fafc", minHeight: "100vh", padding: "9.5rem 2rem 6rem" }}>
       <div style={{ maxWidth: "800px", margin: "0 auto" }}>
         <div style={{ textAlign: "center", marginBottom: "3rem" }}>
           <h1 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: "clamp(2rem, 4vw, 3rem)", color: "#0f172a", marginBottom: "1rem" }}>

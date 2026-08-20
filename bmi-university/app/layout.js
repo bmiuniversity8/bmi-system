@@ -30,7 +30,7 @@ export default function RootLayout({ children }) {
       </head>
       <body style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
         <Navbar />
-        <div style={{ flexGrow: 1, paddingTop: '112px' }}>
+        <div style={{ flexGrow: 1 }}>
           {children}
         </div>
         <CookieBanner />

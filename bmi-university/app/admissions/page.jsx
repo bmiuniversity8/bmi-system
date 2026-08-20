@@ -1,4 +1,5 @@
 import Link from "next/link";
+import PageHero from "@/components/PageHero";
 
 export default function Admissions() {
   const fees = [
@@ -35,12 +36,12 @@ export default function Admissions() {
 
   return (
     <main id="main-content">
-      <header className="page-header" style={{ backgroundImage: "url('/images/admissions-hero/admissions-hero-3-orientation.jpg')" }}>
-        <div className="page-header-content" style={{ maxWidth: "1280px", margin: "0 auto", padding: "0 2rem" }}>
-          <h1>Admissions</h1>
-          <p>Your journey toward Christ-centered leadership begins here.</p>
-        </div>
-      </header>
+      <PageHero
+        image="/images/admissions-hero/admissions-hero-3-orientation.jpg"
+        eyebrow="Admissions & Enrollment"
+        title="Admissions at BMI"
+        subtitle="Your journey toward Christ-centered leadership begins here. Join a worldwide cohort of scholars."
+      />
 
       <section style={{ background: "#fff", padding: "5rem 2rem" }}>
         <div style={{ maxWidth: "1280px", margin: "0 auto", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "5rem", alignItems: "center" }} className="split-section">
@@ -58,125 +59,141 @@ export default function Admissions() {
               Apply Now →
             </Link>
           </div>
-          <div style={{ borderRadius: "24px", overflow: "hidden", boxShadow: "0 20px 60px rgba(15,23,42,0.15)", aspectRatio: "4/3" }}>
-            <img src="/images/admissions-hero/admissions-hero-2-interview.jpg" alt="Admissions process at BMI University" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+          <div style={{ borderRadius: "20px", overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,0.12)", aspectRatio: "4/3" }}>
+            <img
+              src="/images/admissions-hero/admissions-hero-2-classroom.jpg"
+              alt="Classroom discussion at BMI University"
+              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+              loading="lazy"
+            />
           </div>
         </div>
       </section>
 
-      <section aria-labelledby="requirements-heading" style={{ background: "#f8fafc", padding: "6rem 2rem" }}>
+      {/* Steps */}
+      <section style={{ background: "#f8fafc", padding: "5rem 2rem" }}>
         <div style={{ maxWidth: "1280px", margin: "0 auto" }}>
-          <div style={{ textAlign: "center", marginBottom: "4rem" }}>
-            <div className="gold-bar" style={{ margin: "0 auto 1.25rem" }} />
-            <h2 id="requirements-heading" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: "clamp(1.8rem, 3vw, 2.6rem)", color: "#0f172a", marginBottom: "1rem" }}>
-              Admission Steps
-            </h2>
-            <p style={{ color: "#64748b", fontSize: "1.05rem", maxWidth: "640px", margin: "0 auto", lineHeight: 1.7 }}>
-              Follow these steps to complete your application to BMI University. You can track your progress through the online portal.
-            </p>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "2rem" }}>
-            {steps.map((s) => (
-              <div key={s.num} style={{ background: "#fff", borderRadius: "20px", padding: "2.5rem", boxShadow: "0 2px 12px rgba(0,0,0,0.06)", border: "1px solid rgba(0,0,0,0.05)", position: "relative", overflow: "hidden" }}>
-                <div style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: "4rem", color: "rgba(212,175,55,0.1)", position: "absolute", top: "1rem", right: "1.5rem", lineHeight: 1 }}>
-                  {s.num}
-                </div>
-                <div style={{ width: "48px", height: "48px", background: "linear-gradient(135deg,#d4af37,#b5952f)", borderRadius: "14px", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: "1.1rem", color: "#0f172a", marginBottom: "1.25rem" }}>
-                  {s.num}
-                </div>
-                <h3 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: "1.1rem", color: "#0f172a", marginBottom: "0.75rem" }}>{s.title}</h3>
-                <p style={{ color: "#64748b", fontSize: "0.9rem", lineHeight: 1.75 }}>{s.body}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section aria-labelledby="fees-heading" style={{ background: "#fff", padding: "6rem 2rem" }}>
-        <div style={{ maxWidth: "1000px", margin: "0 auto" }}>
           <div style={{ textAlign: "center", marginBottom: "3.5rem" }}>
             <div className="gold-bar" style={{ margin: "0 auto 1.25rem" }} />
-            <h2 id="fees-heading" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: "clamp(1.8rem, 3vw, 2.6rem)", color: "#0f172a", marginBottom: "1rem" }}>
-              Tuition &amp; Fees
+            <h2 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: "clamp(1.8rem, 3vw, 2.6rem)", color: "#0f172a", marginBottom: "1rem" }}>
+              How to Apply
             </h2>
-            <p style={{ color: "#64748b", fontSize: "1rem", maxWidth: "600px", margin: "0 auto", lineHeight: 1.7 }}>
-              Applicants (Certifications, Undergraduate, and Graduate): Submit the non-refundable Application Fee and
-              Registration Fee ($100.00 Total).
+            <p style={{ color: "#64748b", fontSize: "1.05rem", maxWidth: "600px", margin: "0 auto" }}>
+              Follow these simple steps to submit your application and begin your studies at BMI University.
             </p>
           </div>
 
-          <div style={{ borderRadius: "20px", overflow: "hidden", boxShadow: "0 4px 24px rgba(0,0,0,0.08)", border: "1px solid rgba(0,0,0,0.06)", marginBottom: "3rem" }}>
-            <div style={{ background: "#d4af37", padding: "1.25rem 2rem", display: "flex", justifyContent: "space-between" }}>
-              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, color: "#0f172a", fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "0.1em" }}>Program Level</span>
-              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, color: "#0f172a", fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "0.1em" }}>Tuition Cost</span>
-            </div>
-            {tuitionRates.map((t, i) => (
-              <div key={i} style={{ padding: "1.1rem 2rem", display: "flex", justifyContent: "space-between", alignItems: "center", background: i % 2 === 0 ? "#fff" : "#f8fafc", borderTop: "1px solid rgba(0,0,0,0.04)" }}>
-                <span style={{ color: "#334155", fontSize: "0.95rem", fontWeight: 500 }}>{t.program}</span>
-                <span style={{ color: "#0f172a", fontWeight: 800, fontFamily: "'Outfit', sans-serif", fontSize: "1rem" }}>{t.cost}</span>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1.5rem" }}>
+            {steps.map((s) => (
+              <div key={s.num} style={{ background: "#fff", borderRadius: "16px", padding: "2rem 1.5rem", border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
+                <span style={{ fontSize: "2rem", fontWeight: 900, color: "#d4af37", fontFamily: "'Outfit', sans-serif", display: "block", marginBottom: "0.75rem" }}>
+                  {s.num}
+                </span>
+                <h3 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: "1rem", color: "#0f172a", marginBottom: "0.75rem" }}>
+                  {s.title}
+                </h3>
+                <p style={{ color: "#64748b", fontSize: "0.88rem", lineHeight: 1.65 }}>
+                  {s.body}
+                </p>
               </div>
             ))}
-          </div>
-
-          <div style={{ borderRadius: "20px", overflow: "hidden", boxShadow: "0 4px 24px rgba(0,0,0,0.08)", border: "1px solid rgba(0,0,0,0.06)", marginBottom: "3rem" }}>
-            <div style={{ background: "#0f172a", padding: "1.25rem 2rem", display: "flex", justifyContent: "space-between" }}>
-              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, color: "#d4af37", fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "0.1em" }}>Fee Type</span>
-              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, color: "#d4af37", fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "0.1em" }}>Amount</span>
-            </div>
-            {fees.map((f, i) => (
-              <div key={i} style={{ padding: "1.1rem 2rem", display: "flex", justifyContent: "space-between", alignItems: "center", background: i % 2 === 0 ? "#fff" : "#f8fafc", borderTop: "1px solid rgba(0,0,0,0.04)" }}>
-                <span style={{ color: "#334155", fontSize: "0.95rem", fontWeight: 500 }}>{f.label}</span>
-                <span style={{ color: "#0f172a", fontWeight: 800, fontFamily: "'Outfit', sans-serif", fontSize: "1rem" }}>{f.amount}</span>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ background: "#f8fafc", borderRadius: "20px", padding: "2.5rem", border: "1px solid rgba(0,0,0,0.06)", marginBottom: "2rem" }}>
-            <h3 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: "1.3rem", color: "#0f172a", marginBottom: "1.5rem" }}>
-              Transfer Credit Fees
-            </h3>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1rem" }}>
-              {transferFees.map((t, i) => (
-                <div key={i} style={{ background: "#fff", borderRadius: "12px", padding: "1.25rem", border: "1px solid rgba(0,0,0,0.06)", textAlign: "center" }}>
-                  <div style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: "1.5rem", color: "#d4af37", marginBottom: "0.4rem" }}>{t.fee}</div>
-                  <div style={{ color: "#64748b", fontSize: "0.82rem" }}>{t.credits}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div style={{ background: "#fefce8", border: "1px solid #fde047", borderRadius: "12px", padding: "1.25rem 1.75rem" }}>
-            <p style={{ color: "#713f12", fontSize: "0.85rem", lineHeight: 1.7, margin: 0 }}>
-              <strong>Note:</strong> The tuition fees do not include textbook(s), workbook(s), or reference reading materials.
-              Upon request, additional book fees will be charged to the student&apos;s account based on course criteria.
-              Tuition and fee costs can change at any time without notice from the institution.
-            </p>
           </div>
         </div>
       </section>
 
-      <section style={{ background: "linear-gradient(135deg,#0f172a 0%,#1a2744 100%)", padding: "5rem 2rem", textAlign: "center" }}>
-        <div style={{ maxWidth: "680px", margin: "0 auto" }}>
-          <h2 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: "clamp(1.8rem, 3vw, 2.5rem)", color: "#fff", marginBottom: "1.25rem" }}>
-            Ready to Begin Your Journey?
-          </h2>
-          <p style={{ color: "rgba(255,255,255,0.75)", fontSize: "1.05rem", lineHeight: 1.8, marginBottom: "2.5rem" }}>
-            Take the first step toward a transformative, Christ-centered education. Applications are open now.
-          </p>
-          <div style={{ display: "flex", gap: "1rem", justifyContent: "center", flexWrap: "wrap" }}>
-            <Link href="/apply" className="btn btn-gold" style={{ fontSize: "1rem", padding: "1rem 2.5rem" }}>
-              Apply Now →
-            </Link>
-            <Link href="/contact" className="btn btn-outline-white" style={{ fontSize: "1rem", padding: "1rem 2.5rem" }}>
-              Contact Admissions
-            </Link>
+      {/* Tuition */}
+      <section style={{ background: "#fff", padding: "5rem 2rem" }}>
+        <div style={{ maxWidth: "1000px", margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: "3rem" }}>
+            <div className="gold-bar" style={{ margin: "0 auto 1.25rem" }} />
+            <h2 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: "clamp(1.8rem, 3vw, 2.6rem)", color: "#0f172a", marginBottom: "1rem" }}>
+              Tuition Rates
+            </h2>
+            <p style={{ color: "#64748b", fontSize: "1.05rem" }}>
+              Affordable, transparent tuition rates for all degree levels.
+            </p>
           </div>
+
+          <div style={{ borderRadius: "16px", overflow: "hidden", border: "1px solid #e2e8f0", boxShadow: "0 4px 16px rgba(0,0,0,0.05)" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ background: "#0f172a", color: "#fff", textAlign: "left" }}>
+                  <th style={{ padding: "1rem 1.5rem", fontFamily: "'Outfit', sans-serif", fontWeight: 700 }}>Program Level</th>
+                  <th style={{ padding: "1rem 1.5rem", fontFamily: "'Outfit', sans-serif", fontWeight: 700 }}>Tuition Rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tuitionRates.map((t, i) => (
+                  <tr key={t.program} style={{ background: i % 2 === 0 ? "#fff" : "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                    <td style={{ padding: "1rem 1.5rem", fontWeight: 600, color: "#1e293b" }}>{t.program}</td>
+                    <td style={{ padding: "1rem 1.5rem", color: "#d4af37", fontWeight: 700 }}>{t.cost}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      {/* Fees */}
+      <section style={{ background: "#f8fafc", padding: "5rem 2rem" }}>
+        <div style={{ maxWidth: "1000px", margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: "3rem" }}>
+            <div className="gold-bar" style={{ margin: "0 auto 1.25rem" }} />
+            <h2 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: "clamp(1.8rem, 3vw, 2.6rem)", color: "#0f172a", marginBottom: "1rem" }}>
+              Institutional Fees
+            </h2>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem" }} className="split-section">
+            <div style={{ background: "#fff", borderRadius: "16px", padding: "2rem", border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
+              <h3 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: "1.1rem", color: "#0f172a", marginBottom: "1.25rem" }}>
+                General Fees
+              </h3>
+              <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+                {fees.map((f) => (
+                  <li key={f.label} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.9rem", color: "#475569", borderBottom: "1px solid #f1f5f9", paddingBottom: "0.5rem" }}>
+                    <span>{f.label}</span>
+                    <strong style={{ color: "#0f172a" }}>{f.amount}</strong>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div style={{ background: "#fff", borderRadius: "16px", padding: "2rem", border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
+              <h3 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: "1.1rem", color: "#0f172a", marginBottom: "1.25rem" }}>
+                Transfer Credit Fees
+              </h3>
+              <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+                {transferFees.map((tf) => (
+                  <li key={tf.credits} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.9rem", color: "#475569", borderBottom: "1px solid #f1f5f9", paddingBottom: "0.5rem" }}>
+                    <span>{tf.credits}</span>
+                    <strong style={{ color: "#0f172a" }}>{tf.fee}</strong>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section style={{ background: "#0f172a", padding: "5rem 2rem", textAlign: "center" }}>
+        <div style={{ maxWidth: "600px", margin: "0 auto" }}>
+          <h2 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: "2.2rem", color: "#fff", marginBottom: "1rem" }}>
+            Start Your Application
+          </h2>
+          <p style={{ color: "rgba(255,255,255,0.75)", fontSize: "1.05rem", lineHeight: 1.7, marginBottom: "2rem" }}>
+            Take the first step toward earning your accredited degree at BMI University.
+          </p>
+          <Link href="/apply" className="btn btn-gold" style={{ fontSize: "1rem", padding: "0.85rem 2.5rem" }}>
+            Apply Now →
+          </Link>
         </div>
       </section>
 
       <style>{`
-        @media (max-width: 900px) { .split-section { grid-template-columns: 1fr !important; gap: 2rem !important; } }
+        @media (max-width: 900px) { .split-section { grid-template-columns: 1fr !important; } }
       `}</style>
     </main>
   );

@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useState, useEffect, useMemo } from "react";
 import { PROGRAMS as FALLBACK_PROGRAMS, API_WORKER_URL } from "@bmi/shared";
+import PageHero from "@/components/PageHero";
 
 export default function Academics() {
   // ── DB-as-SSOT: load programs from the authoritative public endpoint.
@@ -79,16 +80,12 @@ export default function Academics() {
 
   return (
     <main id="main-content">
-      {/* Page Header */}
-      <header
-        className="page-header"
-        style={{ backgroundImage: "url('/images/academics-hero/academics-hero-1-studying.jpg')" }}
-      >
-        <div className="page-header-content" style={{ maxWidth: "1280px", margin: "0 auto", padding: "0 2rem" }}>
-          <h1>Academics at BMI</h1>
-          <p>A Christ-centered curriculum designed to equip you for ministry and global impact.</p>
-        </div>
-      </header>
+      <PageHero
+        image="/images/academics-hero/academics-hero-1-studying.jpg"
+        eyebrow="BMI University • Academic Excellence"
+        title="Academics at BMI"
+        subtitle="A Christ-centered curriculum designed to equip you for ministry and global impact."
+      />
 
       {/* Intro */}
       <section style={{ background: "#fff", padding: "5rem 2rem" }}>
