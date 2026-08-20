@@ -173,13 +173,22 @@ export default function HomePage() {
           />
         ))}
 
-        {/* Deep Oxford Navy Gradient Vignette */}
+        {/* Rich Crimson & Deep Oxford Navy Gradient Vignette Tint */}
         <div
           aria-hidden="true"
           style={{
             position: "absolute",
             inset: 0,
-            background: "linear-gradient(to bottom, rgba(9, 18, 35, 0.65) 0%, rgba(9, 18, 35, 0.85) 65%, #091223 100%)",
+            background: "linear-gradient(135deg, rgba(120, 15, 32, 0.68) 0%, rgba(50, 12, 24, 0.6) 38%, rgba(9, 18, 35, 0.85) 75%, #091223 100%)",
+            zIndex: 1,
+          }}
+        />
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "linear-gradient(to bottom, rgba(9, 18, 35, 0.45) 0%, transparent 40%, #091223 100%)",
             zIndex: 1,
           }}
         />

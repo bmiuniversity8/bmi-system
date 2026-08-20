@@ -93,13 +93,22 @@ export default function PageHero({ image, eyebrow, title, subtitle }) {
         margin: 0,
       }}
     >
-      {/* Deep dark gradient overlay */}
+      {/* Rich Crimson & Deep Navy Gradient Tint Overlay */}
       <div
         aria-hidden="true"
         style={{
           position: "absolute",
           inset: 0,
-          background: "linear-gradient(to top, rgba(9, 18, 35, 0.95) 0%, rgba(9, 18, 35, 0.68) 55%, rgba(9, 18, 35, 0.45) 100%)",
+          background: "linear-gradient(135deg, rgba(120, 15, 32, 0.72) 0%, rgba(55, 12, 24, 0.65) 42%, rgba(9, 18, 35, 0.92) 100%)",
+          zIndex: 1,
+        }}
+      />
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: "linear-gradient(to top, rgba(9, 18, 35, 0.95) 0%, rgba(9, 18, 35, 0.45) 50%, rgba(9, 18, 35, 0.2) 100%)",
           zIndex: 1,
         }}
       />
