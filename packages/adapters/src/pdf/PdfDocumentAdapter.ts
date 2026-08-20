@@ -209,8 +209,8 @@ export class PdfDocumentAdapter implements IDocumentGenerator {
 
     // Left Signature
     this.drawHLine(page, y - 10, PdfDocumentAdapter.CHARCOAL, 55, 160, 1);
-    page.drawText('Dr. E. Vance, Ph.D.', { x: 55, y: y - 22, size: 10, font: bold, color: PdfDocumentAdapter.NAVY });
-    page.drawText('University Registrar & Admissions Director', { x: 55, y: y - 33, size: 8, font: helvetica, color: PdfDocumentAdapter.DARK_GRAY });
+    page.drawText('Dr. Melba Layne, Ph.D.', { x: 55, y: y - 22, size: 10, font: bold, color: PdfDocumentAdapter.NAVY });
+    page.drawText('Chief Registrar & Admissions Director', { x: 55, y: y - 33, size: 8, font: helvetica, color: PdfDocumentAdapter.DARK_GRAY });
     page.drawText('Office of Academic Records', { x: 55, y: y - 43, size: 7.5, font: helvetica, color: PdfDocumentAdapter.LIGHT_GRAY });
 
     // Official Stamp Graphic / Seal Rosette Center
@@ -218,8 +218,8 @@ export class PdfDocumentAdapter implements IDocumentGenerator {
 
     // Right Signature
     this.drawHLine(page, y - 10, PdfDocumentAdapter.CHARCOAL, 397, 160, 1);
-    page.drawText('Prof. M. Adebayo, Th.D.', { x: 397, y: y - 22, size: 10, font: bold, color: PdfDocumentAdapter.NAVY });
-    page.drawText('Vice-Chancellor & Dean of Academic Affairs', { x: 397, y: y - 33, size: 8, font: helvetica, color: PdfDocumentAdapter.DARK_GRAY });
+    page.drawText('Dr. Christopher Cookhorne, Ph.D.', { x: 397, y: y - 22, size: 10, font: bold, color: PdfDocumentAdapter.NAVY });
+    page.drawText('President & Chancellor', { x: 397, y: y - 33, size: 8, font: helvetica, color: PdfDocumentAdapter.DARK_GRAY });
     page.drawText('Bethel Ministries International University', { x: 397, y: y - 43, size: 7.5, font: helvetica, color: PdfDocumentAdapter.LIGHT_GRAY });
 
     // Footer with Verification Code & Microtext
@@ -649,13 +649,13 @@ export class PdfDocumentAdapter implements IDocumentGenerator {
     // Signatures & Gold Medallion
     y -= 60;
     this.drawHLine(page, y, PdfDocumentAdapter.CHARCOAL, 70, 150, 1);
-    page.drawText('Dr. E. Vance, Ph.D.', { x: 95, y: y - 14, size: 9.5, font: bold, color: PdfDocumentAdapter.NAVY });
-    page.drawText('University Registrar', { x: 105, y: y - 24, size: 8, font: helvetica, color: PdfDocumentAdapter.DARK_GRAY });
+    page.drawText('Dr. Melba Layne, Ph.D.', { x: 95, y: y - 14, size: 9.5, font: bold, color: PdfDocumentAdapter.NAVY });
+    page.drawText('Chief Registrar', { x: 110, y: y - 24, size: 8, font: helvetica, color: PdfDocumentAdapter.DARK_GRAY });
 
     this.drawSealEmblem(page, 306, y - 5, bold, helvetica);
 
     this.drawHLine(page, y, PdfDocumentAdapter.CHARCOAL, 392, 150, 1);
-    page.drawText('Prof. M. Adebayo, Th.D.', { x: 405, y: y - 14, size: 9.5, font: bold, color: PdfDocumentAdapter.NAVY });
+    page.drawText('Dr. Christopher Cookhorne, Ph.D.', { x: 388, y: y - 14, size: 9.5, font: bold, color: PdfDocumentAdapter.NAVY });
     page.drawText('Chancellor & President', { x: 418, y: y - 24, size: 8, font: helvetica, color: PdfDocumentAdapter.DARK_GRAY });
 
     // Microprint verification footer

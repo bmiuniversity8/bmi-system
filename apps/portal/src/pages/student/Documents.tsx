@@ -592,8 +592,8 @@ export default function Documents() {
             <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '2px solid #e2e8f0', display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: '1.5rem' }}>
               <div>
                 <div style={{ borderBottom: '1px solid #334155', width: '180px', marginBottom: '0.35rem', height: 20 }} />
-                <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--navy)' }}>Dr. E. Vance, Ph.D.</div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--slate)' }}>University Registrar</div>
+                <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--navy)' }}>Dr. Melba Layne, Ph.D.</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--slate)' }}>Chief Registrar</div>
                 <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Office of Academic Records</div>
               </div>
 
@@ -606,8 +606,8 @@ export default function Documents() {
 
               <div style={{ textAlign: 'right' }}>
                 <div style={{ borderBottom: '1px solid #334155', width: '180px', marginBottom: '0.35rem', height: 20, marginLeft: 'auto' }} />
-                <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--navy)' }}>Prof. M. Adebayo, Th.D.</div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--slate)' }}>Vice-Chancellor</div>
+                <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--navy)' }}>Dr. Christopher Cookhorne, Ph.D.</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--slate)' }}>President & Chancellor</div>
                 <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Bethel Ministries International</div>
               </div>
             </div>
