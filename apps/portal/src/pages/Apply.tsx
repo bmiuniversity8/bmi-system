@@ -94,7 +94,7 @@ export default function Apply() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [existingApp, setExistingApp] = useState<any>(null);
-  const [checkingExisting, setCheckingExisting] = useState(true);
+  const [_checkingExisting, setCheckingExisting] = useState(true);
   const [stagedDocs, setStagedDocs] = useState<StagedDoc[]>([]);
   const [selectedDocType, setSelectedDocType] = useState('transcript');
   const fileInputRef = useRef<HTMLInputElement>(null);
