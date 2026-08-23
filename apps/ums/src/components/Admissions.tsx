@@ -19,6 +19,7 @@ import {
   Trash2
 } from "lucide-react";
 import { admissionsService, Application, StatusLogEntry } from "../services/admissionsService";
+import { useDialogStore } from "../stores/dialogStore";
 import { PROGRAMS as FALLBACK_PROGRAMS, API_WORKER_URL } from "@bmi/shared";
 
 const _viteApiUrl = (import.meta as any).env?.VITE_API_URL as string | undefined;
@@ -313,9 +314,17 @@ export default function Admissions() {
   };
 
   const handleDeleteApplication = async (id: string, name: string) => {
-    if (!window.confirm(`Are you sure you want to permanently delete the application for ${name}? This action cannot be undone.`)) {
-      return;
-    }
+    const confirmed = await useDialogStore.getState().confirm({
+      title: "Permanent Application Deletion",
+      message: `Are you sure you want to permanently delete the application for ${name}?`,
+      detail: "This irreversible operation will permanently purge the candidate's admission file, uploaded academic transcripts, recommendation references, and decision history from the Bethel Ministries International University institutional registry.",
+      confirmText: "Permanently Delete",
+      cancelText: "Retain Application",
+      variant: "danger",
+      badgeText: "Admissions Protocol",
+    });
+    if (!confirmed) return;
+
     setUpdating(true);
     setError("");
     try {
@@ -341,9 +350,17 @@ export default function Admissions() {
 
   const handleBulkDelete = async () => {
     if (selectedIds.size === 0) return;
-    if (!window.confirm(`Are you sure you want to permanently delete ${selectedIds.size} selected application(s)? This action cannot be undone.`)) {
-      return;
-    }
+    const confirmed = await useDialogStore.getState().confirm({
+      title: `Bulk Deletion (${selectedIds.size} Applications)`,
+      message: `Are you sure you want to permanently purge ${selectedIds.size} selected candidate application dossiers?`,
+      detail: "All associated candidate files, document verifications, committee notes, and decision logs will be permanently expunged from the institutional database. This action cannot be undone.",
+      confirmText: `Delete ${selectedIds.size} Applications`,
+      cancelText: "Cancel",
+      variant: "danger",
+      badgeText: "Bulk Purge Protocol",
+    });
+    if (!confirmed) return;
+
     setUpdating(true);
     setError("");
     try {

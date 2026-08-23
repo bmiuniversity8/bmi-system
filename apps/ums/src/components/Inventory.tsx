@@ -18,6 +18,7 @@ import {
   MapPin
 } from 'lucide-react';
 import { useApiDataStore } from '../stores/apiDataStore';
+import { useDialogStore } from '../stores/dialogStore';
 
 interface InventoryItem {
   id: string;
@@ -106,7 +107,13 @@ const Inventory: React.FC = () => {
       if (success) {
         setIsModalOpen(false);
       } else {
-        alert('Failed to update inventory record. Please try again.');
+        await useDialogStore.getState().alert({
+          title: "Inventory Update Failed",
+          message: "The system was unable to update this asset record in the institutional inventory ledger. Please try again.",
+          variant: "warning",
+          confirmText: "Understood",
+          badgeText: "Facilities Management",
+        });
       }
     } else {
       const success = await createInventoryItem({
@@ -119,16 +126,37 @@ const Inventory: React.FC = () => {
       if (success) {
         setIsModalOpen(false);
       } else {
-        alert('Failed to register inventory item. Please try again.');
+        await useDialogStore.getState().alert({
+          title: "Asset Registration Failed",
+          message: "The system was unable to register this asset in the institutional inventory ledger. Please try again.",
+          variant: "warning",
+          confirmText: "Understood",
+          badgeText: "Facilities Management",
+        });
       }
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('Permanent Decommission: Are you sure you want to purge this asset from the institutional ledger?')) {
+    const confirmed = await useDialogStore.getState().confirm({
+      title: "Permanent Asset Decommission",
+      message: "Are you sure you want to permanently decommission and purge this asset from the institutional inventory ledger?",
+      detail: "This will permanently remove the asset record including its condition history, location tracking, and procurement data. This action must be authorised by the Facilities Management Director and is subject to institutional asset disposal policy.",
+      confirmText: "Decommission Asset",
+      cancelText: "Retain Asset",
+      variant: "danger",
+      badgeText: "Facilities Protocol",
+    });
+    if (confirmed) {
       const success = await deleteInventoryItem(id);
       if (!success) {
-        alert('Failed to delete asset. Please try again.');
+        await useDialogStore.getState().alert({
+          title: "Decommission Failed",
+          message: "The asset could not be removed from the inventory ledger. Please contact the Facilities Management Office.",
+          variant: "warning",
+          confirmText: "Close",
+          badgeText: "Facilities Management",
+        });
       }
     }
   };

@@ -26,6 +26,7 @@ import { Hostel } from "../types";
 import { useDataStore } from "../stores/dataStore";
 import { useApiDataStore } from "../stores/apiDataStore";
 import { useTransportRoutesQuery, useTransportPassesQuery } from "../hooks/api/useAlumniCampus";
+import { useDialogStore } from "../stores/dialogStore";
 
 const Hostels: React.FC = () => {
   const students = useDataStore((s) => s.students);
@@ -112,15 +113,36 @@ const Hostels: React.FC = () => {
       });
       setSelectedHall(null);
     } else {
-      alert("Failed to allocate housing room. Please try again.");
+      await useDialogStore.getState().alert({
+        title: "Housing Allocation Failed",
+        message: "The system was unable to complete this room allocation. Please verify room availability and try again.",
+        variant: "warning",
+        confirmText: "Understood",
+        badgeText: "Housing Office",
+      });
     }
   };
 
   const deleteAssignment = async (id: string) => {
-    if (window.confirm("Revoke this housing allocation?")) {
+    const confirmed = await useDialogStore.getState().confirm({
+      title: "Revoke Housing Allocation",
+      message: "Are you sure you want to revoke this student's housing allocation?",
+      detail: "The student will immediately lose their assigned room and will need to re-apply through the Housing Office. Ensure the student has been notified before proceeding.",
+      confirmText: "Revoke Allocation",
+      cancelText: "Keep Allocation",
+      variant: "danger",
+      badgeText: "Housing Protocol",
+    });
+    if (confirmed) {
       const success = await deleteRoomAssignment(id);
       if (!success) {
-        alert("Failed to revoke housing assignment. Please try again.");
+        await useDialogStore.getState().alert({
+          title: "Revocation Failed",
+          message: "The housing allocation could not be revoked at this time. Please contact the Housing Office directly.",
+          variant: "warning",
+          confirmText: "Close",
+          badgeText: "Housing Office",
+        });
       }
     }
   };

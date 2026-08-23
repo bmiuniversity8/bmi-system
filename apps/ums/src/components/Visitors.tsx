@@ -21,6 +21,7 @@ import {
   Users
 } from 'lucide-react';
 import { useApiDataStore } from '../stores/apiDataStore';
+import { useDialogStore } from '../stores/dialogStore';
 
 // interface Visitor {
 //   id: string;
@@ -74,7 +75,13 @@ const Visitors: React.FC = () => {
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const success = await updateVisitor(id, { status: 'Checked Out', checkOut: time });
     if (!success) {
-      alert('Failed to check out visitor. Please try again.');
+      await useDialogStore.getState().alert({
+        title: "Check-Out Failed",
+        message: "The visitor check-out could not be processed. Please retry or contact the Security Office.",
+        variant: "warning",
+        confirmText: "Close",
+        badgeText: "Security Notice",
+      });
     }
   };
 
@@ -92,15 +99,36 @@ const Visitors: React.FC = () => {
       setIsModalOpen(false);
       setFormData({ name: '', purpose: '', host: '' });
     } else {
-      alert('Failed to register visitor. Please try again.');
+      await useDialogStore.getState().alert({
+        title: "Visitor Registration Failed",
+        message: "The visitor could not be registered in the campus security ledger. Please check the entry details and try again.",
+        variant: "warning",
+        confirmText: "Close",
+        badgeText: "Security Notice",
+      });
     }
   };
 
   const handleDeleteVisitor = async (id: string) => {
-    if (window.confirm('Purge visitor record from security ledger?')) {
+    const confirmed = await useDialogStore.getState().confirm({
+      title: "Purge Visitor Record from Security Ledger",
+      message: "Are you sure you want to permanently remove this visitor entry from the campus security registry?",
+      detail: "This will erase all entry, check-in, and check-out records associated with this visitor. This action should only be performed with Security Office approval and is subject to institutional data retention compliance.",
+      confirmText: "Purge Record",
+      cancelText: "Retain Record",
+      variant: "danger",
+      badgeText: "Security Protocol",
+    });
+    if (confirmed) {
       const success = await deleteVisitor(id);
       if (!success) {
-        alert('Failed to purge visitor record. Please try again.');
+        await useDialogStore.getState().alert({
+          title: "Purge Failed",
+          message: "The visitor record could not be removed from the security ledger. Please contact the ICT Support team.",
+          variant: "warning",
+          confirmText: "Close",
+          badgeText: "Security Notice",
+        });
       }
     }
   };

@@ -22,6 +22,7 @@ import {
 import { getAIResponse } from "../services/aiService";
 import { useDataStore } from "../stores/dataStore";
 import { useAlumniProfilesQuery, useAlumniEventsQuery, useDonationsQuery } from "../hooks/api/useAlumniCampus";
+import { useDialogStore } from "../stores/dialogStore";
 
 interface AlumniMember {
   id: string;
@@ -245,13 +246,18 @@ const Alumni: React.FC = () => {
     );
   };
 
-  const deleteMember = (id: string, e: React.MouseEvent) => {
+  const deleteMember = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (
-      window.confirm(
-        "Are you sure you want to remove this record from the Global Alumni Registry?",
-      )
-    ) {
+    const confirmed = await useDialogStore.getState().confirm({
+      title: "Remove from Global Alumni Registry",
+      message: "Are you sure you want to permanently remove this graduate's record from the BMI University Global Alumni Registry?",
+      detail: "This will expunge the alumnus's profile, verified credentials, and engagement history from the institutional alumni network. This action requires Alumni Office authorisation.",
+      confirmText: "Remove from Registry",
+      cancelText: "Keep Record",
+      variant: "danger",
+      badgeText: "Alumni Registry",
+    });
+    if (confirmed) {
       setAlumni((prev) => prev.filter((a) => a.id !== id));
       showToast("Alumnus record removed.");
     }

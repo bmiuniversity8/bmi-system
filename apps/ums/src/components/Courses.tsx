@@ -28,6 +28,7 @@ import { postCourseBatch } from "../services/batchService";
 import { useDataStore } from "../stores/dataStore";
 import { usePagination } from "../hooks/usePagination";
 import { useCoursesQuery } from "../hooks/useEntityQueries";
+import { useDialogStore } from "../stores/dialogStore";
 
 const Courses: React.FC = () => {
   const courses = useDataStore((s) => s.courses);
@@ -137,7 +138,7 @@ const Courses: React.FC = () => {
           setCourses((prev) =>
             prev.map((c) => (c.id === editingCourse.id ? next : c)),
           );
-          alert("Course updated successfully!");
+          await useDialogStore.getState().alert({ title: "Course Updated", message: "The course record has been successfully updated in the institutional course registry.", variant: "success", confirmText: "Acknowledged", badgeText: "Academic Registry" });
         } else {
           // eslint-disable-next-line no-console
           console.warn(
@@ -151,9 +152,7 @@ const Courses: React.FC = () => {
                 : c,
             ),
           );
-          alert(
-            "Course updated in local state (not saved to database). Backend may be offline.",
-          );
+          await useDialogStore.getState().alert({ title: "Course Updated (Offline Mode)", message: "The course has been updated locally. Changes have not been persisted to the server — the academic database may be temporarily unavailable.", variant: "warning", confirmText: "Understood", badgeText: "Offline Notice" });
         }
       } catch (error) { // eslint-disable-next-line no-console
         console.error("Error updating course:", error);
@@ -162,9 +161,7 @@ const Courses: React.FC = () => {
             c.id === editingCourse.id ? ({ ...c, ...courseData  } as Course) : c,
           ),
         );
-        alert(
-          "Course updated in local state (not saved to database). Backend may be offline.",
-        );
+        await useDialogStore.getState().alert({ title: "Course Updated (Offline Mode)", message: "The course has been updated locally. Changes have not been persisted to the server — the academic database may be temporarily unavailable.", variant: "warning", confirmText: "Understood", badgeText: "Offline Notice" });
       }
     } else {
       // Add new course
@@ -178,7 +175,7 @@ const Courses: React.FC = () => {
 
         if (result.success) {
           setCourses((prev) => [result.data || newCourse, ...prev]);
-          alert("Course added successfully!");
+          await useDialogStore.getState().alert({ title: "Course Added", message: "The new course has been successfully registered in the institutional academic catalogue.", variant: "success", confirmText: "Acknowledged", badgeText: "Academic Registry" });
         } else {
           // eslint-disable-next-line no-console
           console.warn(
@@ -186,46 +183,43 @@ const Courses: React.FC = () => {
             result.error,
           );
           setCourses((prev) => [newCourse, ...prev]);
-          alert(
-            "Course added to local state (not saved to database). Backend may be offline.",
-          );
+          await useDialogStore.getState().alert({ title: "Course Added (Offline Mode)", message: "The course has been added locally. It has not been persisted to the server — the academic database may be temporarily unavailable.", variant: "warning", confirmText: "Understood", badgeText: "Offline Notice" });
         }
       } catch (error) { // eslint-disable-next-line no-console
         console.error("Error saving course:", error);
         setCourses((prev) => [newCourse, ...prev]);
-        alert(
-          "Course added to local state (not saved to database). Backend may be offline.",
-        );
+        await useDialogStore.getState().alert({ title: "Course Added (Offline Mode)", message: "The course has been added locally. It has not been persisted to the server — the academic database may be temporarily unavailable.", variant: "warning", confirmText: "Understood", badgeText: "Offline Notice" });
        }
     }
     setEditingCourse(null);
   };
 
   const deleteCourse = async (id: string) => {
-    if (window.confirm("Are you sure you want to delete this course?")) {
+    const confirmed = await useDialogStore.getState().confirm({
+      title: "Delete Course from Academic Registry",
+      message: "Are you sure you want to permanently remove this course from the institutional academic catalogue?",
+      detail: "Deleting this course will remove it from the degree programme offerings and may affect enrolled students. Ensure the Registrar and Faculty Dean have authorised this removal before proceeding.",
+      confirmText: "Delete Course",
+      cancelText: "Retain Course",
+      variant: "danger",
+      badgeText: "Academic Registry",
+    });
+    if (confirmed) {
       try {
         const result = await deleteCourseApi(id);
-
         if (result.success) {
           setCourses((prev) => prev.filter((c) => c.id !== id));
-          alert("Course deleted successfully!");
+          await useDialogStore.getState().alert({ title: "Course Deleted", message: "The course has been successfully removed from the institutional academic catalogue.", variant: "success", confirmText: "Acknowledged", badgeText: "Academic Registry" });
         } else {
           // eslint-disable-next-line no-console
-          console.warn(
-            "Backend delete failed, removing from local state only",
-            result.error,
-          );
+          console.warn("Backend delete failed, removing from local state only", result.error);
           setCourses((prev) => prev.filter((c) => c.id !== id));
-          alert(
-            "Course removed from local state (not deleted from database). Backend may be offline.",
-          );
+          await useDialogStore.getState().alert({ title: "Course Removed (Offline Mode)", message: "The course was removed locally but could not be deleted from the server. The academic database may be temporarily unavailable.", variant: "warning", confirmText: "Understood", badgeText: "Offline Notice" });
         }
       } catch (error) { // eslint-disable-next-line no-console
         console.error("Error deleting course:", error);
         setCourses((prev) => prev.filter((c) => c.id !== id));
-        alert(
-          "Course removed from local state (not deleted from database). Backend may be offline.",
-        );
+        await useDialogStore.getState().alert({ title: "Course Removed (Offline Mode)", message: "The course was removed locally but could not be deleted from the server. The academic database may be temporarily unavailable.", variant: "warning", confirmText: "Understood", badgeText: "Offline Notice" });
        }
     }
   };

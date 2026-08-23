@@ -21,6 +21,7 @@ import {
 import { MedicalVisit } from "../types";
 import { useDataStore } from "../stores/dataStore";
 import { useApiDataStore } from "../stores/apiDataStore";
+import { useDialogStore } from "../stores/dialogStore";
 
 export const Medical: React.FC = () => {
   const students = useDataStore((s) => s.students);
@@ -118,20 +119,38 @@ export const Medical: React.FC = () => {
         notes: "",
       });
     } else {
-      alert("Failed to record medical visit. Please try again.");
+      await useDialogStore.getState().alert({
+        title: "Medical Visit Record Failed",
+        message: "The system was unable to save this medical visit record. Please ensure all required fields are completed and try again.",
+        detail: "If the issue persists, contact the BMI University Health Services IT administrator.",
+        variant: "warning",
+        confirmText: "Understood",
+        badgeText: "Health Services",
+      });
     }
   };
 
   const deleteRecord = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (
-      window.confirm(
-        "Decommission this medical record? This is a permanent action.",
-      )
-    ) {
+    const confirmed = await useDialogStore.getState().confirm({
+      title: "Decommission Medical Record",
+      message: "Are you sure you want to permanently decommission this medical visit record?",
+      detail: "Medical records are protected under institutional health data policies. This action is irreversible and must comply with BMI University Health Services data governance guidelines. Ensure proper authorisation before proceeding.",
+      confirmText: "Decommission Record",
+      cancelText: "Retain Record",
+      variant: "danger",
+      badgeText: "Health Services Protocol",
+    });
+    if (confirmed) {
       const success = await deleteMedicalVisit(id);
       if (!success) {
-        alert("Failed to delete medical visit record. Please try again.");
+        await useDialogStore.getState().alert({
+          title: "Record Deletion Failed",
+          message: "The medical record could not be removed. Please contact the Health Services IT administrator.",
+          variant: "warning",
+          confirmText: "Close",
+          badgeText: "Health Services",
+        });
       }
     }
   };

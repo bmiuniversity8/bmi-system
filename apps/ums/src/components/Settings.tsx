@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { authFetch } from "../services/authService";
 import { useUIStore } from "../stores/uiStore";
+import { useDialogStore } from "../stores/dialogStore";
 
 const Settings: React.FC = () => {
   const currentLogo = useUIStore((s) => s.logo);
@@ -294,22 +295,34 @@ const Settings: React.FC = () => {
     }
   };
 
-  const handleResetSystem = () => {
-    if (
-      window.confirm(
-        "CRITICAL SECURITY WARNING:\n\nThis action will PURGE ALL INSTITUTIONAL DATA (Student Registries, Financial Ledgers, Staff Records, etc.) and restore the system to factory defaults.\n\nThis action is irreversible and will log a security event.\n\nAre you sure you want to proceed?",
-      )
-    ) {
+  const handleResetSystem = async () => {
+    const confirmed = await useDialogStore.getState().confirm({
+      title: "⚠ Full System Factory Reset",
+      message: "You are about to permanently purge ALL institutional data and reset the BMI University ERP to factory defaults.",
+      detail: "This critical security action will irreversibly erase all Student Registries, Financial Ledgers, Staff Records, Course Catalogues, Academic Transcripts, and system configurations. A security audit event will be logged. This action requires Vice-Chancellor authorisation and cannot be undone under any circumstances.",
+      confirmText: "Confirm Full System Reset",
+      cancelText: "Abort",
+      variant: "danger",
+      badgeText: "Critical Security Action",
+    });
+    if (confirmed) {
       localStorage.clear();
       window.location.reload();
     }
   };
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 2 * 1024 * 1024) {
-        alert("Media Protocol: File exceeds 2MB limit.");
+        await useDialogStore.getState().alert({
+          title: "Media Upload Limit Exceeded",
+          message: "The selected logo file exceeds the 2MB institutional media upload limit.",
+          detail: "Please reduce the file size using an image compression tool before uploading. Accepted formats: PNG, SVG, WebP (max 2MB).",
+          variant: "warning",
+          confirmText: "Understood",
+          badgeText: "Media Policy",
+        });
         return;
       }
 

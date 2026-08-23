@@ -30,6 +30,7 @@ import { useDataStore } from "../stores/dataStore";
 import { usePagination } from "../hooks/usePagination";
 import { useStaffQuery } from "../hooks/useEntityQueries";
 import { useLeaveRequestsQuery, useUpdateLeaveRequest } from "../hooks/api";
+import { useDialogStore } from "../stores/dialogStore";
 
 const departments = [
   "All Departments",
@@ -159,14 +160,21 @@ const Staff: React.FC = () => {
     });
   }, [staff, searchTerm, activeTab, campusFilter]);
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.size < 2 * 1024 * 1024) {
       const reader = new FileReader();
       reader.onloadend = () => setImagePreview(reader.result as string);
       reader.readAsDataURL(file);
     } else if (file) {
-      alert("Image must be under 2MB");
+      await useDialogStore.getState().alert({
+        title: "File Size Limit Exceeded",
+        message: "The selected image exceeds the 2MB maximum file size permitted by the institutional media policy.",
+        detail: "Please compress or resize the image before uploading. Accepted formats: JPEG, PNG, WebP.",
+        variant: "warning",
+        confirmText: "Understood",
+        badgeText: "Media Policy",
+      });
     }
   };
 
@@ -215,8 +223,17 @@ const Staff: React.FC = () => {
     });
   };
 
-  const deleteStaff = (id: string) => {
-    if (window.confirm("Delete record?")) {
+  const deleteStaff = async (id: string) => {
+    const confirmed = await useDialogStore.getState().confirm({
+      title: "Remove Staff Personnel Record",
+      message: "Are you sure you want to permanently remove this staff member from the institutional personnel registry?",
+      detail: "This action will expunge the staff member's employment record, assigned roles, and access credentials from the BMI University HR system. This operation should only be performed with HR Director authorisation.",
+      confirmText: "Remove Staff Record",
+      cancelText: "Retain Record",
+      variant: "danger",
+      badgeText: "HR Protocol",
+    });
+    if (confirmed) {
       setStaff(staff.filter((s) => s.id !== id));
     }
   };

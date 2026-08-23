@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, User, Phone, MapPin, Save, Loader2, Download, ShieldAlert } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { authFetch } from '../services/authService';
+import { useDialogStore } from '../stores/dialogStore';
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -38,12 +39,27 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
   };
 
   const handleForgetMe = async () => {
-    if (!window.confirm("WARNING: This will permanently deactivate your account and scrub your personal data. This action cannot be undone. Proceed?")) return;
+    const confirmed = await useDialogStore.getState().confirm({
+      title: "Permanently Delete Your Account",
+      message: "Are you sure you want to submit a Right to Erasure request? This will permanently deactivate your account and scrub all your personal data from the BMI University ERP system.",
+      detail: "This action is compliant with institutional GDPR and data protection policy. Once submitted, your account credentials, profile data, and access permissions will be permanently revoked and cannot be recovered. You will be logged out immediately.",
+      confirmText: "Submit Erasure Request",
+      cancelText: "Cancel",
+      variant: "danger",
+      badgeText: "Data Protection Protocol",
+    });
+    if (!confirmed) return;
     
     try {
       const res = await authFetch('/api/v1/auth/forget-me', { method: 'POST' });
       if (res.ok) {
-        alert("Your data has been scrubbed. You will now be logged out.");
+        await useDialogStore.getState().alert({
+          title: "Data Erasure Complete",
+          message: "Your personal data has been successfully scrubbed from the BMI University institutional systems. You will now be logged out.",
+          variant: "info",
+          confirmText: "Log Out Now",
+          badgeText: "Data Protection Notice",
+        });
         window.location.reload();
       }
     } catch (error) { // eslint-disable-next-line no-console

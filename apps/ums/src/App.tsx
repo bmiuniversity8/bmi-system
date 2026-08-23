@@ -10,6 +10,7 @@ import ResetPasswordPage from "./components/ResetPasswordPage";
 import SessionTimeoutWarning from "./components/SessionTimeoutWarning";
 import { AppRoutes } from "./router";
 import ErrorBoundary from "./components/ErrorBoundary";
+import GlobalConfirmDialog from "./components/common/GlobalConfirmDialog";
 import { useAuthStore } from "./stores/authStore";
 import { useDataStore } from "./stores/dataStore";
 import { useUIStore } from "./stores/uiStore";
@@ -190,6 +191,7 @@ function App() {
     return (
       <ErrorBoundary>
         <PublicRoutes />
+        <GlobalConfirmDialog />
       </ErrorBoundary>
     );
   }
@@ -197,6 +199,7 @@ function App() {
   return (
     <ErrorBoundary>
       <AuthenticatedLayout />
+      <GlobalConfirmDialog />
     </ErrorBoundary>
   );
 }

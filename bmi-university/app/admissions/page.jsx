@@ -61,8 +61,8 @@ export default function Admissions() {
           </div>
           <div style={{ borderRadius: "20px", overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,0.12)", aspectRatio: "4/3" }}>
             <img
-              src="/images/admissions-hero/admissions-hero-2-interview.jpg"
-              alt="Admissions consultation at BMI University"
+              src="/images/admissions-hero/admissions-hero-1-students-group.jpg"
+              alt="Prospective and current scholars collaborating at BMI University"
               style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
               loading="lazy"
             />

@@ -28,6 +28,7 @@ import { postStudentBatch } from "../services/batchService";
 import { getAllStudyCenters, StudyCenter } from "../services/studyCenterService";
 import { StudyCenterSelector } from "./StudyCenterSelector";
 import StudentEnrollmentForm from "./StudentEnrollmentForm";
+import { useDialogStore } from "../stores/dialogStore";
 
 import { useDataStore } from "../stores/dataStore";
 import { usePagination } from "../hooks/usePagination";
@@ -233,23 +234,45 @@ const Students: React.FC<StudentsProps> = (props) => {
   };
 
   const deleteStudent = async (id: string) => {
-    if (
-      window.confirm(
-        "Are you sure you want to expel/remove this student record?",
-      )
-    ) {
+    const confirmed = await useDialogStore.getState().confirm({
+      title: "Remove Student Enrolment Record",
+      message: "Are you sure you want to permanently remove this student from the institutional register?",
+      detail: "This action will expunge the student's enrolment record, course registrations, and associated academic history from the BMI University student management system. Proceed only if authorised by the Registrar's Office.",
+      confirmText: "Remove Student",
+      cancelText: "Keep Record",
+      variant: "danger",
+      badgeText: "Registrar Protocol",
+    });
+    if (confirmed) {
       try {
         const result = await deleteStudentAPI(id);
-
         if (result.success) {
           setStudents((prev) => prev.filter((s) => s.id !== id));
-          alert("Student removed successfully!");
+          await useDialogStore.getState().alert({
+            title: "Student Record Removed",
+            message: "The student enrolment record has been successfully expunged from the institutional register.",
+            variant: "success",
+            confirmText: "Acknowledged",
+            badgeText: "Registrar Notice",
+          });
         } else {
-          alert(result.error || "Failed to delete student. Please try again.");
+          await useDialogStore.getState().alert({
+            title: "Removal Failed",
+            message: result.error || "The system was unable to remove this student record. Please try again or contact the system administrator.",
+            variant: "warning",
+            confirmText: "Understood",
+            badgeText: "System Notice",
+          });
         }
       } catch (error) { // eslint-disable-next-line no-console
         console.error("Error deleting student:", error);
-        alert("An unexpected error occurred while deleting the student.");
+        await useDialogStore.getState().alert({
+          title: "Unexpected System Error",
+          message: "An unexpected error occurred while processing this request. Please contact the BMI University ICT Support team if this persists.",
+          variant: "warning",
+          confirmText: "Close",
+          badgeText: "System Error",
+        });
        }
     }
   };
@@ -286,12 +309,31 @@ const Students: React.FC<StudentsProps> = (props) => {
       const data = await response.json();
       if (data.success) {
         queryClient.invalidateQueries();
-        alert("System successfully synchronized with Google Sheets!");
+        await useDialogStore.getState().alert({
+          title: "Data Synchronisation Complete",
+          message: "The institutional student registry has been successfully synchronised with the BMI University Google Sheets data source.",
+          variant: "success",
+          confirmText: "Acknowledged",
+          badgeText: "Sync Complete",
+        });
       } else {
-        alert("Sync failed: " + data.error);
+        await useDialogStore.getState().alert({
+          title: "Synchronisation Failed",
+          message: `Data sync could not be completed: ${data.error}`,
+          detail: "Verify that the Google Sheets data source is accessible and that the institutional webhook token is valid.",
+          variant: "warning",
+          confirmText: "Understood",
+          badgeText: "Sync Error",
+        });
       }
     } catch (error) {
-      alert("Sync failed. Check console for details.");
+      await useDialogStore.getState().alert({
+        title: "Sync Connection Error",
+        message: "Unable to reach the synchronisation endpoint. Please check your network connection and try again.",
+        variant: "warning",
+        confirmText: "Close",
+        badgeText: "Sync Error",
+      });
       // eslint-disable-next-line no-console
       console.error(error);
      } finally {
