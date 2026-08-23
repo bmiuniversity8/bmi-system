@@ -154,7 +154,7 @@ export default function ApplyPage() {
                   { label: "Graduate Certificates", level: "certificate" },
                 ].map((group) => (
                   <optgroup key={group.level} label={group.label}>
-                    {programs.filter((p) => p.level === group.level).map((p) => (
+                    {programs.filter((p) => (p.level || "").toLowerCase() === group.level.toLowerCase()).map((p) => (
                       <option key={p.label} value={p.label}>{p.label}</option>
                     ))}
                   </optgroup>

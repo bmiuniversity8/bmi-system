@@ -2,23 +2,34 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 import ApplyPage from '../app/apply/page';
-import { PORTAL_URL } from '@bmi/shared';
+import { PROGRAMS as FALLBACK_PROGRAMS, PORTAL_URL } from '@bmi/shared';
 
 describe('Apply Page', () => {
   let originalWindowLocation;
+  let originalFetch;
 
   beforeEach(() => {
     originalWindowLocation = window.location;
+    originalFetch = global.fetch;
+
     // Mock window.location to assert redirects
     delete window.location;
     window.location = { href: '' };
     
+    // Mock global.fetch to provide deterministic program catalog
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, data: FALLBACK_PROGRAMS }),
+    });
+
     // Clear mocks
     vi.clearAllMocks();
   });
 
   afterEach(() => {
     window.location = originalWindowLocation;
+    global.fetch = originalFetch;
+    vi.restoreAllMocks();
   });
 
   it('renders all required form fields', () => {
