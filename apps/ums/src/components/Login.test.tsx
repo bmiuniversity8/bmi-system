@@ -12,15 +12,21 @@ describe("Login", () => {
 
   it("renders the login form with an email input", () => {
     render(<Login onLogin={mockOnLogin} />);
-    // The email input has placeholder 'admin@bmi.edu'
-    const emailInput = screen.getByPlaceholderText(/bmi\.edu/i);
+    // The email input has placeholder 'admin@bmiuniversities.org'
+    const emailInput = screen.getByPlaceholderText(/bmiuniversities\.org/i);
     expect(emailInput).toBeInTheDocument();
   });
 
   it("renders a submit / sign-in button", () => {
     render(<Login onLogin={mockOnLogin} />);
-    const btn = screen.getByRole("button", { name: /sign in to ums dashboard/i });
+    const btn = screen.getByRole("button", { name: /sign in/i });
     expect(btn).toBeInTheDocument();
+  });
+
+  it("populates institutional email on role button click", () => {
+    render(<Login onLogin={mockOnLogin} />);
+    const registrarBtn = screen.getByTitle(/Academic Registrar/i);
+    expect(registrarBtn).toBeInTheDocument();
   });
 
   it("does not call onLogin before submission", () => {
