@@ -1,6 +1,6 @@
 import { withSentry } from '@sentry/cloudflare';
 import { handleRegister, handleLogin, handleRefresh, handleLogout, handleMe, handleVerifyEmail, handleResendVerification, handleForgotPassword, handleResetPassword, handleMfaSetup, handleMfaEnable, handleMfaDisable, handleOAuthLogin, handleOAuthCallback } from './routes/auth';
-import { handleSubmitApplication, handleGetMyApplication, handleListApplications, handleGetApplication, handleUpdateStatus, handleGetStatusLogs, handleGetLifecycle, handleSaveDraft, handleAdminCreateApplication, checkAdmissionCodeExpiries } from './routes/apply';
+import { handleSubmitApplication, handleGetMyApplication, handleListApplications, handleGetApplication, handleUpdateStatus, handleDeleteApplication, handleGetStatusLogs, handleGetLifecycle, handleSaveDraft, handleAdminCreateApplication, checkAdmissionCodeExpiries } from './routes/apply';
 import { handleUploadDocument, handleDownloadDocument, handleDeleteDocument, handleListDocuments, handleAdminUploadDocument, handleUpdateDocumentVerification } from './routes/documents';
 import { handleRequestRecommendation, handleGetRecommendationInfo, handleUploadRecommendation, handleListRecommendations } from './routes/recommendations';
 import { requireAuth, rateLimit, withCors, getCorsHeaders, createLogger, requestLogger } from '@bmi/api-middleware';
@@ -171,18 +171,20 @@ const ROUTES: Route[] = [
   { method: 'GET', path: /^\/api\/admin\/audit-logs$/, roles: ['admin'], handler: async (req, env) => handleGetAuditLogs(req, env) },
   { method: 'GET', path: /^\/api\/admin\/contact-submissions$/, roles: ['admin', 'staff'], handler: async (req, env) => handleListContactSubmissions(req, env) },
   { method: 'GET', path: /^\/api\/admin\/newsletter-subscribers$/, roles: ['admin', 'staff'], handler: async (req, env) => handleListNewsletterSubscribers(req, env) },
-  { method: 'GET', path: /^\/api\/admin\/applications$/, roles: ['staff', 'admin', 'registrar', 'superadmin'], handler: async (req, env) => handleListApplications(req, env) },
-  { method: 'POST', path: /^\/api\/admin\/applications$/, roles: ['staff', 'admin', 'registrar', 'superadmin'], handler: async (req, env, _p, auth) => handleAdminCreateApplication(req, env, auth!.user.sub) },
-  { method: 'GET', path: /^\/api\/admin\/applications\/([^/]+)$/, roles: ['staff', 'admin', 'registrar', 'superadmin'], handler: async (req, env) => handleGetApplication(req, env) },
-  { method: 'PUT', path: /^\/api\/admin\/applications\/([^/]+)\/status$/, roles: ['staff', 'admin', 'registrar', 'superadmin'], handler: async (req, env, p, auth, ctx) => handleUpdateStatus(req, env, p[1], auth!.user.sub, ctx) },
+  { method: 'GET', path: /^\/api\/admin\/applications$/, roles: ['staff', 'admin', 'registrar', 'admissions', 'superadmin'], handler: async (req, env) => handleListApplications(req, env) },
+  { method: 'POST', path: /^\/api\/admin\/applications$/, roles: ['staff', 'admin', 'registrar', 'admissions', 'superadmin'], handler: async (req, env, _p, auth) => handleAdminCreateApplication(req, env, auth!.user.sub) },
+  { method: 'GET', path: /^\/api\/admin\/applications\/([^/]+)$/, roles: ['staff', 'admin', 'registrar', 'admissions', 'superadmin'], handler: async (req, env) => handleGetApplication(req, env) },
+  { method: 'PUT', path: /^\/api\/admin\/applications\/([^/]+)\/status$/, roles: ['staff', 'admin', 'registrar', 'admissions', 'superadmin'], handler: async (req, env, p, auth, ctx) => handleUpdateStatus(req, env, p[1], auth!.user.sub, ctx) },
+  { method: 'DELETE', path: /^\/api\/admin\/applications\/([^/]+)$/, roles: ['staff', 'admin', 'registrar', 'admissions', 'superadmin'], handler: async (req, env, p, auth) => handleDeleteApplication(req, env, p[1], auth!.user.sub) },
   // v1 and root aliases for UMS/Portal frontend compatibility
-  { method: 'GET', path: /^\/api\/(?:v1\/)?applications$/, roles: ['staff', 'admin', 'registrar', 'superadmin'], handler: async (req, env) => handleListApplications(req, env) },
-  { method: 'GET', path: /^\/api\/v1\/admin\/applications$/, roles: ['staff', 'admin', 'registrar', 'superadmin'], handler: async (req, env) => handleListApplications(req, env) },
-  { method: 'GET', path: /^\/api\/v1\/admin\/applications\/([^/]+)$/, roles: ['staff', 'admin', 'registrar', 'superadmin'], handler: async (req, env) => handleGetApplication(req, env) },
-  { method: ['PUT', 'PATCH'], path: /^\/api\/(?:v1\/)?(?:admin\/)?applications\/([^/]+)$/, roles: ['staff', 'admin', 'registrar', 'superadmin'], handler: async (req, env, p, auth, ctx) => handleUpdateStatus(req, env, p[1], auth!.user.sub, ctx) },
-  { method: ['PUT', 'PATCH'], path: /^\/api\/v1\/admin\/applications\/([^/]+)\/status$/, roles: ['staff', 'admin', 'registrar', 'superadmin'], handler: async (req, env, p, auth, ctx) => handleUpdateStatus(req, env, p[1], auth!.user.sub, ctx) },
+  { method: 'GET', path: /^\/api\/(?:v1\/)?applications$/, roles: ['staff', 'admin', 'registrar', 'admissions', 'superadmin'], handler: async (req, env) => handleListApplications(req, env) },
+  { method: 'GET', path: /^\/api\/v1\/admin\/applications$/, roles: ['staff', 'admin', 'registrar', 'admissions', 'superadmin'], handler: async (req, env) => handleListApplications(req, env) },
+  { method: 'GET', path: /^\/api\/v1\/admin\/applications\/([^/]+)$/, roles: ['staff', 'admin', 'registrar', 'admissions', 'superadmin'], handler: async (req, env) => handleGetApplication(req, env) },
+  { method: ['PUT', 'PATCH'], path: /^\/api\/(?:v1\/)?(?:admin\/)?applications\/([^/]+)$/, roles: ['staff', 'admin', 'registrar', 'admissions', 'superadmin'], handler: async (req, env, p, auth, ctx) => handleUpdateStatus(req, env, p[1], auth!.user.sub, ctx) },
+  { method: ['PUT', 'PATCH'], path: /^\/api\/v1\/admin\/applications\/([^/]+)\/status$/, roles: ['staff', 'admin', 'registrar', 'admissions', 'superadmin'], handler: async (req, env, p, auth, ctx) => handleUpdateStatus(req, env, p[1], auth!.user.sub, ctx) },
+  { method: 'DELETE', path: /^\/api\/v1\/admin\/applications\/([^/]+)$/, roles: ['staff', 'admin', 'registrar', 'admissions', 'superadmin'], handler: async (req, env, p, auth) => handleDeleteApplication(req, env, p[1], auth!.user.sub) },
   {
-    method: 'POST', path: /^\/api\/(?:v1\/)?applications\/([^/]+)\/convert$/, roles: ['staff', 'admin', 'registrar', 'superadmin'], handler: async (req, env, p, auth, ctx) => {
+    method: 'POST', path: /^\/api\/(?:v1\/)?applications\/([^/]+)\/convert$/, roles: ['staff', 'admin', 'registrar', 'admissions', 'superadmin'], handler: async (req, env, p, auth, ctx) => {
       let body: any = {};
       try { body = await req.json(); } catch { /* body is optional */ }
       const status = body.status || 'accepted';
@@ -322,8 +324,8 @@ const ROUTES: Route[] = [
   { method: 'GET', path: /^\/api\/registration\/modules$/, roles: ['student'], handler: async (req, env, _p, auth) => handleGetAvailableModules(req, env, auth!.user.sub) },
   { method: 'POST', path: /^\/api\/registration\/([^/]+)$/, roles: ['student'], handler: async (req, env, p, auth) => handleSaveRegistrationStep(req, env, auth!.user.sub, p[1]) },
   // Admissions & Decision Routes
-  { method: 'POST', path: /^\/api\/admissions\/decide$/, roles: ['admin', 'staff'], handler: async (req, env, _p, auth) => handleRecordDecision(req, env, auth!.user.sub) },
-  { method: 'GET', path: /^\/api\/admissions\/decision(?:\/([^/]+))?$/, roles: ['applicant', 'student', 'admin', 'staff'], handler: async (req, env, _p, auth) => handleGetDecision(req, env, auth!.user.sub) },
+  { method: 'POST', path: /^\/api\/admissions\/decide$/, roles: ['admin', 'staff', 'admissions', 'registrar', 'superadmin'], handler: async (req, env, _p, auth) => handleRecordDecision(req, env, auth!.user.sub) },
+  { method: 'GET', path: /^\/api\/admissions\/decision(?:\/([^/]+))?$/, roles: ['applicant', 'student', 'admin', 'staff', 'admissions', 'registrar', 'superadmin'], handler: async (req, env, _p, auth) => handleGetDecision(req, env, auth!.user.sub) },
   { method: 'POST', path: /^\/api\/admissions\/accept$/, roles: ['applicant', 'student'], handler: async (req, env, _p, auth, ctx) => handleAcceptOffer(req, env, auth!.user.sub, ctx) },
   { method: 'POST', path: /^\/api\/admissions\/deposit$/, roles: ['applicant', 'student'], handler: async (req, env, _p, auth) => handlePayDeposit(req, env, auth!.user.sub) },
   { method: 'POST', path: /^\/api\/admissions\/decline$/, roles: ['applicant', 'student'], handler: async (req, env, _p, auth) => handleDeclineOffer(req, env, auth!.user.sub) },

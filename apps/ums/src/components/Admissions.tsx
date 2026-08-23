@@ -15,7 +15,8 @@ import {
   FileCheck,
   GraduationCap,
   Gavel,
-  DollarSign
+  DollarSign,
+  Trash2
 } from "lucide-react";
 import { admissionsService, Application, StatusLogEntry } from "../services/admissionsService";
 import { PROGRAMS as FALLBACK_PROGRAMS, API_WORKER_URL } from "@bmi/shared";
@@ -311,6 +312,58 @@ export default function Admissions() {
     }
   };
 
+  const handleDeleteApplication = async (id: string, name: string) => {
+    if (!window.confirm(`Are you sure you want to permanently delete the application for ${name}? This action cannot be undone.`)) {
+      return;
+    }
+    setUpdating(true);
+    setError("");
+    try {
+      await admissionsService.deleteApplication(id);
+      setApps(prev => prev.filter(a => a.id !== id));
+      if (selectedApp?.id === id) {
+        setSelectedApp(null);
+        setAppDetails(null);
+      }
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      setSuccess(`Application for ${name} deleted successfully.`);
+      setTimeout(() => setSuccess(""), 4000);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to delete application.");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`Are you sure you want to permanently delete ${selectedIds.size} selected application(s)? This action cannot be undone.`)) {
+      return;
+    }
+    setUpdating(true);
+    setError("");
+    try {
+      const idsToDelete = Array.from(selectedIds);
+      await Promise.all(idsToDelete.map(id => admissionsService.deleteApplication(id)));
+      setApps(prev => prev.filter(a => !selectedIds.has(a.id)));
+      if (selectedApp && selectedIds.has(selectedApp.id)) {
+        setSelectedApp(null);
+        setAppDetails(null);
+      }
+      setSuccess(`Successfully deleted ${selectedIds.size} applications.`);
+      setSelectedIds(new Set());
+      setTimeout(() => setSuccess(""), 4000);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to delete selected applications.");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
   const handleExportCSV = () => {
     const headers = ["ID", "First Name", "Last Name", "Email", "Phone", "Program", "Level", "Status", "GPA", "Submitted At"];
     const rows = filteredApps.map(a => [
@@ -503,6 +556,13 @@ export default function Admissions() {
               Bulk Approve
             </button>
             <button
+              onClick={handleBulkDelete}
+              disabled={updating}
+              className="inline-flex items-center gap-1 px-3 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded uppercase text-[10px] tracking-wider transition-all"
+            >
+              <Trash2 size={12} /> Bulk Delete
+            </button>
+            <button
               onClick={() => setSelectedIds(new Set())}
               className="px-2 py-1 text-gray-300 hover:text-white"
             >
@@ -590,12 +650,22 @@ export default function Admissions() {
                         {app.submitted_at ? new Date(app.submitted_at).toLocaleDateString() : '—'}
                       </td>
                       <td className="px-5 py-4 text-right">
-                        <button
-                          onClick={() => handleSelectApp(app)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#2E004F] bg-purple-50 hover:bg-purple-100 border border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800 rounded-lg transition-colors"
-                        >
-                          <Eye size={14} /> Review
-                        </button>
+                        <div className="inline-flex items-center gap-2 justify-end">
+                          <button
+                            onClick={() => handleSelectApp(app)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#2E004F] bg-purple-50 hover:bg-purple-100 border border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800 rounded-lg transition-colors"
+                          >
+                            <Eye size={14} /> Review
+                          </button>
+                          <button
+                            onClick={() => handleDeleteApplication(app.id, `${app.first_name} ${app.last_name}`)}
+                            disabled={updating}
+                            title="Delete Application"
+                            className="p-1.5 text-rose-600 hover:text-white hover:bg-rose-600 border border-rose-200 dark:border-rose-800/60 rounded-lg transition-colors"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -622,12 +692,22 @@ export default function Admissions() {
                   {selectedApp.first_name} {selectedApp.last_name}
                 </h2>
               </div>
-              <button
-                onClick={() => setSelectedApp(null)}
-                className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full transition-colors"
-              >
-                <XCircle size={22} />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleDeleteApplication(selectedApp.id, `${selectedApp.first_name} ${selectedApp.last_name}`)}
+                  disabled={updating}
+                  title="Delete Application"
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-rose-600 hover:text-white bg-rose-50 hover:bg-rose-600 border border-rose-200 dark:border-rose-900/40 rounded-lg transition-colors"
+                >
+                  <Trash2 size={14} /> Delete
+                </button>
+                <button
+                  onClick={() => setSelectedApp(null)}
+                  className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full transition-colors"
+                >
+                  <XCircle size={22} />
+                </button>
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto p-6 space-y-6">

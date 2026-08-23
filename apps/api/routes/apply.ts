@@ -870,6 +870,54 @@ export async function handleAdminCreateApplication(
   return ok({ application_id: appId, user_id: userId, status: 'submitted' });
 }
 
+// ─── Admin: Delete application ───────────────────────────────────────────────────
+// DELETE /api/admin/applications/:id
+export async function handleDeleteApplication(
+  _request: Request,
+  env: Env,
+  applicationId: string,
+  adminId: string,
+): Promise<Response> {
+  const db = env.PLATFORM_CONTEXT!.db;
+
+  // Check if application exists
+  const app = await db.prepare(
+    `SELECT id, user_id, program FROM applications WHERE id = ?`
+  ).bind(applicationId).first<{ id: string; user_id: string; program: string }>();
+
+  if (!app) {
+    return error('Application not found', 404);
+  }
+
+  // Delete associated status logs, recommendations, documents (metadata), and the application record
+  try {
+    await db.prepare(`DELETE FROM application_status_logs WHERE application_id = ?`).bind(applicationId).run();
+  } catch (e) {
+    console.warn('[delete_app] status logs delete warning:', e);
+  }
+
+  try {
+    await db.prepare(`DELETE FROM recommendations WHERE application_id = ?`).bind(applicationId).run();
+  } catch (e) {
+    console.warn('[delete_app] recommendations delete warning:', e);
+  }
+
+  try {
+    await db.prepare(`DELETE FROM documents WHERE application_id = ?`).bind(applicationId).run();
+  } catch (e) {
+    console.warn('[delete_app] documents delete warning:', e);
+  }
+
+  await db.prepare(`DELETE FROM applications WHERE id = ?`).bind(applicationId).run();
+
+  await logAdminAction(env, adminId, 'DELETE_APPLICATION', 'applications', applicationId, {
+    program: app.program,
+    applicant_user_id: app.user_id,
+  });
+
+  return ok({ message: 'Application deleted successfully', application_id: applicationId });
+}
+
 export async function checkAdmissionCodeExpiries(env: Env, ctx?: ExecutionContext): Promise<void> {
   const db = env.PLATFORM_CONTEXT!.db;
   try {

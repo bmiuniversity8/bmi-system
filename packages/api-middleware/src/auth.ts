@@ -43,7 +43,7 @@ export async function requireAuth(
     return errorResponse('Session has been invalidated. Please log in again.', 401);
   }
 
-  if (requiredRoles && !requiredRoles.includes(user.role)) {
+  if (requiredRoles && !requiredRoles.includes(user.role) && user.role !== 'admin' && user.role !== 'superadmin') {
     return errorResponse('Insufficient permissions', 403);
   }
 

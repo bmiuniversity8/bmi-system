@@ -5,10 +5,11 @@ export function getCorsHeaders(
   allowedOriginsOverride?: string
 ): Record<string, string> {
   const origin = request.headers.get('Origin');
-  let origins = ALLOWED_ORIGINS;
+  let origins = [...ALLOWED_ORIGINS];
 
   if (allowedOriginsOverride) {
-    origins = allowedOriginsOverride.split(',').map((o) => o.trim());
+    const overrideList = allowedOriginsOverride.split(',').map((o) => o.trim());
+    origins = Array.from(new Set([...origins, ...overrideList]));
   }
 
   let isAllowed = origin ? origins.includes(origin) : false;
@@ -18,6 +19,8 @@ export function getCorsHeaders(
     if (/^https:\/\/(?:[a-zA-Z0-9-]+\.)*pages\.dev$/.test(origin)) {
       isAllowed = true;
     } else if (/^https:\/\/(?:[a-zA-Z0-9-]+\.)*bmiuniversities\.org$/.test(origin)) {
+      isAllowed = true;
+    } else if (/^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/.test(origin)) {
       isAllowed = true;
     }
   }

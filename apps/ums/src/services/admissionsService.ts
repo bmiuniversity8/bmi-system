@@ -122,9 +122,19 @@ export const admissionsService = {
       },
       body: JSON.stringify(data),
     });
+    return response.json();
+  },
+
+  /**
+   * Delete an application permanently
+   */
+  async deleteApplication(id: string) {
+    const response = await authFetch(`${API_URL.replace('/v1', '')}/admin/applications/${id}`, {
+      method: 'DELETE',
+    });
     if (!response.ok) {
       const err = (await parseJsonSafe(response)) as { error?: string };
-      throw new Error(err?.error || 'Failed to create application');
+      throw new Error(err?.error || 'Failed to delete application');
     }
     return response.json();
   },
