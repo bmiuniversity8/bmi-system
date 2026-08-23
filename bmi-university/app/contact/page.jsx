@@ -44,7 +44,7 @@ export default function Contact() {
   return (
     <main id="main-content">
       <PageHero
-        image="/images/contact-hero/contact-hero-1-campus.jpg"
+        image="/images/contact-hero/contact-hero-1-office.jpg"
         eyebrow="Connect With Us"
         title="Contact Us"
         subtitle="We'd love to hear from you. Reach out and our admissions & registrar teams will respond promptly."

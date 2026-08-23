@@ -5,7 +5,7 @@ export default function AccreditationPage() {
   return (
     <main id="main-content">
       <PageHero
-        image="/images/academics-hero/academics-hero-3-faculty.jpg"
+        image="/images/academics-hero/academics-hero-3-classroom.jpg"
         eyebrow="Academic Standards & Compliance"
         title="Accreditation & Authorization"
         subtitle="Committed to rigorous theological scholarship, global quality assurance, and institutional integrity."

@@ -403,7 +403,7 @@ export default function VerifyPage() {
   return (
     <main id="main-content">
       <PageHero
-        image="/images/academics-hero/academics-hero-2-graduation.jpg"
+        image="/images/home-hero/home-hero-1-graduation.jpg"
         eyebrow="Institutional Records & Trust"
         title="Document Verification Engine"
         subtitle="Public cryptographic registry to validate official diplomas, transcripts, admission letters, and certificates issued by Bethel Ministries International University."

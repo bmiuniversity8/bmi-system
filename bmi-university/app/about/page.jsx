@@ -79,7 +79,7 @@ export default function About() {
           </div>
           <div style={{ borderRadius: "20px", overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,0.12)", aspectRatio: "4/3" }}>
             <img
-              src="/images/about-hero/about-hero-1-faculty.jpg"
+              src="/images/about-hero/about-hero-3-faculty.jpg"
               alt="Faculty and students at BMI University"
               style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
               loading="lazy"
