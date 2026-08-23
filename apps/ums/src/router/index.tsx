@@ -73,8 +73,8 @@ function RoleGuard({
 }) {
   const user = useAuthStore((s) => s.user);
 
-  // Admin bypasses all checks
-  if (user?.role === "admin") return <>{children}</>;
+  // Superadmin & Admin bypass all module restrictions
+  if (user?.role === "admin" || user?.role === "superadmin") return <>{children}</>;
 
   if (!user || !allowedRoles.includes(user.role)) {
     return <Navigate to="/dashboard" replace />;

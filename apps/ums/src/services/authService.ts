@@ -120,6 +120,15 @@ export async function login(email: string, password: string, rememberMe: boolean
         role: apiUser.role,
         isActive: true,
       };
+
+      // Guard: UMS is exclusively for University Staff, Faculty, and Administrators
+      if (user.role === 'student' || user.role === 'applicant') {
+        return {
+          success: false,
+          error: 'Access Restricted: The University Management System (UMS) is strictly for university staff, faculty, and administrators. Please log in to the Student Portal at https://portal.bmiuniversities.org',
+        };
+      }
+
       // eslint-disable-next-line no-console
       console.log('[authService] Login success - User object:', user);
       localStorage.setItem(USER_KEY, JSON.stringify(user));
@@ -385,6 +394,17 @@ export async function verifySession(): Promise<boolean> {
         role: apiUser.role,
         isActive: true,
       };
+
+      // Guard: UMS is exclusively for University Staff, Faculty, and Administrators
+      if (user.role === 'student' || user.role === 'applicant') {
+        localStorage.removeItem(USER_KEY);
+        localStorage.removeItem(TOKEN_EXPIRY_KEY);
+        localStorage.removeItem(REMEMBER_KEY);
+        _memoryToken = null;
+        _jwtToken = null;
+        return false;
+      }
+
       // eslint-disable-next-line no-console
       console.log('[authService] Session verified - User object:', user);
       localStorage.setItem(USER_KEY, JSON.stringify(user));
