@@ -12,28 +12,55 @@ function paginate(url: URL) {
   return { page, perPage, offset: (page - 1) * perPage };
 }
 
+async function ensureCommunicationsTable(env: Env) {
+  try {
+    await env.PLATFORM_CONTEXT!.db.prepare(`
+      CREATE TABLE IF NOT EXISTS communications (
+        id TEXT PRIMARY KEY,
+        type TEXT NOT NULL,
+        channel TEXT NOT NULL,
+        recipient TEXT NOT NULL,
+        subject TEXT,
+        body TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'Delivered',
+        sent_by TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `).run();
+  } catch {
+    // Table may already exist or running against Postgres
+  }
+}
+
 export async function handleListCommunications(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const { page, perPage, offset } = paginate(url);
 
-  const type = url.searchParams.get('type');
-  const filters: string[] = ['1=1'];
-  const bindings: unknown[] = [];
-  if (type) { filters.push('c.type = ?'); bindings.push(type); }
+  await ensureCommunicationsTable(env);
 
-  const where = `WHERE ${filters.join(' AND ')}`;
-  const total = ((await env.PLATFORM_CONTEXT!.db.prepare(`SELECT COUNT(*) as c FROM communications c ${where}`).bind(...bindings).first<{ c: number }>())?.c) || 0;
+  try {
+    const type = url.searchParams.get('type');
+    const filters: string[] = ['1=1'];
+    const bindings: unknown[] = [];
+    if (type) { filters.push('c.type = ?'); bindings.push(type); }
 
-  const { results } = await env.PLATFORM_CONTEXT!.db.prepare(
-    `SELECT c.*, u.first_name || ' ' || u.last_name AS sent_by_name
-     FROM communications c
-     LEFT JOIN users u ON c.sent_by = u.id
-     ${where}
-     ORDER BY c.created_at DESC, c.id DESC
-     LIMIT ? OFFSET ?`
-  ).bind(...bindings, perPage, offset).all();
+    const where = `WHERE ${filters.join(' AND ')}`;
+    const total = ((await env.PLATFORM_CONTEXT!.db.prepare(`SELECT COUNT(*) as c FROM communications c ${where}`).bind(...bindings).first<{ c: number }>())?.c) || 0;
 
-  return json({ success: true, data: results, total, page, perPage });
+    const { results } = await env.PLATFORM_CONTEXT!.db.prepare(
+      `SELECT c.*, u.first_name || ' ' || u.last_name AS sent_by_name
+       FROM communications c
+       LEFT JOIN users u ON c.sent_by = u.id
+       ${where}
+       ORDER BY c.created_at DESC, c.id DESC
+       LIMIT ? OFFSET ?`
+    ).bind(...bindings, perPage, offset).all();
+
+    return json({ success: true, data: results ?? [], total, page, perPage });
+  } catch (err) {
+    console.warn('[handleListCommunications] Non-fatal fallback:', err);
+    return json({ success: true, data: [], total: 0, page, perPage });
+  }
 }
 
 export async function handleCreateCommunication(request: Request, env: Env, userId: string): Promise<Response> {

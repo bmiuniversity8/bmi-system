@@ -88,14 +88,15 @@ const Communications: React.FC = () => {
 
   const loadHistory = async () => {
     setIsLoadingHistory(true);
-    const res = await listCommunications({ perPage: 200 });
-    if (res.success && res.data) {
+    try {
+      const res = await listCommunications({ perPage: 200 });
+      const list = Array.isArray(res?.data) ? res.data : [];
       setHistory(
-        res.data.map((r) => ({
+        list.map((r) => ({
           id: r.id,
           type: r.type,
           recipient: r.recipient,
-          date: new Date(r.created_at).toLocaleString("en-GB", {
+          date: new Date(r.created_at || Date.now()).toLocaleString("en-GB", {
             day: "2-digit",
             month: "2-digit",
             hour: "2-digit",
@@ -106,23 +107,29 @@ const Communications: React.FC = () => {
           text: r.body,
         })),
       );
+    } catch {
+      setHistory([]);
+    } finally {
+      setIsLoadingHistory(false);
     }
-    setIsLoadingHistory(false);
   };
 
   const loadInquiries = async () => {
     setIsLoadingInquiries(true);
-    const res = await listContactSubmissions({
-      status: inquiryStatusFilter === "all" ? undefined : inquiryStatusFilter,
-      search: inquirySearch || undefined,
-      perPage: 100,
-    });
-    if (res.success && res.data) {
-      setInquiries(res.data);
+    try {
+      const res = await listContactSubmissions({
+        status: inquiryStatusFilter === "all" ? undefined : inquiryStatusFilter,
+        search: inquirySearch || undefined,
+        perPage: 100,
+      });
+      setInquiries(Array.isArray(res?.data) ? res.data : []);
       setInquiriesTotal(res.total ?? 0);
       setInquiriesUnread(res.unreadCount ?? 0);
+    } catch {
+      setInquiries([]);
+    } finally {
+      setIsLoadingInquiries(false);
     }
-    setIsLoadingInquiries(false);
   };
 
   const handleMarkInquiry = async (id: string, status: "read" | "replied" | "archived" | "new") => {
@@ -1002,7 +1009,7 @@ const Communications: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
-                      {history
+                      {(history || [])
                         .filter(
                           (h) =>
                             h.recipient

@@ -36,10 +36,12 @@ export async function listCommunications(params?: {
     if (params?.perPage) qs.set('perPage', String(params.perPage));
     const url = `${API_URL}/communications${qs.toString() ? `?${qs.toString()}` : ''}`;
     const response = await authFetch(url, {}, 8000);
-    const data = await response.json();
-    return { success: response.ok, data: data?.data, total: data?.total, error: data?.error };
+    const data = await response.json().catch(() => null);
+    const rawList = data?.data ?? data?.results ?? [];
+    const list = Array.isArray(rawList) ? rawList : (Array.isArray(rawList?.results) ? rawList.results : []);
+    return { success: response.ok, data: list, total: data?.total ?? list.length, error: data?.error };
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Failed to fetch communications' };
+    return { success: false, data: [], total: 0, error: error instanceof Error ? error.message : 'Failed to fetch communications' };
   }
 }
 
@@ -110,16 +112,18 @@ export async function listContactSubmissions(params?: {
     if (params?.perPage) qs.set('perPage', String(params.perPage));
     const url = `${API_URL}/contact-submissions${qs.toString() ? `?${qs.toString()}` : ''}`;
     const response = await authFetch(url, {}, 8000);
-    const data = await response.json();
+    const data = await response.json().catch(() => null);
+    const rawList = data?.data ?? data?.results ?? [];
+    const list = Array.isArray(rawList) ? rawList : (Array.isArray(rawList?.results) ? rawList.results : []);
     return { 
       success: response.ok, 
-      data: data?.data, 
-      total: data?.total, 
-      unreadCount: data?.unreadCount,
+      data: list, 
+      total: data?.total ?? list.length, 
+      unreadCount: data?.unreadCount ?? 0,
       error: data?.error 
     };
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Failed to fetch contact inquiries' };
+    return { success: false, data: [], total: 0, unreadCount: 0, error: error instanceof Error ? error.message : 'Failed to fetch contact inquiries' };
   }
 }
 

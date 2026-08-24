@@ -9,6 +9,7 @@ import {
   Users,
 } from 'lucide-react';
 import { authFetch } from '../services/authService';
+import { API_URL } from '../services/config';
 
 interface SystemHealthData {
   status: string;
@@ -35,7 +36,7 @@ const SystemHealth: React.FC = () => {
 
   const fetchHealth = async () => {
     try {
-      const response = await authFetch('/api/admin/performance/health');
+      const response = await authFetch(`${API_URL.replace('/v1', '')}/admin/performance/health`);
       const result = await response.json();
       if (result.success) {
         setData(result.data);

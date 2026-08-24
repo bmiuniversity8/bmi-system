@@ -84,7 +84,7 @@ const Settings: React.FC = () => {
 
     import("../services/authService").then(({ authFetch }) => {
       import("../services/config").then(({ API_URL }) => {
-        authFetch(`${API_URL}/api/v1/settings/admin`)
+        authFetch(`${API_URL}/settings/admin`)
           .then(async (r) => {
             const data = await r.json();
             if (cancelled) return;
@@ -226,7 +226,7 @@ const Settings: React.FC = () => {
     try {
       const { authFetch } = await import("../services/authService");
       const { API_URL } = await import("../services/config");
-      const res = await authFetch(`${API_URL}/api/v1/settings/admin`, {
+      const res = await authFetch(`${API_URL}/settings/admin`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
