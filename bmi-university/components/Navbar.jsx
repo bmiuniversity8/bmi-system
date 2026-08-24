@@ -262,6 +262,23 @@ export default function Navbar() {
         </div>
       </header>
 
+      {/* ── Mobile Backdrop Overlay ── */}
+      {mobileOpen && (
+        <div
+          onClick={() => setMobileOpen(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0, 0, 0, 0.65)",
+            backdropFilter: "blur(6px)",
+            WebkitBackdropFilter: "blur(6px)",
+            zIndex: 998,
+            transition: "opacity 0.3s ease",
+          }}
+          aria-hidden="true"
+        />
+      )}
+
       {/* ── Mobile Drawer ── */}
       <div
         id="mobile-nav"
@@ -270,11 +287,13 @@ export default function Navbar() {
         aria-modal={mobileOpen}
         style={{
           position: "fixed",
-          top: "120px",
+          top: "112px",
           left: 0,
           right: 0,
           bottom: 0,
-          background: "linear-gradient(180deg, #091223 0%, #0e1d38 100%)",
+          background: "linear-gradient(180deg, rgba(9, 18, 35, 0.98) 0%, rgba(14, 29, 56, 0.98) 100%)",
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
           zIndex: 999,
           display: "flex",
           flexDirection: "column",
@@ -283,8 +302,9 @@ export default function Navbar() {
           gap: "0.75rem",
           transform: mobileOpen ? "translateX(0)" : "translateX(100%)",
           transition: "transform 0.35s cubic-bezier(0.4, 0, 0.2, 1)",
-          padding: "2rem",
+          padding: "1.5rem 1.25rem calc(2rem + env(safe-area-inset-bottom, 0px))",
           overflowY: "auto",
+          WebkitOverflowScrolling: "touch",
         }}
         className="mobile-drawer"
       >
@@ -296,37 +316,43 @@ export default function Navbar() {
                 <Link
                   href={link.href}
                   aria-current={isActive ? "page" : undefined}
+                  onClick={() => setMobileOpen(false)}
                   style={{
-                    display: "block",
-                    padding: "1rem 1.25rem",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    minHeight: "48px",
+                    padding: "0.85rem 1.25rem",
                     borderRadius: "12px",
-                    fontSize: "1.15rem",
+                    fontSize: "1.1rem",
                     fontWeight: 700,
-                    color: isActive ? "#e5c578" : "rgba(255,255,255,0.9)",
-                    background: isActive ? "rgba(197,160,72,0.12)" : "transparent",
+                    color: isActive ? "#e5c578" : "rgba(255,255,255,0.92)",
+                    background: isActive ? "rgba(197,160,72,0.15)" : "rgba(255,255,255,0.03)",
                     borderLeft: isActive ? "4px solid #c5a048" : "4px solid transparent",
                     transition: "all 0.2s ease",
                   }}
                 >
-                  {link.name}
+                  <span>{link.name}</span>
+                  <span style={{ fontSize: "0.9rem", opacity: 0.6 }}>→</span>
                 </Link>
               </li>
             );
           })}
         </ul>
 
-        <div style={{ width: "100%", maxWidth: "380px", marginTop: "1.5rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+        <div style={{ width: "100%", maxWidth: "380px", marginTop: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
           <Link
             href="/apply"
+            onClick={() => setMobileOpen(false)}
             className="btn btn-gold"
-            style={{ width: "100%", fontSize: "1rem", padding: "0.9rem" }}
+            style={{ width: "100%", fontSize: "1rem", minHeight: "48px" }}
           >
             Apply Today →
           </Link>
           <a
             href="https://portal.bmiuniversities.org"
             className="btn btn-outline-white"
-            style={{ width: "100%", fontSize: "0.95rem", padding: "0.85rem", textAlign: "center" }}
+            style={{ width: "100%", fontSize: "0.95rem", minHeight: "48px", textAlign: "center" }}
           >
             👤 Student Portal Login
           </a>
@@ -345,7 +371,7 @@ export default function Navbar() {
         }
         @media (max-width: 640px) {
           .hide-mobile { display: none !important; }
-          .top-utility-bar { padding: 0.35rem 1rem !important; font-size: 0.7rem !important; }
+          .top-utility-bar { padding: 0.35rem 0.75rem !important; font-size: 0.68rem !important; }
         }
       `}</style>
     </>

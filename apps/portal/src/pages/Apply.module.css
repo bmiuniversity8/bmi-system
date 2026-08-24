@@ -403,3 +403,49 @@
   color: white;
   border-color: var(--navy, #0f172a);
 }
+
+/* ─── Mobile Responsiveness Enhancements ─── */
+@media (max-width: 640px) {
+  .pageContainer {
+    padding: 1.25rem 0.75rem 3.5rem;
+  }
+
+  .title {
+    font-size: 1.65rem;
+  }
+
+  .subHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .stepMeta {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .programGrid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .quickChips {
+    gap: 0.35rem;
+  }
+
+  .quickChip {
+    padding: 0.35rem 0.7rem;
+    font-size: 0.78rem;
+    min-height: 36px;
+  }
+
+  .comboboxDropdown {
+    max-height: 180px;
+  }
+
+  .comboboxItem {
+    min-height: 44px;
+    padding: 0.75rem 0.85rem;
+  }
+}
+

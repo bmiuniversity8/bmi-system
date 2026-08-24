@@ -309,3 +309,67 @@ img {
 .animate-hero-delay-2 {
   animation: fadeSlideUp 0.85s 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
+
+/* ─── Responsive & Mobile Optimization Utilities ─── */
+@media (max-width: 768px) {
+  :root {
+    --navbar-height: 72px;
+  }
+  
+  .section {
+    padding: 4rem 1.25rem;
+  }
+  .section-sm {
+    padding: 3rem 1.25rem;
+  }
+  
+  .top-utility-bar {
+    padding: 0.35rem 1rem !important;
+    font-size: 0.7rem !important;
+  }
+
+  .hide-mobile {
+    display: none !important;
+  }
+
+  .mobile-stack {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+  }
+
+  .mobile-grid-1 {
+    grid-template-columns: 1fr !important;
+  }
+
+  .split-section {
+    grid-template-columns: 1fr !important;
+    gap: 2.5rem !important;
+  }
+
+  .btn {
+    width: 100%;
+    min-height: 48px;
+    padding: 0.85rem 1.25rem;
+    font-size: 0.95rem;
+  }
+
+  .stat-card {
+    padding: 1.5rem 1rem;
+  }
+}
+
+@media (max-width: 640px) {
+  body {
+    font-size: 0.95rem;
+  }
+
+  .hero-slider-content {
+    padding: 1.25rem !important;
+  }
+
+  .program-card {
+    border-radius: 16px;
+  }
+}
+

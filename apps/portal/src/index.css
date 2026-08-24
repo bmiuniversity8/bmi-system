@@ -720,3 +720,38 @@ input, select, textarea, button { font-family: inherit; }
     display: flex !important;
   }
 }
+
+@media (max-width: 640px) {
+  .card {
+    padding: 1.25rem !important;
+    border-radius: var(--radius) !important;
+  }
+
+  .form-grid-2 {
+    grid-template-columns: 1fr !important;
+    gap: 1rem !important;
+  }
+
+  .page {
+    padding-top: 75px !important;
+  }
+
+  .page-center {
+    padding: 80px 1rem 1.5rem 1rem !important;
+  }
+
+  .btn {
+    min-height: 44px;
+    padding: 0.65rem 1.25rem;
+  }
+
+  .form-input, .form-select, .form-textarea {
+    font-size: 16px !important; /* Prevents auto-zoom on iOS */
+    padding: 0.75rem 0.85rem;
+  }
+
+  .steps {
+    margin-bottom: 1.5rem !important;
+  }
+}
+

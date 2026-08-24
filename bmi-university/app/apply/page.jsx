@@ -80,26 +80,26 @@ export default function ApplyPage() {
   };
 
   return (
-    <main id="main-content" style={{ background: "#f8fafc", minHeight: "100vh", padding: "9.5rem 2rem 6rem" }}>
+    <main id="main-content" style={{ background: "#f8fafc", minHeight: "100vh", padding: "clamp(6.5rem, 10vw, 9.5rem) clamp(1rem, 4vw, 2rem) 4rem" }}>
       <div style={{ maxWidth: "800px", margin: "0 auto" }}>
-        <div style={{ textAlign: "center", marginBottom: "3rem" }}>
-          <h1 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: "clamp(2rem, 4vw, 3rem)", color: "#0f172a", marginBottom: "1rem" }}>
+        <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
+          <h1 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: "clamp(1.85rem, 5vw, 3rem)", color: "#0f172a", marginBottom: "0.75rem" }}>
             Begin Your Application
           </h1>
-          <p style={{ color: "#64748b", fontSize: "1.1rem", lineHeight: 1.7 }}>
+          <p style={{ color: "#64748b", fontSize: "clamp(0.95rem, 2vw, 1.1rem)", lineHeight: 1.6 }}>
             We&apos;re thrilled you&apos;re taking this step toward Christ-centered leadership. Complete the form below to get started — you&apos;ll set your password in the next step.
           </p>
         </div>
 
-        <div style={{ background: "#fff", borderRadius: "16px", padding: "3rem", boxShadow: "0 10px 40px rgba(0,0,0,0.08)", border: "1px solid rgba(0,0,0,0.05)" }}>
+        <div style={{ background: "#fff", borderRadius: "16px", padding: "clamp(1.5rem, 4vw, 3rem)", boxShadow: "0 10px 40px rgba(0,0,0,0.08)", border: "1px solid rgba(0,0,0,0.05)" }}>
           {error && (
             <div style={{ background: "#fee2e2", color: "#991b1b", padding: "0.75rem 1rem", borderRadius: "8px", marginBottom: "1.5rem", fontSize: "0.9rem", border: "1px solid #fecaca" }} role="alert">
               {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }} noValidate>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem" }}>
+          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }} noValidate>
+            <div className="apply-name-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "1.25rem" }}>
               <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                 <label htmlFor="firstName" style={{ fontSize: "0.9rem", fontWeight: 600, color: "#334155" }}>First Name *</label>
                 <input

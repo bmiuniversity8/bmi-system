@@ -172,12 +172,12 @@ export default function GlobalConfirmDialog() {
         </div>
 
         {/* Modal Footer / Actions */}
-        <div className="p-6 pt-5 bg-gray-50/60 dark:bg-gray-900/40 border-t border-gray-100 dark:border-gray-800/80 flex items-center justify-end gap-3">
+        <div className="p-6 pt-5 bg-gray-50/60 dark:bg-gray-900/40 border-t border-gray-100 dark:border-gray-800/80 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 sm:gap-3">
           {!isAlertOnly && (
             <button
               type="button"
               onClick={handleCancel}
-              className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-all shadow-xs"
+              className="w-full sm:w-auto px-4 py-2.5 min-h-[44px] text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-all shadow-xs text-center flex items-center justify-center"
             >
               {options.cancelText || "Cancel"}
             </button>
@@ -187,7 +187,7 @@ export default function GlobalConfirmDialog() {
             ref={confirmBtnRef}
             type="button"
             onClick={handleConfirm}
-            className={`px-5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-all ${style.primaryBtn}`}
+            className={`w-full sm:w-auto px-5 py-2.5 min-h-[44px] text-xs font-bold uppercase tracking-wider rounded-xl transition-all text-center flex items-center justify-center ${style.primaryBtn}`}
           >
             {options.confirmText || (isAlertOnly ? "Acknowledge" : "Confirm Action")}
           </button>

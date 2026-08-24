@@ -550,38 +550,38 @@ export default function Admissions() {
 
       {/* Bulk Toolbar if selection exists */}
       {selectedIds.size > 0 && (
-        <div className="bg-[#2E004F] text-white p-3 rounded-xl mb-4 flex items-center justify-between gap-3 text-xs font-semibold shadow-md animate-fade-in">
+        <div className="bg-[#2E004F] text-white p-3 rounded-xl mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs font-semibold shadow-md animate-fade-in">
           <div className="flex items-center gap-2">
             <span className="bg-[#FFD700] text-[#2E004F] font-black px-2 py-0.5 rounded text-[10px]">
               {selectedIds.size} Selected
             </span>
             <span>Batch Operations Available</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-start sm:justify-end">
             <button
               onClick={() => handleBulkUpdate("under_review")}
               disabled={updating}
-              className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded uppercase text-[10px] tracking-wider transition-all"
+              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded uppercase text-[10px] tracking-wider transition-all min-h-[36px]"
             >
               Move to Review
             </button>
             <button
               onClick={() => handleBulkUpdate("accepted")}
               disabled={updating}
-              className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded uppercase text-[10px] tracking-wider transition-all"
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded uppercase text-[10px] tracking-wider transition-all min-h-[36px]"
             >
               Bulk Approve
             </button>
             <button
               onClick={handleBulkDelete}
               disabled={updating}
-              className="inline-flex items-center gap-1 px-3 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded uppercase text-[10px] tracking-wider transition-all"
+              className="inline-flex items-center gap-1 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded uppercase text-[10px] tracking-wider transition-all min-h-[36px]"
             >
               <Trash2 size={12} /> Bulk Delete
             </button>
             <button
               onClick={() => setSelectedIds(new Set())}
-              className="px-2 py-1 text-gray-300 hover:text-white"
+              className="px-2.5 py-1.5 text-purple-200 hover:text-white transition-colors"
             >
               Clear
             </button>
