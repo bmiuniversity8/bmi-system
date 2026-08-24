@@ -102,7 +102,7 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" style={{ scrollPaddingTop: '112px' }}>
+    <html lang="en" suppressHydrationWarning style={{ scrollPaddingTop: '112px' }}>
       <head>
         {/* Schema.org Organization structured data — tells Google to display the BMI logo */}
         <script
@@ -116,7 +116,7 @@ export default function RootLayout({ children }) {
           rel="stylesheet"
         />
       </head>
-      <body style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+      <body suppressHydrationWarning style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
         <Navbar />
         <div style={{ flexGrow: 1 }}>
           {children}

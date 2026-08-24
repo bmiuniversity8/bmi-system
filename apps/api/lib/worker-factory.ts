@@ -78,7 +78,11 @@ export function createWorker(routes: Route[]) {
             '/api/auth/resend-verification',
             '/api/admin/setup',
           ]);
-          const isCsrfExempt = csrfExemptPaths.has(path) || path.startsWith('/api/recommendations/');
+          const isCsrfExempt = 
+            csrfExemptPaths.has(path) || 
+            path.startsWith('/api/public/') || 
+            path.startsWith('/api/v1/public/') || 
+            path.startsWith('/api/recommendations/');
           if (stateChangingMethods.includes(method) && !isCsrfExempt) {
             if (!validateCsrfToken(request)) {
               const duration = performance.now() - startTime;

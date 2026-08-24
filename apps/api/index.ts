@@ -478,7 +478,12 @@ export default withSentry(
           '/api/admin/setup/info',
           '/api/admin/setup/reset',
         ]);
-        const isCsrfExempt = csrfExemptPaths.has(path) || path === '/api/recommendations/' || path.startsWith('/api/recommendations/');
+        const isCsrfExempt = 
+          csrfExemptPaths.has(path) || 
+          path.startsWith('/api/public/') || 
+          path.startsWith('/api/v1/public/') || 
+          path === '/api/recommendations/' || 
+          path.startsWith('/api/recommendations/');
         if (stateChangingMethods.includes(method) && !isCsrfExempt) {
           if (!validateCsrfToken(request)) {
             const duration = performance.now() - startTime;
