@@ -302,11 +302,11 @@ const Attendance: React.FC = () => {
         </div>
       </div>
 
-      {/* Sticky Tab Bar - Modules */}
-      <div className="flex-shrink-0 bg-[#F8F9FA]/95 dark:bg-[#0a0015]/95 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 px-6 py-3 flex items-center gap-3 overflow-x-auto no-scrollbar shadow-sm">
-        <div className="flex items-center gap-2 mr-4 text-gray-400">
-          <BookOpen size={14} />
-          <span className="text-[9px] font-black uppercase tracking-widest">
+      {/* Responsive Tab Bar - Modules */}
+      <div className="flex-shrink-0 bg-[#F8F9FA]/95 dark:bg-[#0a0015]/95 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 px-3 sm:px-6 py-2.5 flex items-center gap-2 overflow-x-auto no-scrollbar shadow-xs">
+        <div className="flex items-center gap-1.5 mr-2 text-gray-400 flex-shrink-0">
+          <BookOpen size={13} />
+          <span className="text-[9px] font-black uppercase tracking-widest hidden sm:inline">
             Active Modules
           </span>
         </div>
@@ -316,9 +316,9 @@ const Attendance: React.FC = () => {
             onClick={() => {
               setSelectedCourse(course.name);
             }}
-            className={`px-5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
+            className={`px-3.5 sm:px-5 py-1.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex-shrink-0 ${
               selectedCourse === course.name
-                ? "bg-[#4B0082] text-white shadow-lg shadow-purple-500/20 scale-105 border border-purple-500/50"
+                ? "bg-[#4B0082] text-white shadow-md shadow-purple-500/20 border border-purple-500/50"
                 : "bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-[#4B0082]"
             }`}
           >
@@ -327,45 +327,45 @@ const Attendance: React.FC = () => {
         ))}
       </div>
 
-      {/* Pinned Metrics Row - MOVED OUTSIDE SCROLL CONTAINER TO FORCE PIN */}
-      <div className="flex-shrink-0 bg-white dark:bg-black border-b border-gray-200 dark:border-gray-800 z-30 shadow-sm px-6 py-3">
-        <div className="grid grid-cols-4 gap-4">
+      {/* Pinned Metrics Row - Responsive 2x2 on Mobile, 4-col on Desktop */}
+      <div className="flex-shrink-0 bg-white dark:bg-black border-b border-gray-200 dark:border-gray-800 z-30 shadow-xs px-3 sm:px-6 py-2.5">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4">
           {/* Present Card */}
-          <div className="bg-emerald-50 dark:bg-emerald-900/10 border-l-[3px] border-emerald-500 pl-3 py-1 flex flex-col justify-center">
-            <span className="text-[8px] font-black uppercase text-emerald-600 tracking-widest">
+          <div className="bg-emerald-50/80 dark:bg-emerald-950/20 border-l-[3px] border-emerald-500 px-3 py-2 rounded-r-lg flex flex-col justify-center">
+            <span className="text-[8px] sm:text-[9px] font-black uppercase text-emerald-600 tracking-widest">
               Present
             </span>
-            <span className="text-lg font-black text-emerald-700 dark:text-emerald-400 leading-none">
+            <span className="text-base sm:text-lg font-black text-emerald-700 dark:text-emerald-400 leading-none mt-0.5">
               {stats.present}
             </span>
           </div>
 
           {/* Late Card */}
-          <div className="bg-amber-50 dark:bg-amber-900/10 border-l-[3px] border-amber-500 pl-3 py-1 flex flex-col justify-center">
-            <span className="text-[8px] font-black uppercase text-amber-600 tracking-widest">
+          <div className="bg-amber-50/80 dark:bg-amber-950/20 border-l-[3px] border-amber-500 px-3 py-2 rounded-r-lg flex flex-col justify-center">
+            <span className="text-[8px] sm:text-[9px] font-black uppercase text-amber-600 tracking-widest">
               Late
             </span>
-            <span className="text-lg font-black text-amber-700 dark:text-amber-400 leading-none">
+            <span className="text-base sm:text-lg font-black text-amber-700 dark:text-amber-400 leading-none mt-0.5">
               {stats.late}
             </span>
           </div>
 
           {/* Absent Card */}
-          <div className="bg-rose-50 dark:bg-rose-900/10 border-l-[3px] border-rose-500 pl-3 py-1 flex flex-col justify-center">
-            <span className="text-[8px] font-black uppercase text-rose-600 tracking-widest">
+          <div className="bg-rose-50/80 dark:bg-rose-950/20 border-l-[3px] border-rose-500 px-3 py-2 rounded-r-lg flex flex-col justify-center">
+            <span className="text-[8px] sm:text-[9px] font-black uppercase text-rose-600 tracking-widest">
               Absent
             </span>
-            <span className="text-lg font-black text-rose-700 dark:text-rose-400 leading-none">
+            <span className="text-base sm:text-lg font-black text-rose-700 dark:text-rose-400 leading-none mt-0.5">
               {stats.absent}
             </span>
           </div>
 
           {/* Total Class Card */}
-          <div className="bg-indigo-50 dark:bg-indigo-900/10 border-l-[3px] border-indigo-500 pl-3 py-1 flex flex-col justify-center">
-            <span className="text-[8px] font-black uppercase text-indigo-600 dark:text-indigo-300 tracking-widest">
+          <div className="bg-indigo-50/80 dark:bg-indigo-950/20 border-l-[3px] border-indigo-500 px-3 py-2 rounded-r-lg flex flex-col justify-center">
+            <span className="text-[8px] sm:text-[9px] font-black uppercase text-indigo-600 dark:text-indigo-300 tracking-widest">
               Total Class
             </span>
-            <span className="text-lg font-black text-indigo-700 dark:text-indigo-300 leading-none">
+            <span className="text-base sm:text-lg font-black text-indigo-700 dark:text-indigo-300 leading-none mt-0.5">
               {filteredStudents.length}
             </span>
           </div>
@@ -374,59 +374,59 @@ const Attendance: React.FC = () => {
 
       {/* Scrollable Content */}
       <div className="flex-1 overflow-y-auto no-scrollbar">
-        <div className="p-6 space-y-6">
-          {/* Search Bar */}
-          <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 p-4 flex flex-col md:flex-row gap-4 items-center shadow-sm">
+        <div className="p-3 sm:p-6 space-y-4 sm:space-y-6">
+          {/* Search & Bulk Actions Bar */}
+          <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 p-3 sm:p-4 rounded-xl flex flex-col md:flex-row gap-3 items-stretch sm:items-center shadow-xs">
             <div className="relative flex-1 w-full">
               <Search
-                className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
-                size={16}
+                className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
+                size={15}
               />
               <input
                 type="text"
                 placeholder="Search registry by ID, Name or Department..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-none outline-none font-bold text-xs dark:text-white focus:ring-1 focus:ring-[#4B0082]"
+                className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg outline-none font-medium text-xs dark:text-white focus:ring-2 focus:ring-[#4B0082]/20 focus:border-[#4B0082]"
               />
             </div>
             <div className="flex items-center gap-2 w-full md:w-auto">
               <button
                 onClick={markAllPresent}
                 type="button"
-                className="flex items-center gap-1 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-lg hover:bg-emerald-100 font-bold text-[10px] uppercase tracking-wider cursor-pointer"
+                className="flex-1 sm:flex-initial justify-center flex items-center gap-1.5 px-3 py-2 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-lg hover:bg-emerald-100 font-bold text-[9px] sm:text-[10px] uppercase tracking-wider cursor-pointer transition-colors"
               >
                 <CheckCheck size={13} /> Mark All Present
               </button>
               <button
                 onClick={markAllAbsent}
                 type="button"
-                className="flex items-center gap-1 px-3 py-1.5 bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 rounded-lg hover:bg-rose-100 font-bold text-[10px] uppercase tracking-wider cursor-pointer"
+                className="flex-1 sm:flex-initial justify-center flex items-center gap-1.5 px-3 py-2 bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 rounded-lg hover:bg-rose-100 font-bold text-[9px] sm:text-[10px] uppercase tracking-wider cursor-pointer transition-colors"
               >
                 <XCircle size={13} /> Mark All Absent
               </button>
             </div>
             {lastMarkedAt && (
-              <div className="flex items-center gap-2 text-[9px] font-bold text-emerald-600 uppercase tracking-widest">
-                <CheckCircle2 size={14} /> Last Save: {lastMarkedAt}
+              <div className="flex items-center gap-1.5 text-[9px] font-bold text-emerald-600 uppercase tracking-widest">
+                <CheckCircle2 size={13} /> Last Save: {lastMarkedAt}
               </div>
             )}
           </div>
 
-          {/* List */}
-          <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 shadow-sm">
-            <div className="divide-y divide-gray-50 dark:divide-gray-700">
+          {/* Student List */}
+          <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl shadow-xs overflow-hidden">
+            <div className="divide-y divide-gray-100 dark:divide-gray-700/60">
               {filteredStudents.length > 0 ? (
                 filteredStudents.map((student) => {
                   const currentStatus = attendance[student.id] || "absent";
                   return (
                     <div
                       key={student.id}
-                      className="flex items-center justify-between p-5 hover:bg-purple-50/30 dark:hover:bg-gray-700/30 transition-colors"
+                      className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-5 gap-3 hover:bg-purple-50/20 dark:hover:bg-gray-700/20 transition-colors"
                     >
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-3">
                         <div
-                          className={`w-10 h-10 rounded-none bg-purple-600 flex items-center justify-center font-bold text-white shadow-sm overflow-hidden`}
+                          className={`w-9 sm:w-10 h-9 sm:h-10 rounded-lg bg-purple-600 flex items-center justify-center font-bold text-white shadow-xs overflow-hidden flex-shrink-0 text-xs sm:text-sm`}
                         >
                           {student.photo ? (
                             <img
@@ -438,41 +438,54 @@ const Attendance: React.FC = () => {
                             student.first_name.charAt(0)
                           )}
                         </div>
-                        <div>
-                          <p className="font-bold text-gray-900 dark:text-white text-sm uppercase tracking-tight">
+                        <div className="min-w-0">
+                          <p className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm uppercase tracking-tight truncate">
                             {student.first_name} {student.last_name}
                           </p>
-                          <p className="text-[10px] text-gray-500 font-mono tracking-widest uppercase">
+                          <p className="text-[9px] text-gray-500 font-mono tracking-widest uppercase truncate mt-0.5">
                             {student.reg_no || student.id} • {student.department}
                           </p>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-900 p-1 rounded-none border border-gray-200 dark:border-gray-700">
+                      {/* Status Toggle Buttons */}
+                      <div className="flex items-center justify-between sm:justify-end gap-1.5 bg-gray-100/80 dark:bg-gray-900/80 p-1 rounded-lg border border-gray-200 dark:border-gray-700 w-full sm:w-auto">
                         <button
                           onClick={() => handleMark(student.id, "present")}
-                          className={`px-4 py-2 rounded-none text-[9px] font-black uppercase transition-all flex items-center gap-1.5 ${currentStatus === "present" ? "bg-emerald-500 text-white shadow-md" : "text-gray-400 hover:text-emerald-500"}`}
+                          className={`flex-1 sm:flex-initial justify-center px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-md text-[9px] font-black uppercase transition-all flex items-center gap-1 cursor-pointer ${
+                            currentStatus === "present"
+                              ? "bg-emerald-500 text-white shadow-xs"
+                              : "text-gray-500 hover:text-emerald-600"
+                          }`}
                         >
-                          <CheckCircle2 size={14} /> Present
+                          <CheckCircle2 size={13} /> Present
                         </button>
                         <button
                           onClick={() => handleMark(student.id, "late")}
-                          className={`px-4 py-2 rounded-none text-[9px] font-black uppercase transition-all flex items-center gap-1.5 ${currentStatus === "late" ? "bg-amber-500 text-white shadow-md" : "text-gray-400 hover:text-amber-500"}`}
+                          className={`flex-1 sm:flex-initial justify-center px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-md text-[9px] font-black uppercase transition-all flex items-center gap-1 cursor-pointer ${
+                            currentStatus === "late"
+                              ? "bg-amber-500 text-white shadow-xs"
+                              : "text-gray-500 hover:text-amber-600"
+                          }`}
                         >
-                          <Clock size={14} /> Late
+                          <Clock size={13} /> Late
                         </button>
                         <button
                           onClick={() => handleMark(student.id, "absent")}
-                          className={`px-4 py-2 rounded-none text-[9px] font-black uppercase transition-all flex items-center gap-1.5 ${currentStatus === "absent" ? "bg-red-500 text-white shadow-md font-black" : "text-gray-400 hover:text-red-500"}`}
+                          className={`flex-1 sm:flex-initial justify-center px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-md text-[9px] font-black uppercase transition-all flex items-center gap-1 cursor-pointer ${
+                            currentStatus === "absent"
+                              ? "bg-red-500 text-white shadow-xs font-black"
+                              : "text-gray-500 hover:text-red-600"
+                          }`}
                         >
-                          <XCircle size={14} /> Absent
+                          <XCircle size={13} /> Absent
                         </button>
                       </div>
                     </div>
                   );
                 })
               ) : (
-                <div className="py-20 text-center text-gray-400 font-bold uppercase tracking-widest text-xs italic">
+                <div className="py-16 text-center text-gray-400 font-bold uppercase tracking-widest text-xs italic">
                   No Students Identified in this Institutional Domain
                 </div>
               )}
@@ -480,13 +493,13 @@ const Attendance: React.FC = () => {
           </div>
 
           {/* Footer Message */}
-          <div className="bg-amber-50 dark:bg-amber-900/10 border-l-4 border-amber-400 p-4 rounded-none">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <Clock className="h-5 w-5 text-amber-400" aria-hidden="true" />
+          <div className="bg-amber-50/80 dark:bg-amber-950/20 border-l-4 border-amber-400 p-3 sm:p-4 rounded-r-lg">
+            <div className="flex items-start">
+              <div className="flex-shrink-0 mt-0.5">
+                <Clock className="h-4 w-4 text-amber-500" aria-hidden="true" />
               </div>
               <div className="ml-3">
-                <p className="text-xs font-bold text-amber-800 dark:text-amber-200 uppercase tracking-widest">
+                <p className="text-[10px] sm:text-xs font-bold text-amber-800 dark:text-amber-200 uppercase tracking-wider leading-relaxed">
                   Institutional Protocol: Students not explicitly marked as
                   'Present' or 'Late' are automatically processed as 'Absent'.
                 </p>
