@@ -10,15 +10,15 @@ const organizationSchema = {
   "@context": "https://schema.org",
   "@type": "CollegeOrUniversity",
   "name": "Bethel Ministries International University",
-  "alternateName": "BMI University",
+  "alternateName": ["BMI University", "BMI Universities"],
   "url": "https://bmiuniversities.org",
   "logo": {
     "@type": "ImageObject",
-    "url": "https://bmiuniversities.org/images/bmi-logo.png",
+    "url": "https://bmiuniversities.org/images/bmi-logo-search.png",
     "width": 600,
-    "height": 200
+    "height": 600
   },
-  "image": "https://bmiuniversities.org/images/bmi-logo.png",
+  "image": "https://bmiuniversities.org/images/bmi-logo-search.png",
   "description": "Bethel Ministries International University (BMI University) is an accredited global higher education institution dedicated to empowering Christ-centered leaders through theological scholarship, biblical truth, and academic excellence.",
   "address": {
     "@type": "PostalAddress",
@@ -26,7 +26,8 @@ const organizationSchema = {
   },
   "sameAs": [
     "https://bmiuniversities.org",
-    "https://www.bmiuniversities.org"
+    "https://www.bmiuniversities.org",
+    "https://portal.bmiuniversities.org"
   ],
   "foundingDate": "2020",
   "educationalCredentialAwarded": [
@@ -54,13 +55,13 @@ export const metadata = {
   alternates: {
     canonical: "https://bmiuniversities.org",
   },
-  // ── Icons (Google also indexes these for logo display)
+  // ── Icons (Google also indexes these for logo and favicon display in search results)
   icons: {
     icon: [
-      { url: "/images/bmi-logo.png", type: "image/png" },
+      { url: "/images/bmi-logo-search.png", type: "image/png" },
     ],
     apple: [
-      { url: "/images/bmi-logo.png", sizes: "180x180", type: "image/png" },
+      { url: "/images/bmi-logo-search.png", sizes: "180x180", type: "image/png" },
     ],
   },
   // ── Open Graph (social previews + Google rich results)
@@ -73,9 +74,9 @@ export const metadata = {
     type: "website",
     images: [
       {
-        url: "https://bmiuniversities.org/images/bmi-logo.png",
+        url: "https://bmiuniversities.org/images/bmi-logo-search.png",
         width: 1200,
-        height: 630,
+        height: 1200,
         alt: "BMI University — Bethel Ministries International University",
       },
     ],
@@ -85,7 +86,7 @@ export const metadata = {
     card: "summary_large_image",
     title: "BMI University | Bethel Ministries International University",
     description: "Developing Christ-centered men and women with the values, knowledge, and skills essential to impact the world.",
-    images: ["https://bmiuniversities.org/images/bmi-logo.png"],
+    images: ["https://bmiuniversities.org/images/bmi-logo-search.png"],
   },
   // ── Robots
   robots: {
