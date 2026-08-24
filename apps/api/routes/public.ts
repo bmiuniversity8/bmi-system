@@ -305,7 +305,7 @@ export async function handlePublicGetPage(
   return cachedOk(row);
 }
 
-/** POST /api/public/contact — store contact form submission from marketing site */
+/** POST /api/public/contact — store contact form submission from marketing site and trigger email notifications */
 export async function handlePublicContact(request: Request, env: Env): Promise<Response> {
   let body: { name?: unknown; email?: unknown; subject?: unknown; message?: unknown };
   try {
@@ -332,16 +332,22 @@ export async function handlePublicContact(request: Request, env: Env): Promise<R
 
   const ip = request.headers.get('CF-Connecting-IP') ?? request.headers.get('X-Forwarded-For') ?? null;
   const userAgent = request.headers.get('User-Agent') ?? null;
+  const id = crypto.randomUUID();
+  const trimmedName = name.trim();
+  const trimmedEmail = email.trim().toLowerCase();
+  const trimmedSubject = subject.trim();
+  const trimmedMessage = message.trim();
 
   try {
     await env.PLATFORM_CONTEXT!.db.prepare(
-      `INSERT INTO contact_submissions (name, email, subject, message, ip_address, user_agent)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO contact_submissions (id, name, email, subject, message, ip_address, user_agent, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'new')`,
     ).bind(
-      name.trim(),
-      email.trim().toLowerCase(),
-      subject.trim(),
-      message.trim(),
+      id,
+      trimmedName,
+      trimmedEmail,
+      trimmedSubject,
+      trimmedMessage,
       ip,
       userAgent,
     ).run();
@@ -350,7 +356,34 @@ export async function handlePublicContact(request: Request, env: Env): Promise<R
     return error('Failed to save your submission. Please try again.', 500);
   }
 
-  return new Response(JSON.stringify({ success: true, message: 'Your message has been received. We will be in touch within 1–2 business days.' }), {
+  // Asynchronously dispatch email alerts to staff and confirmation to inquirer
+  try {
+    const { sendEmail, adminNewContactInquiryNoticeEmail, contactSubmissionReceiptEmail } = await import('../lib/email');
+    
+    // 1. Notify admissions/admin team
+    sendEmail(env, {
+      to: 'admin@bmiuniversities.org',
+      subject: `[BMI Website Inquiry] ${trimmedSubject} - from ${trimmedName}`,
+      html: adminNewContactInquiryNoticeEmail(trimmedName, trimmedEmail, trimmedSubject, trimmedMessage, id),
+      templateName: 'admin_website_inquiry',
+    }).catch((e) => console.warn('[contact] Staff notification email failed:', e));
+
+    // 2. Send receipt confirmation to the visitor
+    sendEmail(env, {
+      to: trimmedEmail,
+      subject: `We have received your message: ${trimmedSubject}`,
+      html: contactSubmissionReceiptEmail(trimmedName, trimmedSubject),
+      templateName: 'contact_receipt_confirmation',
+    }).catch((e) => console.warn('[contact] Visitor receipt email failed:', e));
+  } catch (mailErr) {
+    console.warn('[contact] Email dispatch error:', mailErr);
+  }
+
+  return new Response(JSON.stringify({ 
+    success: true, 
+    data: { id },
+    message: 'Your message has been received. We will be in touch within 1–2 business days.' 
+  }), {
     status: 201,
     headers: { 'Content-Type': 'application/json' },
   });

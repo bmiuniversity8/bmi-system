@@ -73,3 +73,79 @@ export async function deleteCommunication(id: string): Promise<{ success: boolea
     return { success: false, error: error instanceof Error ? error.message : 'Failed to delete record' };
   }
 }
+
+// ─── Website Contact Submissions ──────────────────────────────────────────────
+
+export interface ContactSubmissionRecord {
+  id: string;
+  name: string;
+  email: string;
+  subject: string;
+  message: string;
+  ip_address?: string | null;
+  user_agent?: string | null;
+  status: 'new' | 'read' | 'replied' | 'archived';
+  created_at: string;
+}
+
+export interface ContactSubmissionsListResponse {
+  success: boolean;
+  data?: ContactSubmissionRecord[];
+  total?: number;
+  unreadCount?: number;
+  error?: string;
+}
+
+export async function listContactSubmissions(params?: {
+  status?: string;
+  search?: string;
+  page?: number;
+  perPage?: number;
+}): Promise<ContactSubmissionsListResponse> {
+  try {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.set('status', params.status);
+    if (params?.search) qs.set('search', params.search);
+    if (params?.page) qs.set('page', String(params.page));
+    if (params?.perPage) qs.set('perPage', String(params.perPage));
+    const url = `${API_URL}/contact-submissions${qs.toString() ? `?${qs.toString()}` : ''}`;
+    const response = await authFetch(url, {}, 8000);
+    const data = await response.json();
+    return { 
+      success: response.ok, 
+      data: data?.data, 
+      total: data?.total, 
+      unreadCount: data?.unreadCount,
+      error: data?.error 
+    };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to fetch contact inquiries' };
+  }
+}
+
+export async function updateContactSubmissionStatus(
+  id: string, 
+  status: 'new' | 'read' | 'replied' | 'archived'
+): Promise<{ success: boolean; data?: ContactSubmissionRecord; error?: string }> {
+  try {
+    const response = await authFetch(`${API_URL}/contact-submissions/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    });
+    const data = await response.json();
+    if (response.ok && data?.success) return { success: true, data: data.data };
+    return { success: false, error: data?.error || 'Failed to update status' };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to update status' };
+  }
+}
+
+export async function deleteContactSubmission(id: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const response = await authFetch(`${API_URL}/contact-submissions/${id}`, { method: 'DELETE' });
+    const data = await response.json().catch(() => null);
+    return { success: response.ok, error: !response.ok ? (data?.error || 'Failed to delete inquiry' ) : undefined };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to delete inquiry' };
+  }
+}

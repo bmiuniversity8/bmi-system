@@ -9,26 +9,36 @@ import {
   CheckCircle,
   Clock,
   AlertCircle,
-  
   Bot,
-  
   Paperclip,
   FileText,
-  
   Trash2,
   Layout,
   Loader2,
   Check,
   ShieldCheck,
   Zap,
-  
-  
   ShieldAlert,
   ArrowRight,
   MessageSquare,
+  Inbox,
+  Globe,
+  Reply,
+  RefreshCw,
+  Filter,
+  CheckCircle2,
+  Archive,
 } from "lucide-react";
 import { getAIResponse } from "../services/aiService";
-import { listCommunications, createCommunication, deleteCommunication } from "../services/communicationsService";
+import { 
+  listCommunications, 
+  createCommunication, 
+  deleteCommunication,
+  listContactSubmissions,
+  updateContactSubmissionStatus,
+  deleteContactSubmission,
+  ContactSubmissionRecord
+} from "../services/communicationsService";
 import { Student, StaffMember } from "../types";
 import { useDataStore } from "../stores/dataStore";
 
@@ -46,7 +56,7 @@ const Communications: React.FC = () => {
   const students = useDataStore((s) => s.students);
   const staff = useDataStore((s) => s.staff);
   const [activeChannel, setActiveChannel] = useState<"sms" | "email">("email");
-  const [activeTab, setActiveTab] = useState<"composer" | "history">(
+  const [activeTab, setActiveTab] = useState<"composer" | "history" | "inquiries">(
     "composer",
   );
   const [message, setMessage] = useState("");
@@ -66,6 +76,15 @@ const Communications: React.FC = () => {
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
   const [history, setHistory] = useState<MessageLog[]>([]);
+
+  // ── Website Inquiries (contact form submissions) ──────────────────────────
+  const [inquiries, setInquiries] = useState<ContactSubmissionRecord[]>([]);
+  const [inquiriesTotal, setInquiriesTotal] = useState(0);
+  const [inquiriesUnread, setInquiriesUnread] = useState(0);
+  const [isLoadingInquiries, setIsLoadingInquiries] = useState(false);
+  const [inquiryStatusFilter, setInquiryStatusFilter] = useState<string>("all");
+  const [inquirySearch, setInquirySearch] = useState("");
+  const [selectedInquiry, setSelectedInquiry] = useState<ContactSubmissionRecord | null>(null);
 
   const loadHistory = async () => {
     setIsLoadingHistory(true);
@@ -91,9 +110,46 @@ const Communications: React.FC = () => {
     setIsLoadingHistory(false);
   };
 
+  const loadInquiries = async () => {
+    setIsLoadingInquiries(true);
+    const res = await listContactSubmissions({
+      status: inquiryStatusFilter === "all" ? undefined : inquiryStatusFilter,
+      search: inquirySearch || undefined,
+      perPage: 100,
+    });
+    if (res.success && res.data) {
+      setInquiries(res.data);
+      setInquiriesTotal(res.total ?? 0);
+      setInquiriesUnread(res.unreadCount ?? 0);
+    }
+    setIsLoadingInquiries(false);
+  };
+
+  const handleMarkInquiry = async (id: string, status: "read" | "replied" | "archived" | "new") => {
+    await updateContactSubmissionStatus(id, status);
+    setInquiries((prev) => prev.map((q) => q.id === id ? { ...q, status } : q));
+    if (selectedInquiry?.id === id) setSelectedInquiry((prev) => prev ? { ...prev, status } : prev);
+    // Refresh unread badge
+    const unreadNow = inquiries.filter((q) => q.id !== id ? q.status === "new" : status === "new").length;
+    setInquiriesUnread(unreadNow);
+  };
+
+  const handleDeleteInquiry = async (id: string) => {
+    const res = await deleteContactSubmission(id);
+    if (res.success) {
+      setInquiries((prev) => prev.filter((q) => q.id !== id));
+      if (selectedInquiry?.id === id) setSelectedInquiry(null);
+    }
+  };
+
   useEffect(() => {
     loadHistory();
+    loadInquiries();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === "inquiries") loadInquiries();
+  }, [activeTab, inquiryStatusFilter]);
 
   const handleDeleteRecord = async (id: string) => {
     const res = await deleteCommunication(id);
@@ -432,6 +488,25 @@ const Communications: React.FC = () => {
           />{" "}
           Dispatch Log
         </button>
+        <button
+          onClick={() => setActiveTab("inquiries")}
+          className={`px-6 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2 ${
+            activeTab === "inquiries"
+              ? "bg-[#8B0000] text-white shadow-lg shadow-red-500/20 scale-105 border border-red-800/50"
+              : "bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-[#8B0000]"
+          }`}
+        >
+          <Inbox
+            size={12}
+            className={activeTab === "inquiries" ? "text-[#FFD700]" : "text-gray-400"}
+          />{" "}
+          Website Inquiries
+          {inquiriesUnread > 0 && (
+            <span className="ml-1 px-1.5 py-0.5 rounded-full text-[9px] font-black bg-red-600 text-white animate-pulse">
+              {inquiriesUnread}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* Scrollable Content */}
@@ -730,6 +805,165 @@ const Communications: React.FC = () => {
                       </button>
                     </div>
                   </div>
+                </div>
+              </div>
+            ) : activeTab === "inquiries" ? (
+              /* ─── Website Inquiries Inbox ─────────────────────────────── */
+              <div className="bg-white dark:bg-gray-800 rounded-none shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+                {/* Header */}
+                <div className="p-6 bg-gray-900 text-white flex flex-col md:flex-row justify-between items-start gap-4">
+                  <div className="flex items-center gap-3">
+                    <Globe size={18} className="text-[#FFD700]" />
+                    <h3 className="font-black text-xs uppercase tracking-[0.25em]">Website Inquiries Inbox</h3>
+                    {inquiriesUnread > 0 && (
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-red-600 text-white">{inquiriesUnread} new</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    {/* Status filter */}
+                    <div className="flex items-center gap-1">
+                      <Filter size={12} className="text-gray-400" />
+                      {["all","new","read","replied","archived"].map(s => (
+                        <button
+                          key={s}
+                          onClick={() => setInquiryStatusFilter(s)}
+                          className={`px-3 py-1 text-[9px] font-black uppercase tracking-widest rounded-full transition-all ${
+                            inquiryStatusFilter === s
+                              ? "bg-[#8B0000] text-white"
+                              : "bg-gray-800 text-gray-400 hover:text-white"
+                          }`}
+                        >{s}</button>
+                      ))}
+                    </div>
+                    {/* Search */}
+                    <div className="relative">
+                      <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" size={12} />
+                      <input
+                        type="text"
+                        placeholder="Search inquiries..."
+                        value={inquirySearch}
+                        onChange={(e) => setInquirySearch(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && loadInquiries()}
+                        className="pl-7 pr-3 py-1.5 bg-gray-800 border border-gray-700 text-[10px] outline-none focus:border-[#FFD700] text-white rounded"
+                      />
+                    </div>
+                    <button onClick={loadInquiries} className="p-1.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" title="Refresh">
+                      <RefreshCw size={12} className={isLoadingInquiries ? "animate-spin" : ""} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Split pane */}
+                <div className="flex h-[600px]">
+                  {/* Left: inquiry list */}
+                  <div className="w-2/5 border-r border-gray-100 dark:border-gray-700 overflow-y-auto">
+                    {isLoadingInquiries ? (
+                      <div className="flex items-center justify-center h-40 text-gray-400">
+                        <Loader2 size={20} className="animate-spin mr-2" /> Loading…
+                      </div>
+                    ) : inquiries.length === 0 ? (
+                      <div className="py-20 text-center text-gray-400 text-xs uppercase tracking-widest">No inquiries found</div>
+                    ) : (
+                      inquiries.map((q) => (
+                        <button
+                          key={q.id}
+                          onClick={() => {
+                            setSelectedInquiry(q);
+                            if (q.status === "new") handleMarkInquiry(q.id, "read");
+                          }}
+                          className={`w-full text-left px-4 py-3 border-b border-gray-100 dark:border-gray-800 transition-colors ${
+                            selectedInquiry?.id === q.id
+                              ? "bg-red-50 dark:bg-red-900/20 border-l-2 border-l-[#8B0000]"
+                              : q.status === "new"
+                              ? "bg-amber-50 dark:bg-amber-900/10 hover:bg-red-50 dark:hover:bg-red-900/10"
+                              : "hover:bg-gray-50 dark:hover:bg-gray-700"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className={`text-[10px] font-black uppercase ${ q.status === "new" ? "text-[#8B0000]" : "text-gray-500" }`}>{q.name}</span>
+                            <span className={`text-[8px] px-1.5 py-0.5 rounded-full font-black uppercase ${
+                              q.status === "new" ? "bg-red-100 text-red-700" :
+                              q.status === "replied" ? "bg-green-100 text-green-700" :
+                              q.status === "archived" ? "bg-gray-100 text-gray-500" :
+                              "bg-blue-100 text-blue-700"
+                            }`}>{q.status}</span>
+                          </div>
+                          <div className="text-[10px] text-gray-600 dark:text-gray-300 font-semibold truncate">{q.subject}</div>
+                          <div className="text-[9px] text-gray-400 mt-0.5">{new Date(q.created_at).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Right: detail reader */}
+                  <div className="flex-1 overflow-y-auto">
+                    {selectedInquiry ? (
+                      <div className="p-6">
+                        {/* Header */}
+                        <div className="flex items-start justify-between mb-4 gap-4">
+                          <div>
+                            <h4 className="font-black text-sm text-gray-900 dark:text-white">{selectedInquiry.subject}</h4>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-xs text-gray-500">From:</span>
+                              <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{selectedInquiry.name}</span>
+                              <a href={`mailto:${selectedInquiry.email}`} className="text-xs text-[#8B0000] hover:underline">&lt;{selectedInquiry.email}&gt;</a>
+                            </div>
+                            <div className="text-[10px] text-gray-400 mt-1">{new Date(selectedInquiry.created_at).toLocaleString("en-GB", { dateStyle: "full", timeStyle: "short" })}</div>
+                          </div>
+                          <span className={`text-[9px] px-2 py-1 rounded-full font-black uppercase flex-shrink-0 ${
+                            selectedInquiry.status === "new" ? "bg-red-100 text-red-700" :
+                            selectedInquiry.status === "replied" ? "bg-green-100 text-green-700" :
+                            selectedInquiry.status === "archived" ? "bg-gray-100 text-gray-500" :
+                            "bg-blue-100 text-blue-700"
+                          }`}>{selectedInquiry.status}</span>
+                        </div>
+
+                        {/* Message body */}
+                        <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 text-sm text-gray-700 dark:text-gray-200 leading-relaxed whitespace-pre-wrap mb-6">
+                          {selectedInquiry.message}
+                        </div>
+
+                        {/* Action buttons */}
+                        <div className="flex flex-wrap gap-2">
+                          <a
+                            href={`mailto:${selectedInquiry.email}?subject=Re: ${encodeURIComponent(selectedInquiry.subject)}`}
+                            onClick={() => handleMarkInquiry(selectedInquiry.id, "replied")}
+                            className="flex items-center gap-2 px-4 py-2 bg-[#4B0082] text-white text-[10px] font-black uppercase tracking-wider rounded hover:bg-purple-900 transition-colors"
+                          >
+                            <Reply size={12} /> Reply via Email
+                          </a>
+                          <button
+                            onClick={() => handleMarkInquiry(selectedInquiry.id, "replied")}
+                            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-[10px] font-black uppercase tracking-wider rounded hover:bg-green-700 transition-colors"
+                          >
+                            <CheckCircle2 size={12} /> Mark Replied
+                          </button>
+                          <button
+                            onClick={() => handleMarkInquiry(selectedInquiry.id, "archived")}
+                            className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 text-[10px] font-black uppercase tracking-wider rounded hover:bg-gray-300 transition-colors"
+                          >
+                            <Archive size={12} /> Archive
+                          </button>
+                          <button
+                            onClick={() => handleDeleteInquiry(selectedInquiry.id)}
+                            className="flex items-center gap-2 px-4 py-2 bg-red-100 text-red-700 text-[10px] font-black uppercase tracking-wider rounded hover:bg-red-200 transition-colors"
+                          >
+                            <Trash2 size={12} /> Delete
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-3">
+                        <Inbox size={40} className="opacity-30" />
+                        <p className="text-xs uppercase tracking-widest font-black">Select an inquiry to read</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {/* Summary footer */}
+                <div className="px-6 py-3 bg-gray-50 dark:bg-gray-800 border-t border-gray-100 dark:border-gray-700 text-[9px] text-gray-400 uppercase tracking-widest flex justify-between">
+                  <span>{inquiriesTotal} total inquiries</span>
+                  <span>{inquiriesUnread} unread</span>
                 </div>
               </div>
             ) : (

@@ -75,3 +75,77 @@ export async function handleDeleteCommunication(_request: Request, env: Env, id:
   await env.PLATFORM_CONTEXT!.db.prepare(`DELETE FROM communications WHERE id = ?`).bind(id).run();
   return ok({ deleted: true });
 }
+
+// ─── Website Contact Submissions (Inquiries) ──────────────────────────────────
+
+export async function handleListContactSubmissions(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  const { page, perPage, offset } = paginate(url);
+
+  const status = url.searchParams.get('status');
+  const search = url.searchParams.get('search');
+
+  const filters: string[] = ['1=1'];
+  const bindings: unknown[] = [];
+
+  if (status && status !== 'all') {
+    filters.push('status = ?');
+    bindings.push(status);
+  }
+
+  if (search && search.trim()) {
+    filters.push('(name LIKE ? OR email LIKE ? OR subject LIKE ? OR message LIKE ?)');
+    const term = `%${search.trim()}%`;
+    bindings.push(term, term, term, term);
+  }
+
+  const where = `WHERE ${filters.join(' AND ')}`;
+  
+  const total = ((await env.PLATFORM_CONTEXT!.db.prepare(`SELECT COUNT(*) as c FROM contact_submissions ${where}`).bind(...bindings).first<{ c: number }>())?.c) || 0;
+  const unreadCount = ((await env.PLATFORM_CONTEXT!.db.prepare(`SELECT COUNT(*) as c FROM contact_submissions WHERE status = 'new'`).first<{ c: number }>())?.c) || 0;
+
+  const { results } = await env.PLATFORM_CONTEXT!.db.prepare(
+    `SELECT id, name, email, subject, message, ip_address, user_agent, status, created_at
+     FROM contact_submissions
+     ${where}
+     ORDER BY created_at DESC
+     LIMIT ? OFFSET ?`
+  ).bind(...bindings, perPage, offset).all();
+
+  return json({ 
+    success: true, 
+    data: results, 
+    total, 
+    unreadCount,
+    page, 
+    perPage 
+  });
+}
+
+export async function handleUpdateContactSubmissionStatus(request: Request, env: Env, id: string): Promise<Response> {
+  const body = await request.json().catch(() => null) as { status?: string } | null;
+  if (!body || !body.status) return error('Status is required', 400);
+
+  const allowedStatuses = ['new', 'read', 'replied', 'archived'];
+  if (!allowedStatuses.includes(body.status)) {
+    return error(`Status must be one of: ${allowedStatuses.join(', ')}`, 400);
+  }
+
+  const row = await env.PLATFORM_CONTEXT!.db.prepare(`SELECT id FROM contact_submissions WHERE id = ?`).bind(id).first();
+  if (!row) return error('Contact submission not found', 404);
+
+  await env.PLATFORM_CONTEXT!.db.prepare(
+    `UPDATE contact_submissions SET status = ? WHERE id = ?`
+  ).bind(body.status, id).run();
+
+  const updated = await env.PLATFORM_CONTEXT!.db.prepare(`SELECT * FROM contact_submissions WHERE id = ?`).bind(id).first();
+  return ok(updated);
+}
+
+export async function handleDeleteContactSubmission(_request: Request, env: Env, id: string): Promise<Response> {
+  const row = await env.PLATFORM_CONTEXT!.db.prepare(`SELECT id FROM contact_submissions WHERE id = ?`).bind(id).first();
+  if (!row) return error('Contact submission not found', 404);
+
+  await env.PLATFORM_CONTEXT!.db.prepare(`DELETE FROM contact_submissions WHERE id = ?`).bind(id).run();
+  return ok({ deleted: true });
+}

@@ -861,5 +861,58 @@ export function adminNewApplicationNoticeEmail(
   return buildEmailLayout('Admin: Application Created', content);
 }
 
+export function adminNewContactInquiryNoticeEmail(
+  name: string,
+  email: string,
+  subject: string,
+  message: string,
+  inquiryId: string
+): string {
+  const content = `
+    <h2 style="color: #0f172a; margin-top: 0;">New Website Inquiry Received</h2>
+    <p style="color: #475569; line-height: 1.6;">
+      A new message has been submitted via the public contact form on <strong>bmiuniversities.org/contact</strong>:
+    </p>
+    <div style="background: #f8fafc; border-left: 4px solid #8B0000; padding: 16px 20px; margin: 20px 0; border-radius: 6px;">
+      <p style="margin: 0 0 8px; font-size: 14px;"><strong>From:</strong> ${name} &lt;<a href="mailto:${email}" style="color: #8B0000; text-decoration: none;">${email}</a>&gt;</p>
+      <p style="margin: 0 0 8px; font-size: 14px;"><strong>Subject:</strong> ${subject}</p>
+      <p style="margin: 0 0 12px; font-size: 13px; color: #64748b;"><strong>Inquiry ID:</strong> ${inquiryId}</p>
+      <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 12px 0;" />
+      <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #1e293b; white-space: pre-wrap;">${message}</p>
+    </div>
+    <p style="color: #475569; line-height: 1.6; font-size: 14px;">
+      You can manage and reply to this inquiry directly inside the <strong>BMI UMS &rarr; Communications &rarr; Website Inquiries</strong> panel.
+    </p>
+  `;
+  return buildEmailLayout('New Website Inquiry', content);
+}
+
+export function contactSubmissionReceiptEmail(
+  name: string,
+  subject: string
+): string {
+  const content = `
+    <h2 style="color: #0f172a; margin-top: 0;">Thank You for Contacting BMI University</h2>
+    <p style="color: #475569; line-height: 1.6;">
+      Dear ${name},
+    </p>
+    <p style="color: #475569; line-height: 1.6;">
+      We have received your message regarding <strong>"${subject}"</strong>. Our admissions and academic advising team will review your inquiry and get back to you within 1&ndash;2 business days.
+    </p>
+    <div style="background: #fdfbf7; border: 1px solid #f3e8c9; border-radius: 8px; padding: 16px 20px; margin: 24px 0;">
+      <p style="margin: 0 0 6px; font-weight: 700; color: #78350f; font-size: 14px;">Direct Institutional Contacts:</p>
+      <p style="margin: 0 0 4px; font-size: 13px; color: #451a03;">&bull; Admissions: <a href="mailto:admissions@bmiuniversities.org" style="color: #8B0000;">admissions@bmiuniversities.org</a></p>
+      <p style="margin: 0 0 4px; font-size: 13px; color: #451a03;">&bull; Registrar: <a href="mailto:registrar@bmiuniversities.org" style="color: #8B0000;">registrar@bmiuniversities.org</a></p>
+      <p style="margin: 0; font-size: 13px; color: #451a03;">&bull; General: <a href="mailto:admin@bmiuniversities.org" style="color: #8B0000;">admin@bmiuniversities.org</a></p>
+    </div>
+    <p style="color: #475569; line-height: 1.6; font-size: 14px;">
+      Warm regards,<br />
+      <strong>Bethel Ministries International University</strong>
+    </p>
+  `;
+  return buildEmailLayout('Inquiry Confirmation', content);
+}
+
+
 
 

@@ -99,7 +99,13 @@ import { handleListAlumniProfiles, handleUpsertAlumniProfile, handleCreateAlumni
 import { handleListTransportRoutes, handleCreateTransportRoute, handleUpdateTransportRoute, handleListTransportPasses, handleIssueTransportPass, handleRevokeTransportPass } from './routes/ums-campus';
 import { handleListNotifications, handleMarkNotificationsRead, handleCreateNotification, handleBroadcastNotification } from './routes/ums-notifications';
 import { handleListVerificationLogs } from './routes/ums-verifications';
-import { handleListCommunications, handleCreateCommunication, handleDeleteCommunication } from './routes/ums-communications';
+import { 
+  handleListCommunications, 
+  handleCreateCommunication, 
+  handleDeleteCommunication,
+  handleUpdateContactSubmissionStatus,
+  handleDeleteContactSubmission,
+} from './routes/ums-communications';
 import { handleGetSystemSettings, handleUpdateSystemSettings, handleResetSystemSettings } from './routes/ums-settings';
 const log = createLogger('bmi-api');
 
@@ -400,10 +406,13 @@ const ROUTES: Route[] = [
   { method: 'DELETE', path: /^\/api\/v1\/library\/([^/]+)$/, roles: ['admin'], handler: async (req, env, p) => handleDeleteLibraryBook(req, env, p[1]) },
   // Verification dashboard (activity ledger)
   { method: 'GET', path: /^\/api\/v1\/certificates\/verification\/logs$/, roles: ['admin', 'staff'], handler: async (req, env) => handleListVerificationLogs(req, env) },
-  // Communications center
+  // Communications center & Website Inquiries
   { method: 'GET', path: /^\/api\/v1\/communications$/, roles: ['admin', 'staff'], handler: async (req, env) => handleListCommunications(req, env) },
   { method: 'POST', path: /^\/api\/v1\/communications$/, roles: ['admin', 'staff'], handler: async (req, env, _p, auth) => handleCreateCommunication(req, env, auth!.user.sub) },
   { method: 'DELETE', path: /^\/api\/v1\/communications\/([^/]+)$/, roles: ['admin'], handler: async (req, env, p) => handleDeleteCommunication(req, env, p[1]) },
+  { method: 'GET', path: /^\/api\/v1\/contact-submissions$/, roles: ['admin', 'staff'], handler: async (req, env) => handleListContactSubmissions(req, env) },
+  { method: 'PATCH', path: /^\/api\/v1\/contact-submissions\/([^/]+)$/, roles: ['admin', 'staff'], handler: async (req, env, p) => handleUpdateContactSubmissionStatus(req, env, p[1]) },
+  { method: 'DELETE', path: /^\/api\/v1\/contact-submissions\/([^/]+)$/, roles: ['admin'], handler: async (req, env, p) => handleDeleteContactSubmission(req, env, p[1]) },
   // System settings
   { method: 'GET', path: /^\/api\/v1\/settings\/admin$/, roles: ['admin'], handler: async (req, env) => handleGetSystemSettings(req, env) },
   { method: 'PUT', path: /^\/api\/v1\/settings\/admin$/, roles: ['admin'], handler: async (req, env, _p, auth) => handleUpdateSystemSettings(req, env, auth!.user.sub) },

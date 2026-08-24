@@ -3,15 +3,37 @@
 import { useState } from "react";
 import PageHero from "@/components/PageHero";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.bmiuniversities.org";
+
 export default function Contact() {
   const [form, setForm] = useState({ name: "", email: "", subject: "", message: "" });
   const [submitted, setSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
   const update = (field, val) => setForm((f) => ({ ...f, [field]: val }));
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setSubmitted(true);
+    setIsSubmitting(true);
+    setError("");
+    try {
+      const res = await fetch(`${API_URL}/api/public/contact`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data?.error || "Something went wrong. Please try again.");
+      } else {
+        setSubmitted(true);
+      }
+    } catch {
+      setError("Network error. Please check your connection and try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const contactInfo = [
@@ -187,8 +209,19 @@ export default function Contact() {
                     />
                   </div>
 
-                  <button type="submit" className="btn btn-gold" style={{ marginTop: "0.5rem", padding: "0.9rem 2rem", fontSize: "1rem", alignSelf: "flex-start" }}>
-                    Send Message →
+                  {error && (
+                    <div style={{ padding: "0.75rem 1rem", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "10px", color: "#dc2626", fontSize: "0.88rem" }}>
+                      {error}
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="btn btn-gold"
+                    style={{ marginTop: "0.5rem", padding: "0.9rem 2rem", fontSize: "1rem", alignSelf: "flex-start", opacity: isSubmitting ? 0.7 : 1, cursor: isSubmitting ? "not-allowed" : "pointer" }}
+                  >
+                    {isSubmitting ? "Sending…" : "Send Message →"}
                   </button>
                 </form>
               </>
