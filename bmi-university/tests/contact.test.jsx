@@ -1,12 +1,25 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import Contact from '../app/contact/page';
 
+// Mock fetch so the real API is never called in tests
+const mockFetch = vi.fn();
+vi.stubGlobal('fetch', mockFetch);
+
 describe('Contact Page', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+    // Default: successful submission
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, data: { id: 'test-id' }, message: 'Received' }),
+    });
+  });
+
   it('renders the contact form and information', () => {
     render(<Contact />);
-    
+
     // Check for headers
     expect(screen.getByRole('heading', { name: /Contact Us/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /Get in Touch/i })).toBeInTheDocument();
@@ -46,15 +59,37 @@ describe('Contact Page', () => {
     await user.type(screen.getByLabelText(/Subject/i), 'Inquiry');
     await user.type(screen.getByLabelText(/Message/i), 'Test message');
 
-    // Submit form
-    const submitBtn = screen.getByRole('button', { name: /Send Message/i });
-    fireEvent.click(submitBtn); // or user.click
+    // Submit form — userEvent.click awaits all resulting state updates
+    await user.click(screen.getByRole('button', { name: /Send Message/i }));
 
     // Verify success message
     expect(screen.getByRole('heading', { name: /Message Sent!/i })).toBeInTheDocument();
     expect(screen.getByText(/We will get back to you within 1–2 business days/i)).toBeInTheDocument();
-    
+
     // Ensure the original form is gone
     expect(screen.queryByRole('heading', { name: /Send a Message/i })).not.toBeInTheDocument();
   });
+
+  it('shows error message when API returns failure', async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      json: async () => ({ error: 'Server error, please try again.' }),
+    });
+
+    render(<Contact />);
+    const user = userEvent.setup();
+
+    await user.type(screen.getByLabelText(/Full Name/i), 'Jane');
+    await user.type(screen.getByLabelText(/Email Address/i), 'jane@example.com');
+    await user.type(screen.getByLabelText(/Subject/i), 'Help');
+    await user.type(screen.getByLabelText(/Message/i), 'Hello');
+
+    await user.click(screen.getByRole('button', { name: /Send Message/i }));
+
+    expect(screen.getByText(/Server error, please try again/i)).toBeInTheDocument();
+    // Form should still be visible
+    expect(screen.getByRole('heading', { name: /Send a Message/i })).toBeInTheDocument();
+  });
 });
+
+
