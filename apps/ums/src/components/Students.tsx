@@ -404,7 +404,7 @@ const Students: React.FC<StudentsProps> = (props) => {
   return (
     <div className="h-full flex flex-col animate-fade-in relative">
       {/* Sticky Page Header */}
-      <div className="flex-shrink-0 sticky top-0 z-40 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-b border-gray-200 dark:border-gray-700 px-6 py-3 flex flex-col md:flex-row justify-between items-center gap-4 shadow-sm min-h-[60px]">
+      <div className="flex-shrink-0 sticky top-0 z-40 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-b border-gray-200 dark:border-gray-700 px-3 sm:px-6 py-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-sm">
         <div className="flex items-center gap-3 w-full md:w-auto">
           <div className="flex flex-col">
             <h2 className="text-xl font-bold text-gray-900 dark:text-white tracking-tight">
@@ -416,14 +416,14 @@ const Students: React.FC<StudentsProps> = (props) => {
           </div>
         </div>
 
-        <div className="flex items-center gap-3 w-full md:w-auto justify-end">
+        <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap sm:flex-nowrap justify-start sm:justify-end">
           {/* Actions Dropdown */}
           <div className="relative">
             <button
               onClick={() => setIsActionsMenuOpen(!isActionsMenuOpen)}
-              className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-semibold text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-all shadow-sm"
+              className="flex items-center gap-1.5 px-3 sm:px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-semibold text-xs sm:text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-all shadow-sm whitespace-nowrap"
             >
-              Data Options <ChevronDown size={14} />
+              Data Options <ChevronDown size={13} />
             </button>
             {isActionsMenuOpen && (
               <>
@@ -473,9 +473,9 @@ const Students: React.FC<StudentsProps> = (props) => {
 
           <button
             onClick={() => setIsEnrollOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 rounded-lg font-semibold text-sm hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-all"
+            className="flex items-center gap-1.5 px-3 sm:px-4 py-2 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 rounded-lg font-semibold text-xs sm:text-sm hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-all whitespace-nowrap"
           >
-            <GraduationCap size={16} /> Enroll Existing
+            <GraduationCap size={15} /> Enroll Existing
           </button>
 
           <button
@@ -483,19 +483,20 @@ const Students: React.FC<StudentsProps> = (props) => {
               setEditingStudent(undefined);
               setIsModalOpen(true);
             }}
-            className="flex items-center gap-2 px-4 py-2 bg-[#4B0082] text-white rounded-lg shadow-md hover:bg-[#380062] transition-all font-semibold text-sm border border-[#4B0082]"
+            className="flex items-center gap-1.5 px-3 sm:px-4 py-2 bg-[#4B0082] text-white rounded-lg shadow-md hover:bg-[#380062] transition-all font-semibold text-xs sm:text-sm border border-[#4B0082] whitespace-nowrap"
           >
-            <Plus size={16} /> New Admission
+            <Plus size={15} /> New Admission
           </button>
         </div>
       </div>
 
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
         {/* Filters */}
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-3 flex flex-col md:flex-row gap-3 items-center shadow-sm">
-          <div className="relative flex-1 w-full md:min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-3 flex flex-col gap-2.5 shadow-sm">
+          {/* Search always full width on top */}
+          <div className="relative w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
             <input
               type="text"
               placeholder="Search students..."
@@ -504,62 +505,65 @@ const Students: React.FC<StudentsProps> = (props) => {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          
-          <div className="flex-1 w-full md:w-auto">
-            <StudyCenterSelector
-              value={campusFilter}
-              onChange={setCampusFilter}
-              includeAll={true}
-            />
-          </div>
 
-          <select
-            value={programFilter}
-            onChange={(e) => setProgramFilter(e.target.value)}
-            className="px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium outline-none cursor-pointer dark:text-white flex-1 w-full md:max-w-[180px] focus:border-[#4B0082]"
-          >
-            <option value="All Programs">All Programs</option>
-            {programRows.map((p) => (
-              <option key={p.id} value={p.id}>{p.label}</option>
-            ))}
-          </select>
+          {/* Dropdowns: 2-col on mobile, 1 row on desktop */}
+          <div className="grid grid-cols-2 md:flex md:flex-row gap-2 md:items-center">
+            <div className="col-span-2 md:flex-1">
+              <StudyCenterSelector
+                value={campusFilter}
+                onChange={setCampusFilter}
+                includeAll={true}
+              />
+            </div>
 
-          <select
-            value={academicLevelFilter}
-            onChange={(e) => setAcademicLevelFilter(e.target.value)}
-            className="px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium outline-none cursor-pointer dark:text-white flex-1 w-full md:max-w-[140px] focus:border-[#4B0082]"
-          >
-            {["All Levels", "Certificate", "Diploma", "Degree", "Masters", "PhD"].map((level) => (
-              <option key={level} value={level}>{level}</option>
-            ))}
-          </select>
-
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium outline-none cursor-pointer dark:text-white flex-1 w-full md:max-w-[140px] focus:border-[#4B0082]"
-          >
-            {["All Status", "Active", "Applicant", "On Leave", "Graduated", "Suspended"].map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-
-          {/* View Toggle */}
-          <div className="flex bg-gray-100 dark:bg-gray-900 p-1 rounded-lg border border-gray-200 dark:border-gray-700 ml-auto">
-            <button
-              onClick={() => setViewMode("grid")}
-              className={`p-1.5 rounded-md transition-all ${viewMode === "grid" ? "bg-white dark:bg-gray-800 text-[#4B0082] dark:text-purple-400 shadow-sm" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}
-              title="Grid View"
+            <select
+              value={programFilter}
+              onChange={(e) => setProgramFilter(e.target.value)}
+              className="px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-xs sm:text-sm font-medium outline-none cursor-pointer dark:text-white w-full focus:border-[#4B0082]"
             >
-              <LayoutGrid size={16} />
-            </button>
-            <button
-              onClick={() => setViewMode("table")}
-              className={`p-1.5 rounded-md transition-all ${viewMode === "table" ? "bg-white dark:bg-gray-800 text-[#4B0082] dark:text-purple-400 shadow-sm" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}
-              title="Table View"
+              <option value="All Programs">All Programs</option>
+              {programRows.map((p) => (
+                <option key={p.id} value={p.id}>{p.label}</option>
+              ))}
+            </select>
+
+            <select
+              value={academicLevelFilter}
+              onChange={(e) => setAcademicLevelFilter(e.target.value)}
+              className="px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-xs sm:text-sm font-medium outline-none cursor-pointer dark:text-white w-full focus:border-[#4B0082]"
             >
+              {["All Levels", "Certificate", "Diploma", "Degree", "Masters", "PhD"].map((level) => (
+                <option key={level} value={level}>{level}</option>
+              ))}
+            </select>
+
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-xs sm:text-sm font-medium outline-none cursor-pointer dark:text-white w-full focus:border-[#4B0082]"
+            >
+              {["All Status", "Active", "Applicant", "On Leave", "Graduated", "Suspended"].map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+
+            {/* View Toggle - always at end */}
+            <div className="flex bg-gray-100 dark:bg-gray-900 p-1 rounded-lg border border-gray-200 dark:border-gray-700 ml-auto col-span-1 self-center">
+              <button
+                onClick={() => setViewMode("grid")}
+                className={`p-1.5 rounded-md transition-all ${viewMode === "grid" ? "bg-white dark:bg-gray-800 text-[#4B0082] dark:text-purple-400 shadow-sm" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}
+                title="Grid View"
+              >
+                <LayoutGrid size={16} />
+              </button>
+              <button
+                onClick={() => setViewMode("table")}
+                className={`p-1.5 rounded-md transition-all ${viewMode === "table" ? "bg-white dark:bg-gray-800 text-[#4B0082] dark:text-purple-400 shadow-sm" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}
+                title="Table View"
+              >
               <List size={16} />
             </button>
+            </div>
           </div>
         </div>
 
