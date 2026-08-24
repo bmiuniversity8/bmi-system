@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import Contact from '../app/contact/page';
@@ -29,19 +29,18 @@ describe('Contact Page', () => {
     expect(screen.getByText('admin@bmiuniversities.org')).toBeInTheDocument();
   });
 
-  it('updates form fields when typed into', async () => {
+  it('updates form fields when typed into', () => {
     render(<Contact />);
-    const user = userEvent.setup();
 
     const nameInput = screen.getByLabelText(/Full Name/i);
     const emailInput = screen.getByLabelText(/Email Address/i);
     const subjectInput = screen.getByLabelText(/Subject/i);
     const messageInput = screen.getByLabelText(/Message/i);
 
-    await user.type(nameInput, 'John Doe');
-    await user.type(emailInput, 'john@example.com');
-    await user.type(subjectInput, 'Test Inquiry');
-    await user.type(messageInput, 'This is a test message.');
+    fireEvent.change(nameInput, { target: { value: 'John Doe' } });
+    fireEvent.change(emailInput, { target: { value: 'john@example.com' } });
+    fireEvent.change(subjectInput, { target: { value: 'Test Inquiry' } });
+    fireEvent.change(messageInput, { target: { value: 'This is a test message.' } });
 
     expect(nameInput.value).toBe('John Doe');
     expect(emailInput.value).toBe('john@example.com');
@@ -51,15 +50,15 @@ describe('Contact Page', () => {
 
   it('shows success message after form submission', async () => {
     render(<Contact />);
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
 
-    // Fill form
-    await user.type(screen.getByLabelText(/Full Name/i), 'John Doe');
-    await user.type(screen.getByLabelText(/Email Address/i), 'john@example.com');
-    await user.type(screen.getByLabelText(/Subject/i), 'Inquiry');
-    await user.type(screen.getByLabelText(/Message/i), 'Test message');
+    // Fill form fast
+    fireEvent.change(screen.getByLabelText(/Full Name/i), { target: { value: 'John Doe' } });
+    fireEvent.change(screen.getByLabelText(/Email Address/i), { target: { value: 'john@example.com' } });
+    fireEvent.change(screen.getByLabelText(/Subject/i), { target: { value: 'Inquiry' } });
+    fireEvent.change(screen.getByLabelText(/Message/i), { target: { value: 'Test message' } });
 
-    // Submit form — userEvent.click awaits all resulting state updates
+    // Submit form
     await user.click(screen.getByRole('button', { name: /Send Message/i }));
 
     // Verify success message
@@ -77,12 +76,12 @@ describe('Contact Page', () => {
     });
 
     render(<Contact />);
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
 
-    await user.type(screen.getByLabelText(/Full Name/i), 'Jane');
-    await user.type(screen.getByLabelText(/Email Address/i), 'jane@example.com');
-    await user.type(screen.getByLabelText(/Subject/i), 'Help');
-    await user.type(screen.getByLabelText(/Message/i), 'Hello');
+    fireEvent.change(screen.getByLabelText(/Full Name/i), { target: { value: 'Jane' } });
+    fireEvent.change(screen.getByLabelText(/Email Address/i), { target: { value: 'jane@example.com' } });
+    fireEvent.change(screen.getByLabelText(/Subject/i), { target: { value: 'Help' } });
+    fireEvent.change(screen.getByLabelText(/Message/i), { target: { value: 'Hello' } });
 
     await user.click(screen.getByRole('button', { name: /Send Message/i }));
 
