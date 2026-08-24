@@ -1139,26 +1139,26 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
 
   return (
     <div className="h-full flex flex-col animate-fade-in relative">
-      {/* Sticky Header */}
-      <div className="flex-shrink-0 sticky top-0 z-40 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-b border-gray-200 dark:border-gray-700 px-4 py-2 flex flex-col md:flex-row justify-between items-center gap-2 shadow-sm min-h-[60px]">
-        <div className="flex items-center gap-3 pl-14 w-full md:w-auto">
-          <div className="w-1 h-5 bg-[#FFD700] rounded-none"></div>
+      {/* Responsive Header */}
+      <div className="flex-shrink-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-b border-gray-200 dark:border-gray-700 px-3 sm:px-6 py-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-xs">
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="w-1.5 h-6 bg-[#FFD700] rounded-full flex-shrink-0"></div>
           <div className="flex flex-col">
-            <h2 className="text-base md:text-lg font-bold text-[#2E004F] dark:text-white tracking-tight uppercase leading-none">
+            <h2 className="text-base sm:text-lg font-bold text-[#2E004F] dark:text-white tracking-tight uppercase leading-tight">
               Academic Records & Transcripts
             </h2>
-            <p className="text-[8px] md:text-[9px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest">
+            <p className="text-[9px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest">
               BMI Registrar • Automated Grade Aggregation Node
             </p>
           </div>
         </div>
       </div>
 
-      {/* Sticky Top Tab Bar */}
-      <div className="sticky top-[60px] z-30 bg-[#F8F9FA]/95 dark:bg-[#0a0015]/95 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 px-6 py-3 flex items-center gap-3 overflow-x-auto no-scrollbar shadow-sm">
-        <div className="flex items-center gap-2 mr-4 text-gray-400">
-          <Scroll size={14} />
-          <span className="text-[9px] font-black uppercase tracking-widest">
+      {/* Responsive Tab Bar */}
+      <div className="bg-[#F8F9FA]/95 dark:bg-[#0a0015]/95 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 px-3 sm:px-6 py-2.5 flex items-center gap-2 overflow-x-auto no-scrollbar shadow-xs">
+        <div className="flex items-center gap-1.5 mr-2 text-gray-400 flex-shrink-0">
+          <Scroll size={13} />
+          <span className="text-[9px] font-black uppercase tracking-widest hidden sm:inline">
             Document Type
           </span>
         </div>
@@ -1166,9 +1166,9 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
           <button
             key={type}
             onClick={() => setTranscriptType(type as "Official" | "Provisional")}
-            className={`px-5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
+            className={`px-3.5 sm:px-5 py-1.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex-shrink-0 ${
               transcriptType === type
-                ? "bg-[#4B0082] text-white shadow-lg shadow-purple-500/20 scale-105 border border-purple-500/50"
+                ? "bg-[#4B0082] text-white shadow-md shadow-purple-500/20 border border-purple-500/50"
                 : "bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-[#4B0082]"
             }`}
           >

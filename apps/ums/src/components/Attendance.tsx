@@ -241,21 +241,21 @@ const Attendance: React.FC = () => {
           </div>
         </div>
       )}
-      {/* Sticky Header */}
-      <div className="flex-shrink-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-b border-gray-200 dark:border-gray-700 px-4 py-2 flex flex-col md:flex-row justify-between items-center gap-2 shadow-sm min-h-[60px]">
-        <div className="flex items-center gap-3 pl-14 w-full md:w-auto">
-          <div className="w-1 h-5 bg-[#FFD700] rounded-none"></div>
+      {/* Responsive Header */}
+      <div className="flex-shrink-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-b border-gray-200 dark:border-gray-700 px-3 sm:px-6 py-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-xs">
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="w-1.5 h-6 bg-[#FFD700] rounded-full flex-shrink-0"></div>
           <div className="flex flex-col">
-            <h2 className="text-base md:text-lg font-bold text-[#2E004F] dark:text-white tracking-tight uppercase leading-none">
+            <h2 className="text-base sm:text-lg font-bold text-[#2E004F] dark:text-white tracking-tight uppercase leading-tight">
               Institutional Attendance
             </h2>
-            <p className="text-[8px] md:text-[9px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest">
+            <p className="text-[9px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest">
               Live Session Monitoring • {currentFaculty}
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3 pl-14 md:pl-0 w-full md:w-auto justify-end">
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end flex-wrap">
           {/* Date/Time Controls */}
           <div className="flex items-center gap-2 bg-white dark:bg-gray-800 p-1 border border-gray-100 dark:border-gray-700 shadow-sm hidden md:flex">
             <div className="flex items-center gap-2 px-2 py-1 bg-gray-50 dark:bg-gray-900 border-r border-gray-100 dark:border-gray-700">

@@ -279,71 +279,84 @@ export const Library: React.FC = () => {
 
   return (
     <div className="h-full flex flex-col animate-fade-in relative">
-      {/* Sticky Header */}
-      <div className="flex-shrink-0 sticky top-0 z-40 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-b border-gray-200 dark:border-gray-700 px-4 py-2 flex flex-col md:flex-row justify-between items-center gap-2 shadow-sm min-h-[60px]">
-        <div className="flex items-center gap-3 pl-14 w-full md:w-auto">
-          <div className="w-1 h-5 bg-[#FFD700] rounded-none"></div>
+      {/* Responsive Header */}
+      <div className="flex-shrink-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-b border-gray-200 dark:border-gray-700 px-3 sm:px-6 py-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-xs">
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="w-1.5 h-6 bg-[#FFD700] rounded-full flex-shrink-0"></div>
           <div className="flex flex-col">
-            <h2 className="text-base md:text-lg font-bold text-[#2E004F] dark:text-white tracking-tight uppercase leading-none">
+            <h2 className="text-base sm:text-lg font-bold text-[#2E004F] dark:text-white tracking-tight uppercase leading-tight">
               Knowledge Depository
             </h2>
-            <p className="text-[8px] md:text-[9px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest">
+            <p className="text-[9px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest">
               BMI University Online Library
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-4 pl-14 md:pl-0 w-full md:w-auto justify-end">
-          <div className="flex bg-white dark:bg-gray-800 p-1 rounded-none shadow-sm border border-gray-100 dark:border-gray-700">
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end flex-wrap">
+          <div className="flex bg-gray-100 dark:bg-gray-800 p-0.5 rounded-lg border border-gray-200 dark:border-gray-700">
             <button
               onClick={() => setViewMode("grid")}
-              className={`p-1.5 transition-all ${viewMode === "grid" ? "bg-[#4B0082] text-white" : "text-gray-400 hover:text-[#4B0082]"}`}
+              className={`p-1.5 rounded-md transition-all ${viewMode === "grid" ? "bg-[#4B0082] text-white shadow-xs" : "text-gray-400 hover:text-[#4B0082]"}`}
+              title="Grid View"
             >
               <LayoutGrid size={14} />
             </button>
             <button
               onClick={() => setViewMode("list")}
-              className={`p-1.5 transition-all ${viewMode === "list" ? "bg-[#4B0082] text-white" : "text-gray-400 hover:text-[#4B0082]"}`}
+              className={`p-1.5 rounded-md transition-all ${viewMode === "list" ? "bg-[#4B0082] text-white shadow-xs" : "text-gray-400 hover:text-[#4B0082]"}`}
+              title="List View"
             >
               <List size={14} />
             </button>
           </div>
           <button
             onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 px-6 py-2 bg-[#4B0082] text-white rounded-none shadow-xl hover:bg-black transition-all font-black text-[9px] uppercase tracking-widest border border-[#FFD700]/30"
+            className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 bg-[#4B0082] text-white rounded-lg shadow-md hover:bg-black transition-all font-bold text-[9px] sm:text-[10px] uppercase tracking-wider border border-[#FFD700]/30 cursor-pointer"
           >
             <Plus size={12} className="text-[#FFD700]" /> Catalog Asset
           </button>
         </div>
       </div>
 
-      {/* Sticky Top Tab Bar */}
-      <div className="sticky top-[60px] z-30 bg-[#F8F9FA]/95 dark:bg-[#0a0015]/95 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 px-6 py-3 flex items-center gap-3 overflow-x-auto no-scrollbar shadow-sm">
-        <div className="flex items-center gap-2 mr-4 text-gray-400">
-          <LibraryIcon size={14} />
-          <span className="text-[9px] font-black uppercase tracking-widest">
+      {/* Responsive Tab Bar */}
+      <div className="bg-[#F8F9FA]/95 dark:bg-[#0a0015]/95 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 px-3 sm:px-6 py-2.5 flex items-center gap-2 overflow-x-auto no-scrollbar shadow-xs">
+        <div className="flex items-center gap-1.5 mr-2 text-gray-400 flex-shrink-0">
+          <LibraryIcon size={13} />
+          <span className="text-[9px] font-black uppercase tracking-widest hidden sm:inline">
             Collections
           </span>
         </div>
         
-        <div className="w-px h-6 bg-gray-300 dark:bg-gray-700 mx-2"></div>
         <button
           onClick={() => setActiveTab("catalog")}
-          className={`px-5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
-            activeTab === "catalog" ? "bg-[#4B0082] text-white shadow-lg border border-purple-500/50" : "bg-white text-gray-500 border border-gray-200"
+          className={`px-3.5 sm:px-5 py-1.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex-shrink-0 ${
+            activeTab === "catalog"
+              ? "bg-[#4B0082] text-white shadow-md shadow-purple-500/20 border border-purple-500/50"
+              : "bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-[#4B0082]"
           }`}
-        >Catalog</button>
+        >
+          Catalog Repository
+        </button>
         <button
           onClick={() => setActiveTab("borrowings")}
-          className={`px-5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
-            activeTab === "borrowings" ? "bg-[#4B0082] text-white shadow-lg border border-purple-500/50" : "bg-white text-gray-500 border border-gray-200"
+          className={`px-3.5 sm:px-5 py-1.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex-shrink-0 ${
+            activeTab === "borrowings"
+              ? "bg-[#4B0082] text-white shadow-md shadow-purple-500/20 border border-purple-500/50"
+              : "bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-[#4B0082]"
           }`}
-        >Borrowings</button>
+        >
+          Borrowings
+        </button>
         <button
           onClick={() => setActiveTab("fines")}
-          className={`px-5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
-            activeTab === "fines" ? "bg-[#4B0082] text-white shadow-lg border border-purple-500/50" : "bg-white text-gray-500 border border-gray-200"
+          className={`px-3.5 sm:px-5 py-1.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex-shrink-0 ${
+            activeTab === "fines"
+              ? "bg-[#4B0082] text-white shadow-md shadow-purple-500/20 border border-purple-500/50"
+              : "bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-[#4B0082]"
           }`}
-        >Fines</button>
+        >
+          Fines & Fees
+        </button>
         <div className="w-px h-6 bg-gray-300 dark:bg-gray-700 mx-2"></div>
         
         {categories.map((cat) => (

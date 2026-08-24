@@ -134,7 +134,9 @@ const TopHeader: React.FC<TopHeaderProps> = ({ onOpenSidebar, isSidebarOpen }) =
                 <span className="text-xs font-bold text-gray-800 dark:text-gray-100 line-clamp-1">{user?.name || "System User"}</span>
                 <span className="text-[10px] text-gray-500 dark:text-gray-400 line-clamp-1">{user?.email || "user@bmi.edu"}</span>
               </div>
-              {getRoleBadge(user?.role)}
+              <div className="hidden sm:inline-flex">
+                {getRoleBadge(user?.role)}
+              </div>
               <ChevronDown size={14} className="text-gray-400 hidden sm:block" />
             </button>
 

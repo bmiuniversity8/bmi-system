@@ -9,7 +9,6 @@ import {
   Hash,
   Edit,
   Trash2,
-  Info,
   LayoutGrid,
   List,
   Award,
@@ -254,63 +253,65 @@ const Courses: React.FC = () => {
 
   return (
     <div className="h-full flex flex-col animate-fade-in relative">
-      {/* Sticky Header */}
-      <div className="flex-shrink-0 sticky top-0 z-40 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-b border-gray-200 dark:border-gray-700 px-4 py-2 flex flex-col md:flex-row justify-between items-center gap-2 shadow-sm min-h-[60px]">
-        <div className="flex items-center gap-3 pl-14 w-full md:w-auto">
-          <div className="w-1 h-5 bg-[#FFD700] rounded-none"></div>
+      {/* Responsive Header */}
+      <div className="flex-shrink-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-b border-gray-200 dark:border-gray-700 px-3 sm:px-6 py-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-xs">
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="w-1.5 h-6 bg-[#FFD700] rounded-full flex-shrink-0"></div>
           <div className="flex flex-col">
-            <h2 className="text-base md:text-lg font-bold text-[#2E004F] dark:text-white tracking-tight uppercase leading-none">
+            <h2 className="text-base sm:text-lg font-bold text-[#2E004F] dark:text-white tracking-tight uppercase leading-tight">
               Curriculum Management
             </h2>
-            <p className="text-[8px] md:text-[9px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest">
+            <p className="text-[9px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest">
               BMI Institutional Course Catalog
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 pl-14 md:pl-0 w-full md:w-auto justify-end">
-          <div className="flex bg-white dark:bg-gray-800 p-0.5 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 mr-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end flex-wrap">
+          <div className="flex bg-gray-100 dark:bg-gray-800 p-0.5 rounded-lg border border-gray-200 dark:border-gray-700">
             <button
               onClick={() => setViewMode("grid")}
-              className={`p-1.5 rounded-md transition-all ${viewMode === "grid" ? "bg-[#4B0082] text-white" : "text-gray-400 hover:text-[#4B0082]"}`}
+              className={`p-1.5 rounded-md transition-all ${viewMode === "grid" ? "bg-[#4B0082] text-white shadow-xs" : "text-gray-400 hover:text-[#4B0082]"}`}
               title="Grid View"
             >
               <LayoutGrid size={14} />
             </button>
             <button
               onClick={() => setViewMode("list")}
-              className={`p-1.5 rounded-md transition-all ${viewMode === "list" ? "bg-[#4B0082] text-white" : "text-gray-400 hover:text-[#4B0082]"}`}
+              className={`p-1.5 rounded-md transition-all ${viewMode === "list" ? "bg-[#4B0082] text-white shadow-xs" : "text-gray-400 hover:text-[#4B0082]"}`}
               title="List View"
             >
               <List size={14} />
             </button>
           </div>
-          <button
-            onClick={handleExportCSV}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all font-bold text-[10px] uppercase tracking-wider rounded-lg shadow-xs cursor-pointer"
-          >
-            Export CSV
-          </button>
-          <button
-            onClick={() => setBulkCoursesOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-800 text-[#4B0082] dark:text-purple-300 border border-purple-200 dark:border-purple-800 hover:bg-purple-50 dark:hover:bg-purple-950/30 transition-all font-bold text-[10px] uppercase tracking-wider rounded-lg shadow-xs cursor-pointer"
-          >
-            Bulk JSON
-          </button>
-          <button
-            onClick={() => openModal()}
-            className="flex items-center gap-1.5 px-4 py-1.5 bg-[#4B0082] text-white hover:bg-purple-950 transition-all font-bold text-[10px] uppercase tracking-wider border border-[#FFD700]/30 shadow-md rounded-lg cursor-pointer"
-          >
-            <Plus size={14} className="text-[#FFD700]" /> Add Course
-          </button>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              onClick={handleExportCSV}
+              className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all font-bold text-[9px] sm:text-[10px] uppercase tracking-wider rounded-lg shadow-xs cursor-pointer"
+            >
+              Export CSV
+            </button>
+            <button
+              onClick={() => setBulkCoursesOpen(true)}
+              className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 bg-white dark:bg-gray-800 text-[#4B0082] dark:text-purple-300 border border-purple-200 dark:border-purple-800 hover:bg-purple-50 dark:hover:bg-purple-950/30 transition-all font-bold text-[9px] sm:text-[10px] uppercase tracking-wider rounded-lg shadow-xs cursor-pointer"
+            >
+              Bulk JSON
+            </button>
+            <button
+              onClick={() => openModal()}
+              className="flex items-center gap-1 px-3 sm:px-4 py-1.5 bg-[#4B0082] text-white hover:bg-purple-950 transition-all font-bold text-[9px] sm:text-[10px] uppercase tracking-wider border border-[#FFD700]/30 shadow-md rounded-lg cursor-pointer"
+            >
+              <Plus size={13} className="text-[#FFD700]" /> Add Course
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Sticky Top Tab Bar */}
-      <div className="sticky top-[60px] z-30 bg-[#F8F9FA]/95 dark:bg-[#0a0015]/95 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 px-6 py-3 flex items-center gap-3 overflow-x-auto no-scrollbar shadow-sm">
-        <div className="flex items-center gap-2 mr-4 text-gray-400">
-          <BookMarked size={14} />
-          <span className="text-[9px] font-black uppercase tracking-widest">
+      {/* Responsive Programs Tab Bar */}
+      <div className="bg-[#F8F9FA]/95 dark:bg-[#0a0015]/95 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 px-3 sm:px-6 py-2.5 flex items-center gap-2 overflow-x-auto no-scrollbar shadow-xs">
+        <div className="flex items-center gap-1.5 mr-2 text-gray-400 flex-shrink-0">
+          <BookMarked size={13} />
+          <span className="text-[9px] font-black uppercase tracking-widest hidden sm:inline">
             Programs
           </span>
         </div>
@@ -325,9 +326,9 @@ const Courses: React.FC = () => {
           <button
             key={tab.id}
             onClick={() => setActiveLevel(tab.id)}
-            className={`px-5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2 ${
+            className={`px-3.5 sm:px-5 py-1.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-1.5 flex-shrink-0 ${
               activeLevel === tab.id
-                ? "bg-[#4B0082] text-white shadow-lg shadow-purple-500/20 scale-105 border border-purple-500/50"
+                ? "bg-[#4B0082] text-white shadow-md shadow-purple-500/20 border border-purple-500/50"
                 : "bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-[#4B0082]"
             }`}
           >
@@ -342,17 +343,17 @@ const Courses: React.FC = () => {
         ))}
       </div>
 
-      {/* Pinned Filters */}
-      <div className="sticky top-[110px] z-20 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 p-4 flex flex-col md:flex-row gap-4 items-center shadow-sm">
+      {/* Responsive Filters */}
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 p-3 sm:p-4 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center shadow-xs">
         <div className="relative flex-1 w-full">
           <Search
-            className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
-            size={16}
+            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
+            size={15}
           />
           <input
             type="text"
-            placeholder="Search by Course Name, Code or Description..."
-            className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-none outline-none font-bold text-xs dark:text-white focus:ring-1 focus:ring-[#4B0082]"
+            placeholder="Search by course name, code or description..."
+            className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg outline-none font-medium text-xs dark:text-white focus:ring-2 focus:ring-[#4B0082]/20 focus:border-[#4B0082]"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -360,7 +361,7 @@ const Courses: React.FC = () => {
         <select
           value={facultyFilter}
           onChange={(e) => setFacultyFilter(e.target.value)}
-          className="px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-[10px] font-black uppercase outline-none cursor-pointer dark:text-white"
+          className="px-3 py-2 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 text-[10px] font-bold uppercase outline-none cursor-pointer dark:text-white rounded-lg w-full sm:w-auto"
         >
           {facultyOptions.map((f) => (
             <option key={f} value={f}>
@@ -370,24 +371,23 @@ const Courses: React.FC = () => {
         </select>
       </div>
 
-      {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        {/* Grid or List */}
+      {/* Content Area */}
+      <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-6">
         {viewMode === "grid" ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
             {filteredCourses.map((course) => (
               <div
                 key={course.id}
-                className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 p-6 flex flex-col group hover:shadow-2xl transition-all relative overflow-hidden"
+                className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 p-5 flex flex-col group hover:shadow-xl transition-all relative overflow-hidden rounded-xl"
               >
                 <div className="absolute top-0 left-0 w-1 h-full bg-[#4B0082] group-hover:w-2 transition-all"></div>
 
-                <div className="flex justify-between items-start mb-4 pl-4">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                <div className="flex justify-between items-start mb-3 pl-3">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 font-mono">
                     {course.code}
                   </span>
                   <span
-                    className={`px-2 py-0.5 text-[9px] font-black uppercase tracking-widest border ${
+                    className={`px-2 py-0.5 text-[9px] font-black uppercase tracking-widest rounded-md border ${
                       (course as any).status === "Published"
                         ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                         : (course as any).status === "Draft"
@@ -399,134 +399,137 @@ const Courses: React.FC = () => {
                   </span>
                 </div>
 
-                <div className="pl-4 mb-6">
-                  <h3 className="text-lg font-black text-gray-900 dark:text-white uppercase tracking-tight leading-none group-hover:text-[#4B0082] transition-colors line-clamp-2">
+                <div className="pl-3 mb-4 flex-1">
+                  <h3 className="text-base font-black text-gray-900 dark:text-white uppercase tracking-tight leading-snug group-hover:text-[#4B0082] transition-colors line-clamp-2">
                     {course.title}
                   </h3>
-                  <p className="text-[10px] font-bold text-[#4B0082] dark:text-purple-300 uppercase tracking-widest mt-2">
+                  <p className="text-[9px] font-bold text-[#4B0082] dark:text-purple-300 uppercase tracking-widest mt-1.5">
                     {(course as any).category ?? ""} • {(course as any).department}
                   </p>
-                  <div className="mt-4 text-xs font-medium text-gray-500 dark:text-gray-400 line-clamp-3">
+                  <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 line-clamp-2">
                     {(course as any).description}
                   </div>
                 </div>
 
-                <div className="mt-auto pl-4 pt-4 border-t border-gray-50 dark:border-gray-700 flex justify-between items-center">
-                  <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-gray-100 dark:bg-gray-700 rounded-full text-gray-500">
-                      <Info size={12} />
-                    </div>
-                    <span className="text-[10px] font-bold text-gray-500">
-                      {course.credit_hours} Credits
-                    </span>
-                  </div>
+                <div className="mt-auto pl-3 pt-3 border-t border-gray-50 dark:border-gray-700 flex justify-between items-center">
+                  <span className="text-[10px] font-bold text-gray-500 bg-gray-50 dark:bg-gray-700/50 px-2 py-1 rounded">
+                    {course.credit_hours} Credits
+                  </span>
                   <div className="flex gap-1">
                     <button
                       onClick={() => openModal(course)}
-                      className="p-2 text-gray-300 hover:text-[#4B0082] transition-colors"
+                      className="p-1.5 text-gray-400 hover:text-[#4B0082] transition-colors"
+                      title="Edit Course"
                     >
-                      <Edit size={16} />
+                      <Edit size={15} />
                     </button>
                     <button
                       onClick={() => deleteCourse(course.id)}
-                      className="p-2 text-gray-300 hover:text-red-500 transition-colors"
+                      className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
+                      title="Delete Course"
                     >
-                      <Trash2 size={16} />
+                      <Trash2 size={15} />
                     </button>
                   </div>
                 </div>
               </div>
             ))}
             {filteredCourses.length === 0 && (
-              <div className="col-span-full py-20 flex flex-col items-center justify-center text-gray-400">
-                <Layers size={48} className="mb-4 opacity-20" />
-                <p className="font-black uppercase tracking-widest text-sm">
-                  No curriculum modules found
+              <div className="col-span-full py-20 text-center flex flex-col items-center justify-center">
+                <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-2xl flex items-center justify-center text-gray-400 mb-4">
+                  <Layers size={32} />
+                </div>
+                <h3 className="text-base font-bold text-gray-700 dark:text-gray-300">
+                  No courses found
+                </h3>
+                <p className="text-xs text-gray-400 mt-1 max-w-sm">
+                  Try adjusting your search criteria or program level filter.
                 </p>
               </div>
             )}
           </div>
         ) : (
-          <div className="bg-white dark:bg-gray-800 rounded-none shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
-            {/* Sticky Grid Header */}
-            <div className="sticky top-0 z-20 bg-gray-900 text-gray-400 uppercase text-[9px] font-black tracking-[0.2em] shadow-md border-b border-gray-800 grid grid-cols-[100px_2fr_1.5fr_100px_100px_80px] gap-4 items-center">
-              <div className="px-6 py-4">Code</div>
-              <div className="px-6 py-4">Course Title</div>
-              <div className="px-6 py-4">Department</div>
-              <div className="px-6 py-4 text-center">Credits</div>
-              <div className="px-6 py-4 text-center">Status</div>
-              <div className="px-6 py-4 text-right">Actions</div>
-            </div>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xs border border-gray-100 dark:border-gray-700 overflow-x-auto w-full">
+            <div className="min-w-[680px]">
+              {/* Table Header */}
+              <div className="bg-gray-900 text-gray-400 uppercase text-[9px] font-black tracking-[0.2em] shadow-xs border-b border-gray-800 grid grid-cols-[100px_2fr_1.5fr_90px_100px_80px] gap-4 items-center">
+                <div className="px-5 py-3.5">Code</div>
+                <div className="px-5 py-3.5">Course Title</div>
+                <div className="px-5 py-3.5">Department</div>
+                <div className="px-5 py-3.5 text-center">Credits</div>
+                <div className="px-5 py-3.5 text-center">Status</div>
+                <div className="px-5 py-3.5 text-right">Actions</div>
+              </div>
 
-            {/* Grid Body */}
-            <div className="divide-y divide-gray-50 dark:divide-gray-800">
-              {filteredCourses.map((course) => (
-                <div
-                  key={course.id}
-                  className="hover:bg-purple-50/20 dark:hover:bg-gray-700/20 transition-all group grid grid-cols-[100px_2fr_1.5fr_100px_100px_80px] gap-4 items-center"
-                >
-                  <div className="px-6 py-5 font-mono text-xs font-bold text-[#4B0082] dark:text-purple-300 truncate">
-                    {course.code}
-                  </div>
-                  <div className="px-6 py-5">
-                    <p className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-tight truncate">
-                      {course.title}
-                    </p>
-                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5 truncate">
-                      {(course as any).level}
-                    </p>
-                  </div>
-                  <div className="px-6 py-5">
-                    <p className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase truncate">
-                      {(course as any).department}
-                    </p>
-                    <p className="text-[9px] font-black text-[#4B0082] dark:text-purple-300 uppercase tracking-widest mt-0.5 truncate">
-                      {(course as any).category ?? ""}
-                    </p>
-                  </div>
-                  <div className="px-6 py-5 text-center font-bold text-gray-600 dark:text-gray-400 text-xs">
-                    {course.credit_hours}
-                  </div>
-                  <div className="px-6 py-5 text-center">
-                    <span
-                      className={`px-2 py-0.5 text-[9px] font-black uppercase tracking-widest border whitespace-nowrap ${
-                        (course as any).status === "Published"
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                          : (course as any).status === "Draft"
-                            ? "bg-amber-50 text-amber-700 border-amber-200"
-                            : "bg-gray-50 text-gray-500 border-gray-200"
-                      }`}
-                    >
-                      {(course as any).status}
-                    </span>
-                  </div>
-                  <div className="px-6 py-5 text-right">
-                    <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
-                        onClick={() => openModal(course)}
-                        className="p-2 text-gray-400 hover:text-[#4B0082]"
+              {/* Table Body */}
+              <div className="divide-y divide-gray-50 dark:divide-gray-800">
+                {filteredCourses.map((course) => (
+                  <div
+                    key={course.id}
+                    className="hover:bg-purple-50/20 dark:hover:bg-gray-700/20 transition-all group grid grid-cols-[100px_2fr_1.5fr_90px_100px_80px] gap-4 items-center"
+                  >
+                    <div className="px-5 py-4 font-mono text-xs font-bold text-[#4B0082] dark:text-purple-300 truncate">
+                      {course.code}
+                    </div>
+                    <div className="px-5 py-4">
+                      <p className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-tight truncate">
+                        {course.title}
+                      </p>
+                      <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5 truncate">
+                        {(course as any).level}
+                      </p>
+                    </div>
+                    <div className="px-5 py-4">
+                      <p className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase truncate">
+                        {(course as any).department}
+                      </p>
+                      <p className="text-[9px] font-black text-[#4B0082] dark:text-purple-300 uppercase tracking-widest mt-0.5 truncate">
+                        {(course as any).category ?? ""}
+                      </p>
+                    </div>
+                    <div className="px-5 py-4 text-center font-bold text-gray-600 dark:text-gray-400 text-xs">
+                      {course.credit_hours}
+                    </div>
+                    <div className="px-5 py-4 text-center">
+                      <span
+                        className={`px-2 py-0.5 text-[9px] font-black uppercase tracking-widest border whitespace-nowrap rounded-md ${
+                          (course as any).status === "Published"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : (course as any).status === "Draft"
+                              ? "bg-amber-50 text-amber-700 border-amber-200"
+                              : "bg-gray-50 text-gray-500 border-gray-200"
+                        }`}
                       >
-                        <Edit size={16} />
-                      </button>
-                      <button
-                        onClick={() => deleteCourse(course.id)}
-                        className="p-2 text-gray-400 hover:text-red-500"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                        {(course as any).status}
+                      </span>
+                    </div>
+                    <div className="px-5 py-4 text-right">
+                      <div className="flex justify-end gap-1 opacity-80 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => openModal(course)}
+                          className="p-1.5 text-gray-400 hover:text-[#4B0082]"
+                          title="Edit Course"
+                        >
+                          <Edit size={15} />
+                        </button>
+                        <button
+                          onClick={() => deleteCourse(course.id)}
+                          className="p-1.5 text-gray-400 hover:text-red-500"
+                          title="Delete Course"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-            {filteredCourses.length === 0 && (
-              <div className="py-20 flex flex-col items-center justify-center text-gray-400 border-t border-gray-100 dark:border-gray-800">
-                <Layers size={48} className="mb-4 opacity-20" />
-                <p className="font-black uppercase tracking-widest text-sm">
-                  No curriculum modules found
-                </p>
+                ))}
+                {filteredCourses.length === 0 && (
+                  <div className="py-20 text-center text-gray-400 font-bold uppercase tracking-widest text-xs">
+                    No curriculum modules found
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
         )}
 

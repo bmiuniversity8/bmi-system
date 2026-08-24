@@ -260,29 +260,29 @@ const Programs: React.FC = () => {
 
   return (
     <div className="h-full flex flex-col animate-fade-in relative bg-[#F8F9FA] dark:bg-[#0a0015]">
-      {/* Premium Sticky Header */}
-      <div className="flex-shrink-0 sticky top-0 z-40 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4 shadow-sm">
-        <div className="flex items-center gap-3 pl-14 w-full md:w-auto">
-          <div className="w-1.5 h-7 bg-[#FFD700] rounded-none"></div>
+      {/* Responsive Header */}
+      <div className="flex-shrink-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 px-3 sm:px-6 py-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-xs">
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="w-1.5 h-6 bg-[#FFD700] rounded-full flex-shrink-0"></div>
           <div className="flex flex-col">
-            <h2 className="text-base md:text-xl font-black text-[#2E004F] dark:text-white tracking-tight uppercase leading-none">
+            <h2 className="text-base sm:text-lg font-black text-[#2E004F] dark:text-white tracking-tight uppercase leading-tight">
               Programs & Curricula
             </h2>
-            <p className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mt-1">
+            <p className="text-[9px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest mt-0.5">
               Theological Seminary Degree Taxonomy
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2 pl-14 md:pl-0 w-full md:w-auto justify-end">
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end flex-wrap">
           <button
             onClick={handleExportCSV}
-            className="flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all font-bold text-[10px] uppercase tracking-wider rounded-lg shadow-xs cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all font-bold text-[9px] sm:text-[10px] uppercase tracking-wider rounded-lg shadow-xs cursor-pointer"
           >
             <Download size={12} /> Export CSV
           </button>
           <button
             onClick={() => setIsCreateModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-[#4B0082] text-white hover:bg-black transition-all font-bold text-[10px] uppercase tracking-wider border border-[#FFD700]/30 shadow-md rounded-lg cursor-pointer"
+            className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 bg-[#4B0082] text-white hover:bg-black transition-all font-bold text-[9px] sm:text-[10px] uppercase tracking-wider border border-[#FFD700]/30 shadow-md rounded-lg cursor-pointer"
           >
             <Plus size={12} className="text-[#FFD700]" /> Create Program
           </button>
@@ -290,18 +290,18 @@ const Programs: React.FC = () => {
       </div>
 
       {/* Level Filters Quickbar */}
-      <div className="sticky top-[73px] z-30 bg-[#F8F9FA]/95 dark:bg-[#0a0015]/95 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 px-6 py-3 flex items-center gap-3 overflow-x-auto no-scrollbar shadow-sm">
-        <div className="flex items-center gap-2 mr-4 text-gray-400">
-          <Layers size={14} />
-          <span className="text-[9px] font-black uppercase tracking-widest">
+      <div className="bg-[#F8F9FA]/95 dark:bg-[#0a0015]/95 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 px-3 sm:px-6 py-2.5 flex items-center gap-2 overflow-x-auto no-scrollbar shadow-xs">
+        <div className="flex items-center gap-1.5 mr-2 text-gray-400 flex-shrink-0">
+          <Layers size={13} />
+          <span className="text-[9px] font-black uppercase tracking-widest hidden sm:inline">
             Degree Levels
           </span>
         </div>
         <button
           onClick={() => setActiveLevel("All")}
-          className={`px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
+          className={`px-3.5 sm:px-5 py-1.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex-shrink-0 ${
             activeLevel === "All"
-              ? "bg-[#4B0082] text-white shadow-lg shadow-purple-500/20 scale-105 border border-purple-500/50"
+              ? "bg-[#4B0082] text-white shadow-md shadow-purple-500/20 border border-purple-500/50"
               : "bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
           }`}
         >
@@ -314,9 +314,9 @@ const Programs: React.FC = () => {
             <button
               key={key}
               onClick={() => setActiveLevel(key)}
-              className={`px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2 ${
+              className={`px-3.5 sm:px-5 py-1.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-1.5 flex-shrink-0 ${
                 isSelected
-                  ? `bg-gradient-to-r ${config.gradient} text-white shadow-lg scale-105 border border-white/20`
+                  ? `bg-gradient-to-r ${config.gradient} text-white shadow-md border border-white/20`
                   : "bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
               }`}
             >
@@ -327,23 +327,23 @@ const Programs: React.FC = () => {
         })}
       </div>
 
-      {/* Advanced Filters Drawer / Pinned Header */}
-      <div className="sticky top-[125px] z-20 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 px-6 py-4 flex flex-col lg:flex-row gap-4 items-center shadow-sm">
+      {/* Advanced Filters Drawer / Header */}
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 px-3 sm:px-6 py-3 flex flex-col lg:flex-row gap-3 items-stretch sm:items-center shadow-xs">
         <div className="relative flex-1 w-full">
           <Search
-            className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
-            size={16}
+            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
+            size={15}
           />
           <input
             type="text"
             placeholder="Search programs by title, code or abbreviation..."
-            className="w-full pl-11 pr-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-none outline-none font-bold text-xs dark:text-white focus:ring-1 focus:ring-[#4B0082]"
+            className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg outline-none font-medium text-xs dark:text-white focus:ring-2 focus:ring-[#4B0082]/20 focus:border-[#4B0082]"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
 
-        <div className="flex flex-wrap md:flex-nowrap gap-3 w-full lg:w-auto items-center">
+        <div className="flex flex-wrap md:flex-nowrap gap-2 w-full lg:w-auto items-center">
           <div className="flex items-center gap-2 text-gray-400 mr-2">
             <SlidersHorizontal size={14} />
             <span className="text-[9px] font-black uppercase tracking-widest">
