@@ -313,7 +313,7 @@ img {
 /* ─── Responsive & Mobile Optimization Utilities ─── */
 @media (max-width: 768px) {
   :root {
-    --navbar-height: 72px;
+    --navbar-height: 92px; /* 28px utility bar + 64px main nav on mobile */
   }
   
   .section {
@@ -347,15 +347,44 @@ img {
     gap: 2.5rem !important;
   }
 
-  .btn {
-    width: 100%;
-    min-height: 48px;
-    padding: 0.85rem 1.25rem;
-    font-size: 0.95rem;
-  }
-
   .stat-card {
     padding: 1.5rem 1rem;
+  }
+
+  /* Hero CTA buttons — stack & fill on mobile */
+  .hero-cta-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    align-items: stretch;
+    width: 100%;
+    max-width: 360px;
+    margin: 0 auto;
+  }
+  .hero-cta-btn {
+    width: 100% !important;
+    min-height: 52px;
+    font-size: 0.97rem !important;
+    padding: 0.95rem 1.5rem !important;
+  }
+
+  /* Metrics section compact padding */
+  .metrics-section {
+    padding: 2rem 1rem !important;
+  }
+  .metric-box {
+    border-right: none !important;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    padding-bottom: 1.25rem !important;
+  }
+}
+
+@media (min-width: 769px) {
+  .hero-cta-row {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
   }
 }
 

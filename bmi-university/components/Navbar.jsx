@@ -43,7 +43,7 @@ export default function Navbar() {
         {/* ── Top Institutional Utility Bar ── */}
         <div
           style={{
-            background: "linear-gradient(90deg, #060d19 0%, #091223 100%)",
+            background: "linear-gradient(90deg, #1a0040 0%, #2d1060 100%)",
             borderBottom: "1px solid rgba(197, 160, 72, 0.2)",
             padding: "0.4rem 2rem",
             fontSize: "0.75rem",
@@ -88,14 +88,15 @@ export default function Navbar() {
           style={{
             height: "82px",
             background: scrolled
-              ? "rgba(9, 18, 35, 0.96)"
-              : "rgba(9, 18, 35, 0.9)",
+              ? "rgba(45, 16, 96, 0.98)"
+              : "rgba(45, 16, 96, 0.93)",
             backdropFilter: "blur(16px)",
             WebkitBackdropFilter: "blur(16px)",
             borderBottom: "1px solid rgba(197, 160, 72, 0.25)",
-            boxShadow: scrolled ? "0 10px 30px rgba(0,0,0,0.5)" : "none",
+            boxShadow: scrolled ? "0 10px 30px rgba(26, 0, 64, 0.6)" : "none",
             transition: "all 0.35s ease",
           }}
+          className="main-nav-bar"
         >
           <nav
             aria-label="Main navigation"
@@ -287,11 +288,11 @@ export default function Navbar() {
         aria-modal={mobileOpen}
         style={{
           position: "fixed",
-          top: "112px",
+          top: "var(--mobile-drawer-top, 112px)",
           left: 0,
           right: 0,
           bottom: 0,
-          background: "linear-gradient(180deg, rgba(9, 18, 35, 0.98) 0%, rgba(14, 29, 56, 0.98) 100%)",
+          background: "linear-gradient(180deg, rgba(26, 0, 64, 0.98) 0%, rgba(45, 16, 96, 0.98) 100%)",
           backdropFilter: "blur(20px)",
           WebkitBackdropFilter: "blur(20px)",
           zIndex: 999,
@@ -371,7 +372,21 @@ export default function Navbar() {
         }
         @media (max-width: 640px) {
           .hide-mobile { display: none !important; }
-          .top-utility-bar { padding: 0.35rem 0.75rem !important; font-size: 0.68rem !important; }
+          .top-utility-bar {
+            padding: 0.3rem 0.75rem !important;
+            font-size: 0.67rem !important;
+            min-height: 28px;
+          }
+          .main-nav-bar {
+            height: 64px !important;
+          }
+          :root {
+            --navbar-height: 92px;
+            --mobile-drawer-top: 92px;
+          }
+        }
+        @media (max-width: 400px) {
+          .top-utility-bar { font-size: 0.62rem !important; }
         }
       `}</style>
     </>

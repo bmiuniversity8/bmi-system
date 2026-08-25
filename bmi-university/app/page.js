@@ -146,13 +146,13 @@ export default function HomePage() {
         style={{
           position: "relative",
           width: "100%",
-          height: "100vh",
-          minHeight: "680px",
+          height: "100svh",
+          minHeight: "600px",
           overflow: "hidden",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          paddingTop: "112px",
+          paddingTop: "var(--navbar-height, 112px)",
           margin: 0,
         }}
       >
@@ -262,11 +262,11 @@ export default function HomePage() {
             Developing Christ-centered men and women at <strong>Bethel Ministries International University</strong> with the values, theological depth, and leadership skills essential to transform nations.
           </p>
 
-          <div className="animate-hero-delay-2" style={{ display: "flex", gap: "1rem", justifyContent: "center", flexWrap: "wrap" }}>
-            <Link href="/apply" className="btn btn-gold" style={{ fontSize: "1rem", padding: "1rem 2.4rem" }}>
+          <div className="animate-hero-delay-2 hero-cta-row">
+            <Link href="/apply" className="btn btn-gold hero-cta-btn" style={{ fontSize: "1rem", padding: "1rem 2.4rem" }}>
               Apply for Admission →
             </Link>
-            <Link href="/academics" className="btn btn-outline-white" style={{ fontSize: "1rem", padding: "1rem 2.2rem" }}>
+            <Link href="/academics" className="btn btn-outline-white hero-cta-btn" style={{ fontSize: "1rem", padding: "1rem 2.2rem" }}>
               Explore Degree Programs
             </Link>
           </div>
@@ -296,8 +296,8 @@ export default function HomePage() {
       </section>
 
       {/* ─── LIVE INSTITUTIONAL METRICS TICKER ─── */}
-      <section style={{ background: "#060d19", borderTop: "3px solid var(--color-gold, #c5a048)", borderBottom: "1px solid rgba(197,160,72,0.2)", padding: "3rem 2rem" }}>
-        <div style={{ maxWidth: "1280px", margin: "0 auto", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "2rem" }}>
+      <section className="metrics-section" style={{ background: "#1a0040", borderTop: "3px solid var(--color-gold, #c5a048)", borderBottom: "1px solid rgba(197,160,72,0.2)", padding: "3rem 2rem" }}>
+        <div style={{ maxWidth: "1280px", margin: "0 auto", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "2rem" }}>
           
           <div style={{ textAlign: "center", borderRight: "1px solid rgba(255,255,255,0.08)", padding: "0 1rem" }} className="metric-box">
             <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: "2.8rem", fontWeight: 900, color: "var(--color-gold, #c5a048)", lineHeight: 1 }}>100%</div>
