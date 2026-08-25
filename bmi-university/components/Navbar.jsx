@@ -110,25 +110,24 @@ export default function Navbar() {
               justifyContent: "space-between",
             }}
           >
-            {/* ── University Crest & Brand ── */}
             <Link
               href="/"
               aria-label="BMI University — Home"
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: "14px",
+                gap: "12px",
                 textDecoration: "none",
               }}
             >
               <img
-                src="/images/bmi-crest-270.png"
+                src="/images/bmi-logo-2.png"
                 alt="BMI University Crest"
                 style={{
-                  height: "52px",
+                  height: "58px",
                   width: "auto",
                   objectFit: "contain",
-                  filter: "drop-shadow(0 2px 8px rgba(197, 160, 72, 0.35))",
+                  filter: "drop-shadow(0 2px 8px rgba(0,0,0,0.35))",
                 }}
               />
               <div style={{ display: "flex", flexDirection: "column", lineHeight: 1 }}>
