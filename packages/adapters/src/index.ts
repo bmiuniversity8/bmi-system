@@ -23,5 +23,6 @@ export * from './memory/MemoryDocumentAdapter';
 export * from './memory/MemoryNotificationAdapter';
 export * from './memory/MemoryStorageAdapter';
 export * from './stripe/StripeAdapter';
+export * from './paystack/PaystackAdapter';
 export * from './pdf/PdfDocumentAdapter';
 export * from './cloudflare/D1IdentityAdapter';

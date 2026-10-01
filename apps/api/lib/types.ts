@@ -49,10 +49,18 @@ export interface Env {
   HR_HYPERDRIVE?: Hyperdrive;
   LIBRARY_HYPERDRIVE?: Hyperdrive;
   ALUMNI_HYPERDRIVE?: Hyperdrive;
-  /** Stripe secret key for payment processing. */
+  /** Stripe secret key for payment processing (legacy fallback — Paystack is preferred). */
   STRIPE_SECRET_KEY?: string;
   /** Stripe webhook signing secret for verifying webhook events. */
   STRIPE_WEBHOOK_SECRET?: string;
+  /** Paystack secret key (sk_test_... / sk_live_...) — initializes transactions server-side. */
+  PAYSTACK_SECRET_KEY?: string;
+  /** Paystack public key (pk_...) — safe to expose to the portal for InlineJS. */
+  PAYSTACK_PUBLIC_KEY?: string;
+  /** Paystack webhook signing secret (defaults to PAYSTACK_SECRET_KEY — Paystack signs with the secret key). */
+  PAYSTACK_WEBHOOK_SECRET?: string;
+  /** Fully-qualified URL Paystack redirects to after checkout (overrides dashboard callback). */
+  PAYSTACK_CALLBACK_URL?: string;
   /** PBKDF2 iteration count for password hashing (defaults to 40000 for Workers Free plan CPU budget). */
   PBKDF2_ITERATIONS?: string;
   /** Email address for critical ops alerts via Resend. */

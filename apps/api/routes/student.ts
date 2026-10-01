@@ -4,6 +4,12 @@
 import { error, ok, typedJson } from '../lib/types';
 import type { Env } from '../lib/types';
 import { percentageToGrade } from '@bmi/shared';
+import {
+  PORTAL_URL,
+  INSTITUTION_LEGAL_NAME,
+  INSTITUTION_TRADING_AS_LINE,
+  buildPaymentDescription,
+} from '@bmi/shared';
 
 export async function handleGetDashboard(_request: Request, env: Env, userId: string): Promise<Response> {
   const { results: invoices } = await env.PLATFORM_CONTEXT!.db.prepare(
@@ -113,30 +119,57 @@ export async function handlePayInvoice(_request: Request, env: Env, userId: stri
   if (!invoice) return error('Invoice not found', 404);
   if (invoice.status === 'paid') return error('Invoice is already paid', 400);
 
+  // Resolve payer email — Paystack requires it to initialize a transaction.
+  let payerEmail = '';
+  try {
+    const user = await env.PLATFORM_CONTEXT!.db
+      .prepare('SELECT email FROM users WHERE id = ?')
+      .bind(userId)
+      .first<{ email: string }>();
+    if (user?.email) payerEmail = user.email;
+  } catch { /* handled below */ }
+  if (!payerEmail) return error('Student email is required to initialize payment', 400);
+
   try {
     const paymentIntent = await env.PLATFORM_CONTEXT!.payment.createPaymentIntent({
       amount: invoice.amount,
-      currency: 'USD',
-      description: `Invoice ${invoice.id}`,
-      metadata: { userId, invoiceId }
+      // Invoices are stored without currency; the gateway adapter applies the
+      // platform default (NGN for Paystack). Currency override happens via
+      // POST /api/payment/create-intent when needed.
+      currency: 'NGN',
+      email: payerEmail,
+      description: buildPaymentDescription(`Tuition Invoice ${String(invoice.id).slice(0, 8)}`),
+      callbackUrl: env.PAYSTACK_CALLBACK_URL || `${PORTAL_URL}/student/finances`,
+      metadata: {
+        userId,
+        invoiceId,
+        merchant: INSTITUTION_LEGAL_NAME,
+        trading_as: INSTITUTION_TRADING_AS_LINE,
+      }
     });
 
-    await env.PLATFORM_CONTEXT!.db.prepare(
-      'UPDATE invoices SET status = "paid" WHERE id = ? AND student_id = ?'
-    ).bind(invoiceId, userId).run();
-
-    await env.PLATFORM_CONTEXT!.db.prepare(
-      `UPDATE student_holds SET is_active = 0, resolved_at = datetime('now')
-       WHERE student_id = ? AND hold_type = 'payment' AND is_active = 1`
-    ).bind(userId).run();
-
-    return ok({ 
-      success: true, 
-      message: 'Payment successful', 
-      paymentIntentId: paymentIntent.id 
+    // NOTE: the invoice is marked paid ONLY after server-side verification
+    // (webhook charge.success or GET /api/payment/verify/:reference).
+    // Never mark paid here — the student has not paid yet at this point.
+    return ok({
+      success: true,
+      requires_action: true,
+      message: `Complete your payment securely — payee: ${INSTITUTION_LEGAL_NAME}`,
+      paymentIntentId: paymentIntent.id,
+      reference: paymentIntent.reference || paymentIntent.id,
+      authorization_url: paymentIntent.authorizationUrl,
+      authorizationUrl: paymentIntent.authorizationUrl,
+      access_code: paymentIntent.accessCode,
+      merchant: INSTITUTION_LEGAL_NAME,
+      tradingAs: INSTITUTION_TRADING_AS_LINE,
     });
-  } catch {
-    return error('Payment processing is not yet available. Please try again later.', 501);
+  } catch (e: any) {
+    const msg = e instanceof Error ? e.message : '';
+    if (/email is required/i.test(msg)) return error(msg, 400);
+    if (/not yet available|no real adapter|unimplemented/i.test(msg)) {
+      return error('Payment processing is not yet available. Please try again later.', 501);
+    }
+    return error(msg || 'Payment processing is not yet available. Please try again later.', 500);
   }
 }
 

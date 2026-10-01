@@ -143,18 +143,33 @@ describe('student routes', () => {
       expect(res.status).toBe(400);
     });
 
-    it('pays invoice and returns payment intent id', async () => {
+    it('initializes Paystack checkout and returns authorization_url (does not mark paid)', async () => {
+      const firstMock = vi.fn()
+        .mockResolvedValueOnce({ id: 'inv1', amount: 1000, status: 'unpaid' })
+        .mockResolvedValueOnce({ email: 'student@example.com' });
+      const runMock = vi.fn().mockResolvedValue({});
       const db = {
         prepare: vi.fn().mockReturnValue({
-          bind: vi.fn().mockReturnValue({
-            first: vi.fn().mockResolvedValue({ id: 'inv1', amount: 1000, status: 'unpaid' }),
-            run: vi.fn().mockResolvedValue({}),
-          }),
+          bind: vi.fn().mockReturnValue({ first: firstMock, run: runMock }),
         }),
       };
-      const res = await handlePayInvoice(new Request('http://localhost'), makeEnv(db), 'u1', 'inv1');
+      const env = makeEnv(db);
+      env.PLATFORM_CONTEXT.payment.createPaymentIntent.mockResolvedValue({
+        id: 'BMI-1',
+        amount: 1000,
+        currency: 'ngn',
+        status: 'pending',
+        authorizationUrl: 'https://checkout.paystack.com/x',
+        reference: 'BMI-1',
+      });
+      const res = await handlePayInvoice(new Request('http://localhost'), env, 'u1', 'inv1');
       const body = await res.json() as any;
-      expect(body.data.paymentIntentId).toBe('pi_mock_123');
+      expect(res.status).toBe(200);
+      expect(body.data.paymentIntentId).toBe('BMI-1');
+      expect(body.data.authorization_url).toBe('https://checkout.paystack.com/x');
+      expect(body.data.merchant).toBe('BEMI TRAINING INSTITUTE');
+      // Invoice must NOT be marked paid at initialize time.
+      expect(runMock).not.toHaveBeenCalled();
     });
   });
 

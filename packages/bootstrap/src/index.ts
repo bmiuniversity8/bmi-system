@@ -43,6 +43,7 @@ import {
   MemoryNotificationAdapter,
   MemoryStorageAdapter,
   StripeAdapter,
+  PaystackAdapter,
   PdfDocumentAdapter,
   D1IdentityAdapter,
 } from '@bmi/adapters';
@@ -111,9 +112,11 @@ function buildCloudflare(env: any): PlatformContext {
     ? new CloudflareWriteQueueAdapter(env.WRITE_QUEUE)
     : new MemoryWriteQueueAdapter();
 
-  const paymentProvider = env.STRIPE_SECRET_KEY
-    ? new StripeAdapter(env.STRIPE_SECRET_KEY, env.STRIPE_WEBHOOK_SECRET)
-    : unimplemented<IPaymentProvider>('payment');
+  const paymentProvider = env.PAYSTACK_SECRET_KEY
+    ? new PaystackAdapter(env.PAYSTACK_SECRET_KEY, { webhookSecret: env.PAYSTACK_WEBHOOK_SECRET })
+    : env.STRIPE_SECRET_KEY
+      ? new StripeAdapter(env.STRIPE_SECRET_KEY, env.STRIPE_WEBHOOK_SECRET)
+      : unimplemented<IPaymentProvider>('payment');
 
   // Database: prefer Neon (Postgres) when a connection string is configured,
   // otherwise fall back to D1 during the strangler-fig migration phase.

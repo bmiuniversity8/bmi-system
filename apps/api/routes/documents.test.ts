@@ -68,6 +68,7 @@ function makeEnv(overrides: Record<string, unknown> = {}) {
       createPaymentIntent: vi.fn(),
       getPaymentIntent: vi.fn(),
       cancelPaymentIntent: vi.fn(),
+      verifyPaymentIntent: vi.fn(),
       handleWebhook: vi.fn(),
     },
     document: {

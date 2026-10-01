@@ -309,8 +309,7 @@ export const api = {
   },
 
   student: {
-    getRegistrationEligibility: (termId?: string) => {
-      const qs = termId ? `?term_id=${encodeURIComponent(termId)}` : '';
+    getRegistrationEligibility: (termId?: string) => {      const qs = termId ? `?term_id=${encodeURIComponent(termId)}` : '';
       return request<{
         eligible: boolean;
         status: string;
@@ -345,7 +344,18 @@ export const api = {
       body: JSON.stringify({ course_id })
     }),
     getFinances: () => request<any>('/student/finances'),
-    payInvoice: (invoiceId: string) => request<{ success: boolean }>(`/student/invoices/${invoiceId}/pay`, { method: 'POST' }),
+    payInvoice: (invoiceId: string) => request<{
+      success: boolean;
+      requires_action?: boolean;
+      paymentIntentId?: string;
+      reference?: string;
+      authorization_url?: string;
+      authorizationUrl?: string;
+      access_code?: string;
+      merchant?: string;
+      tradingAs?: string;
+      message?: string;
+    }>(`/student/invoices/${invoiceId}/pay`, { method: 'POST' }),
     dropCourse: (course_id: string) => request<{ success: boolean; message: string }>(`/student/courses/${course_id}/drop`, { method: 'POST' }),
     getTranscript: () => request<{ classes: any[]; gpa: string | null }>('/student/transcript'),
     getDeadlines: () => request<Array<{ title: string; date: string; type: string; tag: string; color: string }>>('/v1/dashboard/deadlines'),
@@ -375,6 +385,24 @@ export const api = {
     getHolds: () => request<any[]>('/student/holds'),
     getAttendance: () => request<any[]>('/v1/attendance'),
     getRegistrationProgress: () => request<any>('/student/registration-progress'),
+  },
+
+  payments: {
+    createIntent: (body: { amount: number; reason?: string; email?: string; currency?: string; invoiceId?: string }) =>
+      request<{
+        intentId: string;
+        reference: string;
+        authorizationUrl?: string;
+        accessCode?: string;
+        clientSecret?: string;
+        merchant: string;
+        tradingAs: string;
+        publishableKey?: string;
+      }>('/payment/create-intent', { method: 'POST', body: JSON.stringify(body) }),
+    verify: (reference: string) =>
+      request<{ verified: boolean; status: string; reference: string }>(
+        `/payment/verify/${encodeURIComponent(reference)}`,
+      ),
   },
 
   notifications: {

@@ -464,6 +464,7 @@ export function invoiceCreatedEmail(
       A new invoice has been generated for your BMI University account.
     </p>
     <div style="background: #f8fafc; border-left: 4px solid #d4af37; padding: 20px; margin: 20px 0; border-radius: 4px;">
+      <p style="margin: 8px 0;"><strong>Payee:</strong> BEMI TRAINING INSTITUTE (trading as BMI University) — via Paystack</p>
       <p style="margin: 8px 0;"><strong>Invoice ID:</strong> ${invoice.id.substring(0, 8).toUpperCase()}</p>
       <p style="margin: 8px 0;"><strong>Description:</strong> ${invoice.description}</p>
       <p style="margin: 8px 0;"><strong>Amount Due:</strong> <span style="color: #dc2626; font-size: 18px; font-weight: bold;">${amountFormatted}</span></p>

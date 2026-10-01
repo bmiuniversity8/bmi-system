@@ -70,6 +70,13 @@ export function makeContextWithRealDb(db: PostgresDatabaseAdapter) {
       }),
       getPaymentIntent: vi.fn(),
       cancelPaymentIntent: vi.fn(),
+      verifyPaymentIntent: vi.fn().mockImplementation(async (reference: string) => ({
+        id: reference,
+        amount: 1000,
+        currency: 'ngn',
+        status: 'succeeded',
+        reference,
+      })),
       handleWebhook: vi.fn(),
     },
     document: {

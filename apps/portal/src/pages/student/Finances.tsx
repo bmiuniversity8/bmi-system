@@ -32,13 +32,41 @@ export default function Finances() {
 
   useEffect(() => {
     loadFinances();
+    // Paystack callback: ?reference= / ?trxref= — re-verify server-side before celebrating.
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const reference = params.get('reference') || params.get('trxref');
+      if (reference) {
+        api.payments.verify(reference)
+          .then((v) => {
+            if (v.verified) {
+              setAlert({ type: 'success', msg: `Payment verified! Receipt logged under BEMI TRAINING INSTITUTE (ref: ${v.reference}).` });
+            } else {
+              setAlert({ type: 'danger', msg: `Payment not yet confirmed (status: ${v.status}). If debited, it will reconcile automatically via webhook.` });
+            }
+            loadFinances();
+          })
+          .catch((e: any) => setAlert({ type: 'danger', msg: e.message || 'Payment verification failed' }));
+      }
+    } catch { /* ignore */ }
   }, []);
 
   const handlePay = async (invoiceId: string) => {
     setPaying(invoiceId);
     try {
-      await api.student.payInvoice(invoiceId);
-      setAlert({ type: 'success', msg: 'Payment processed successfully! Your receipt has been logged.' });
+      const result = await api.student.payInvoice(invoiceId);
+      const checkoutUrl = result.authorization_url || result.authorizationUrl;
+      if (checkoutUrl) {
+        // Paystack best practice: redirect to the server-initialized checkout URL.
+        // The payee shown on Paystack is BEMI TRAINING INSTITUTE (registered business).
+        setAlert({
+          type: 'success',
+          msg: `Redirecting to secure Paystack checkout — payee: ${result.merchant || 'BEMI TRAINING INSTITUTE'}. Complete payment to clear this invoice.`,
+        });
+        window.location.href = checkoutUrl;
+        return;
+      }
+      setAlert({ type: 'success', msg: result.message || 'Payment initialized. Follow the checkout prompt to complete payment.' });
       loadFinances();
     } catch (e: any) {
       setAlert({ type: 'danger', msg: e.message || 'Payment failed' });
@@ -71,6 +99,7 @@ export default function Finances() {
           </div>
           <p style={{ color: 'var(--slate)', fontSize: '0.95rem', marginTop: '0.25rem' }}>
             Manage invoices, tuition payments, installment plans, and financial statements.
+            All payments are received by <strong>BEMI TRAINING INSTITUTE</strong> (trading as BMI University) via Paystack.
           </p>
         </div>
       </div>
@@ -199,7 +228,8 @@ export default function Finances() {
               </div>
             </div>
             <div style={{ padding: '0.85rem', background: 'var(--bg)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              ℹ️ Payments are processed via encrypted financial gateway. Direct electronic check (ACH) and debit/credit cards accepted.
+              🔒 Secured by <strong>Paystack</strong>. Payee on checkout &amp; bank statement: <strong>BEMI TRAINING INSTITUTE</strong> (trading as BMI University).
+              Cards, bank transfer, USSD &amp; mobile money accepted.
             </div>
           </div>
 
@@ -301,8 +331,8 @@ export default function Finances() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.25rem' }}>
               <div style={{ padding: '0.85rem', background: 'var(--bg)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
                 <div style={{ fontSize: '0.75rem', color: 'var(--slate)', fontWeight: 700 }}>FILER'S Name & Address</div>
-                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--navy)', marginTop: '0.2rem' }}>BMI UNIVERSITY</div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--slate)' }}>Office of Student Accounts & Bursar</div>
+                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--navy)', marginTop: '0.2rem' }}>BEMI TRAINING INSTITUTE</div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--slate)' }}>Trading as BMI University • Office of Student Accounts & Bursar</div>
                 <div style={{ fontSize: '0.8rem', color: 'var(--slate)' }}>EIN: 56-1234567 • Tel: 704-607-5540</div>
               </div>
 

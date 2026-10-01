@@ -3,13 +3,24 @@ import userEvent from '@testing-library/user-event';
 import DocumentRequest from './DocumentRequest';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { api } from '../../lib/api';
 
+vi.mock('../../lib/api', () => ({
+  api: {
+    payments: {
+      createIntent: vi.fn(),
+    },
+  },
+}));
 
 describe('DocumentRequest Page', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    globalThis.fetch = vi.fn();
     window.alert = vi.fn();
+    // @ts-expect-error jsdom navigation
+    delete window.location;
+    // @ts-expect-error jsdom navigation
+    window.location = { href: '' };
   });
 
   const renderPage = () => {
@@ -38,9 +49,18 @@ describe('DocumentRequest Page', () => {
     expect(options[2]).toHaveTextContent('Enrollment Letter (Free)');
   });
 
-  it('calls payment create-intent on submit', async () => {
-    (globalThis.fetch as any).mockResolvedValue({
-      json: () => Promise.resolve({ clientSecret: 'secret_123' }),
+  it('shows the BEMI merchant line (Paystack payee)', () => {
+    renderPage();
+    expect(screen.getByText(/BEMI TRAINING INSTITUTE/i)).toBeInTheDocument();
+  });
+
+  it('initializes Paystack intent and redirects to checkout on submit', async () => {
+    vi.mocked(api.payments.createIntent).mockResolvedValue({
+      intentId: 'BMI-1',
+      reference: 'BMI-1',
+      authorizationUrl: 'https://checkout.paystack.com/x',
+      merchant: 'BEMI TRAINING INSTITUTE',
+      tradingAs: 'BEMI TRAINING INSTITUTE (trading as BMI University)',
     });
 
     const user = userEvent.setup();
@@ -49,21 +69,15 @@ describe('DocumentRequest Page', () => {
     fireEvent.click(screen.getByRole('button', { name: /Request Document/i }));
 
     await waitFor(() => {
-      expect(globalThis.fetch).toHaveBeenCalledWith(
-        '/api/payment/create-intent',
-        expect.objectContaining({
-          method: 'POST',
-          body: JSON.stringify({ amount: 15, reason: 'Document Request: transcript' }),
-        }),
+      expect(api.payments.createIntent).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 15, reason: 'Document Request: transcript' }),
       );
     });
-    expect(window.alert).toHaveBeenCalledWith(
-      'Payment required. Redirecting to Stripe checkout... (Mocked)',
-    );
+    expect(window.location.href).toBe('https://checkout.paystack.com/x');
   });
 
   it('shows processing state while submitting', async () => {
-    (globalThis.fetch as any).mockImplementation(() => new Promise(() => {}));
+    vi.mocked(api.payments.createIntent).mockImplementation(() => new Promise(() => {}));
 
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: /Request Document/i }));
@@ -71,20 +85,23 @@ describe('DocumentRequest Page', () => {
     expect(screen.getByRole('button', { name: /Processing.../i })).toBeDisabled();
   });
 
-  it('shows alert on fetch error', async () => {
-    (globalThis.fetch as any).mockRejectedValue(new Error('Network error'));
+  it('shows alert on error', async () => {
+    vi.mocked(api.payments.createIntent).mockRejectedValue(new Error('Network error'));
 
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: /Request Document/i }));
 
     await waitFor(() => {
-      expect(window.alert).toHaveBeenCalledWith('An error occurred.');
+      expect(window.alert).toHaveBeenCalledWith('Network error');
     });
   });
 
   it('sends correct reason based on selected document type', async () => {
-    (globalThis.fetch as any).mockResolvedValue({
-      json: () => Promise.resolve({ clientSecret: 'secret' }),
+    vi.mocked(api.payments.createIntent).mockResolvedValue({
+      intentId: 'BMI-2',
+      reference: 'BMI-2',
+      merchant: 'BEMI TRAINING INSTITUTE',
+      tradingAs: 'BEMI TRAINING INSTITUTE (trading as BMI University)',
     });
 
     renderPage();
@@ -96,11 +113,8 @@ describe('DocumentRequest Page', () => {
     fireEvent.click(screen.getByRole('button', { name: /Request Document/i }));
 
     await waitFor(() => {
-      expect(globalThis.fetch).toHaveBeenCalledWith(
-        '/api/payment/create-intent',
-        expect.objectContaining({
-          body: expect.stringContaining('Document Request: certificate'),
-        }),
+      expect(api.payments.createIntent).toHaveBeenCalledWith(
+        expect.objectContaining({ reason: expect.stringContaining('Document Request: certificate') }),
       );
     });
   });

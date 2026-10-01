@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { api } from '../../lib/api';
 
 export default function DocumentRequest() {
   const [docType, setDocType] = useState('transcript');
@@ -8,20 +9,21 @@ export default function DocumentRequest() {
     e.preventDefault();
     setLoading(true);
     try {
-      // 1. Create Payment Intent
-      const payRes = await fetch('/api/payment/create-intent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: 15, reason: `Document Request: ${docType}` })
+      // 1. Initialize Paystack transaction (backend-only; payee: BEMI TRAINING INSTITUTE)
+      const intent = await api.payments.createIntent({
+        amount: 15,
+        reason: `Document Request: ${docType}`,
+        currency: 'NGN',
       });
-      const payData = (await payRes.json()) as any;
-      
-      if (payData?.clientSecret) {
-        alert('Payment required. Redirecting to Stripe checkout... (Mocked)');
-        // Stripe elements would be rendered here
+
+      const checkoutUrl = intent.authorizationUrl;
+      if (checkoutUrl) {
+        window.location.href = checkoutUrl;
+        return;
       }
-    } catch (err) {
-      alert('An error occurred.');
+      alert(`Payment initialized with ${intent.merchant}. Complete checkout to proceed.`);
+    } catch (err: any) {
+      alert(err?.message || 'An error occurred.');
     } finally {
       setLoading(false);
     }
@@ -34,7 +36,7 @@ export default function DocumentRequest() {
         <form onSubmit={handleRequest} className="space-y-4">
           <div>
             <label className="block text-sm font-medium mb-1">Document Type</label>
-            <select 
+            <select
               className="w-full border p-2 rounded"
               value={docType}
               onChange={e => setDocType(e.target.value)}
@@ -44,9 +46,12 @@ export default function DocumentRequest() {
               <option value="enrollment_letter">Enrollment Letter (Free)</option>
             </select>
           </div>
-          <button 
-            type="submit" 
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700" 
+          <p className="text-xs text-gray-500">
+            Payments secured by Paystack • Payee: BEMI TRAINING INSTITUTE (trading as BMI University)
+          </p>
+          <button
+            type="submit"
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
             disabled={loading}
           >
             {loading ? 'Processing...' : 'Request Document'}

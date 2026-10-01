@@ -14,6 +14,9 @@ vi.mock('../../lib/api', () => ({
     finance: {
       getFinancialAid: vi.fn(),
     },
+    payments: {
+      verify: vi.fn(),
+    },
   },
 }));
 

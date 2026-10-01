@@ -193,6 +193,9 @@ export function makeContext(db?: any) {
     },
     payment: {
       createPaymentIntent: vi.fn().mockResolvedValue({ id: 'pi_mock_123', amount: 1000, currency: 'USD', status: 'succeeded' }),
+      getPaymentIntent: vi.fn().mockResolvedValue(null),
+      cancelPaymentIntent: vi.fn().mockImplementation(async (id: string) => ({ id, amount: 0, currency: 'ngn', status: 'canceled' as const })),
+      verifyPaymentIntent: vi.fn().mockImplementation(async (reference: string) => ({ id: reference, amount: 1000, currency: 'ngn', status: 'succeeded' as const, reference })),
       handleWebhook: vi.fn(),
     },
     alumni: {

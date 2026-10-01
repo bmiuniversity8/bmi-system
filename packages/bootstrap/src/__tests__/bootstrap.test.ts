@@ -21,13 +21,20 @@ describe('bootstrap', () => {
     expect(typeof ctx.email.sendEmail).toBe('function');
   });
 
+  it('buildCloudflare: prefers PaystackAdapter when PAYSTACK_SECRET_KEY is set', async () => {
+    const env = { PLATFORM_PROVIDER: 'cloudflare', DB: {}, PAYSTACK_SECRET_KEY: 'sk_test_xxx', JWT_SECRET: 'test' };
+    const ctx = bootstrap(env);
+    expect(typeof ctx.payment.createPaymentIntent).toBe('function');
+    expect(typeof ctx.payment.verifyPaymentIntent).toBe('function');
+  });
+
   it('buildCloudflare: wires StripeAdapter when STRIPE_SECRET_KEY is set', async () => {
     const env = { PLATFORM_PROVIDER: 'cloudflare', DB: {}, STRIPE_SECRET_KEY: 'sk_test_xxx', JWT_SECRET: 'test' };
     const ctx = bootstrap(env);
     expect(typeof ctx.payment.createPaymentIntent).toBe('function');
   });
 
-  it('buildCloudflare: uses unimplemented proxy for payment when no STRIPE_SECRET_KEY', async () => {
+  it('buildCloudflare: uses unimplemented proxy for payment when no gateway key is set', async () => {
     const env = { PLATFORM_PROVIDER: 'cloudflare', DB: {}, JWT_SECRET: 'test' };
     const ctx = bootstrap(env);
     try {

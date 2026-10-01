@@ -48,7 +48,7 @@ import {
 import { handleClaimAccount } from './routes/claim';
 import { handleGetOnboardingStatus, handleUploadStudentDocument } from './routes/onboarding';
 import { handleLmsCourses, handleLmsGrades } from './routes/lms';
-import { handleCreatePaymentIntent, handlePaymentWebhook } from './routes/payment';
+import { handleCreatePaymentIntent, handlePaymentWebhook, handleVerifyPayment } from './routes/payment';
 import {
   handleSaveRegistrationStep,
   handleGetRegistrationStatus,
@@ -324,6 +324,7 @@ const ROUTES: Route[] = [
   { method: 'GET', path: /^\/api\/lms\/courses$/, roles: ['student'], handler: async (req, env, _p, auth) => handleLmsCourses(req, env, auth!.user.sub) },
   { method: 'GET', path: /^\/api\/lms\/grades$/, roles: ['student'], handler: async (req, env, _p, auth) => handleLmsGrades(req, env, auth!.user.sub) },
   { method: 'POST', path: /^\/api\/payment\/create-intent$/, roles: ['student'], handler: async (req, env, _p, auth) => handleCreatePaymentIntent(req, env, auth!.user.sub) },
+  { method: 'GET', path: /^\/api\/payment\/verify(?:\/([^/]+))?$/, roles: ['student'], handler: async (req, env, p, auth) => handleVerifyPayment(req, env, auth!.user.sub, p[1]) },
   { method: 'POST', path: /^\/api\/payment\/webhook$/, roles: undefined, handler: async (req, env) => handlePaymentWebhook(req, env) },
   { method: 'GET', path: /^\/api\/registration\/status$/, roles: ['student'], handler: async (req, env, _p, auth) => handleGetRegistrationStatus(req, env, auth!.user.sub) },
   { method: 'POST', path: /^\/api\/registration\/complete$/, roles: ['student'], handler: async (req, env, _p, auth, ctx) => handleCompleteRegistration(req, env, auth!.user.sub, ctx) },

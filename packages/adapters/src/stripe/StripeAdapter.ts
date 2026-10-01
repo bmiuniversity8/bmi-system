@@ -24,6 +24,7 @@ export class StripeAdapter implements IPaymentProvider {
       currency: intent.currency,
       status: this.mapStatus(intent.status),
       clientSecret: intent.client_secret || undefined,
+      provider: 'stripe',
     };
   }
 
@@ -36,6 +37,7 @@ export class StripeAdapter implements IPaymentProvider {
         currency: intent.currency,
         status: this.mapStatus(intent.status),
         clientSecret: intent.client_secret || undefined,
+        provider: 'stripe',
       };
     } catch {
       return null;
@@ -49,7 +51,14 @@ export class StripeAdapter implements IPaymentProvider {
       amount: intent.amount / 100,
       currency: intent.currency,
       status: this.mapStatus(intent.status),
+      provider: 'stripe',
     };
+  }
+
+  async verifyPaymentIntent(id: string): Promise<PaymentIntent> {
+    const intent = await this.getPaymentIntent(id);
+    if (!intent) throw new Error(`Payment intent not found: ${id}`);
+    return intent;
   }
 
   async handleWebhook(payload: string, signature: string): Promise<PaymentIntent> {

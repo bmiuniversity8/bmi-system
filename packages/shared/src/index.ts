@@ -38,6 +38,23 @@ export {
 export type { BrandColorKey } from './tokens.js';
 export { BrandColors } from './tokens.js';
 
+// Institution identity (legal vs academic brand harmonization)
+export {
+  INSTITUTION_LEGAL_NAME,
+  INSTITUTION_LEGAL_SHORT,
+  INSTITUTION_ACADEMIC_BRAND,
+  INSTITUTION_ACADEMIC_FULL,
+  INSTITUTION_TRADING_AS_LINE,
+  PAYMENT_MERCHANT_NAME,
+  PAYMENT_STATEMENT_DESCRIPTOR,
+  PAYMENT_SUPPORT_LINE,
+  PAYSTACK_SUPPORTED_CURRENCIES,
+  PAYSTACK_DEFAULT_CURRENCY,
+  PAYSTACK_DEFAULT_CHANNELS,
+} from './institution.js';
+export type { PaystackCurrency } from './institution.js';
+export { buildPaymentDescription, paymentReceiptFooter } from './institution.js';
+
 // API contract types
 export type {
   ApiSuccess,
