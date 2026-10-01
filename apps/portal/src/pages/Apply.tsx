@@ -60,12 +60,16 @@ const COUNTRIES_LIST = [
 
 const TOP_COUNTRIES = COUNTRIES_LIST.slice(0, 7);
 
+import { validateDocument } from '../lib/documentValidation';
+import type { DocumentValidationResult } from '../lib/documentValidation';
+
 interface StagedDoc {
   id: string;
   file: File;
   docType: string;
   name: string;
   sizeKb: number;
+  validation?: DocumentValidationResult;
 }
 
 // Zod schemas (matching backend definitions)
@@ -303,19 +307,25 @@ export default function Apply() {
   const canProceedStep2 = SubmitApplicationSchema.pick({ prior_education: true }).safeParse(form).success;
   const canProceedStep3 = SubmitApplicationSchema.pick({ personal_statement: true }).safeParse(form).success;
 
-  const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 10 * 1024 * 1024) {
-      setError('File is too large (maximum 10 MB).');
+    
+    setError('');
+    const validation = await validateDocument(file, selectedDocType);
+    if (!validation.valid) {
+      setError(validation.errors.join(' '));
+      if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
+
     const newDoc: StagedDoc = {
       id: crypto.randomUUID(),
       file,
       docType: selectedDocType,
       name: file.name,
-      sizeKb: Math.round(file.size / 1024),
+      sizeKb: validation.sizeKb,
+      validation,
     };
     setStagedDocs(prev => [...prev, newDoc]);
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -817,27 +827,53 @@ export default function Apply() {
                     <p style={{ margin: 0, fontSize: '0.85rem' }}>No documents attached yet (optional during submission).</p>
                   </div>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                     {stagedDocs.map(d => (
                       <div
                         key={d.id}
-                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.85rem', background: 'white', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' }}
+                        style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', padding: '0.75rem 1rem', background: 'white', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' }}
                       >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <span className="badge badge-submitted" style={{ textTransform: 'capitalize', fontSize: '0.75rem' }}>
-                            {d.docType.replace('_', ' ')}
-                          </span>
-                          <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{d.name}</span>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--slate)' }}>({d.sizeKb} KB)</span>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                            {d.validation?.previewUrl ? (
+                              <img
+                                src={d.validation.previewUrl}
+                                alt="Preview"
+                                style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 4, border: '1px solid var(--border)' }}
+                              />
+                            ) : (
+                              <div style={{ width: 36, height: 36, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, fontSize: '1.1rem' }}>
+                                📄
+                              </div>
+                            )}
+                            <div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                <span className="badge badge-submitted" style={{ textTransform: 'capitalize', fontSize: '0.75rem' }}>
+                                  {d.docType.replace('_', ' ')}
+                                </span>
+                                <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{d.name}</span>
+                              </div>
+                              <div style={{ fontSize: '0.75rem', color: 'var(--slate)', marginTop: 2 }}>
+                                {d.sizeKb} KB • {d.validation?.detectedFormat || 'Verified File'}
+                                {d.validation?.dimensions && ` (${d.validation.dimensions.width}×${d.validation.dimensions.height}px)`}
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeStagedDoc(d.id)}
+                            style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', fontSize: '1.1rem', fontWeight: 800 }}
+                            title="Remove file"
+                          >
+                            ✕
+                          </button>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => removeStagedDoc(d.id)}
-                          style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', fontSize: '1.1rem', fontWeight: 800 }}
-                          title="Remove file"
-                        >
-                          ✕
-                        </button>
+
+                        {d.validation?.warnings && d.validation.warnings.length > 0 && (
+                          <div style={{ background: '#fffbeb', border: '1px solid #fef3c7', padding: '0.4rem 0.6rem', borderRadius: 4, fontSize: '0.75rem', color: '#b45309' }}>
+                            ⚠️ {d.validation.warnings.join(' ')}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

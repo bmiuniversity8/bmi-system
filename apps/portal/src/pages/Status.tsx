@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../hooks/useAuth';
 import type { Application, RecommendationRequest, StatusLogEntry, AdmissionsDecision } from '../lib/api';
+import { validateDocument } from '../lib/documentValidation';
 
 const STATUS_STEPS: Record<string, { label: string; icon: string; pct: number }> = {
   draft: { label: 'Draft', icon: '📝', pct: 10 },
@@ -122,10 +123,13 @@ export default function Status() {
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !app) return;
-    if (file.size > 10 * 1024 * 1024) {
-      setUploadStatus(s => ({ ...s, [docType]: 'File is too large (max 10 MB)' }));
+
+    const validation = await validateDocument(file, docType);
+    if (!validation.valid) {
+      setUploadStatus(s => ({ ...s, [docType]: validation.errors.join(' ') }));
       return;
     }
+
     setUploadStatus(s => ({ ...s, [docType]: 'uploading' }));
     try {
       const result: any = await api.documents.upload(app.id, docType, file);
