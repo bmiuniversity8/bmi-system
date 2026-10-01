@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect, useRef } from 'react';
 
 export interface ScheduleTimeSlot {
   day: 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri';
@@ -116,12 +116,17 @@ export default function ScheduleVisualizer({
       }
     }
 
-    if (onConflictDetected) {
-      onConflictDetected(foundConflicts.length > 0, foundConflicts);
-    }
-
     return foundConflicts;
-  }, [scheduledCourses, onConflictDetected]);
+  }, [scheduledCourses]);
+
+  const onConflictDetectedRef = useRef(onConflictDetected);
+  useEffect(() => {
+    onConflictDetectedRef.current = onConflictDetected;
+  });
+
+  useEffect(() => {
+    onConflictDetectedRef.current?.(conflicts.length > 0, conflicts);
+  }, [conflicts]);
 
   // Total Contact Hours calculation
   const totalWeeklyHours = useMemo(() => {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
 import ScheduleVisualizer from './ScheduleVisualizer';
@@ -55,6 +55,11 @@ export default function RegistrationWizard() {
   const [completed, setCompleted] = useState(false);
   const [hasScheduleConflict, setHasScheduleConflict] = useState(false);
   const [scheduleConflicts, setScheduleConflicts] = useState<ScheduleConflict[]>([]);
+
+  const handleConflictDetected = useCallback((conflict: boolean, conflictsList: ScheduleConflict[]) => {
+    setHasScheduleConflict(conflict);
+    setScheduleConflicts(conflictsList);
+  }, []);
 
   // Form State
   const [profile, setProfile] = useState<PersonalDetails>({
@@ -458,10 +463,7 @@ export default function RegistrationWizard() {
               <ScheduleVisualizer
                 courses={availableCourses}
                 selectedCourseIds={selectedCourseIds}
-                onConflictDetected={(conflict, conflictsList) => {
-                  setHasScheduleConflict(conflict);
-                  setScheduleConflicts(conflictsList);
-                }}
+                onConflictDetected={handleConflictDetected}
               />
             </div>
           )}

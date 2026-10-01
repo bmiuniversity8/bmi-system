@@ -144,6 +144,6 @@ describe('RegistrationWizard Page', () => {
     fireEvent.click(screen.getByText(/Save & Continue/i));
     await waitFor(() => expect(screen.getByText(/Course & Section Selection/i)).toBeInTheDocument());
 
-    expect(screen.getByText(/BIB101/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/BIB101/i).length).toBeGreaterThan(0);
   });
 });
