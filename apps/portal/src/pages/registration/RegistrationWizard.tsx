@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
+import ScheduleVisualizer from './ScheduleVisualizer';
+import type { ScheduleConflict } from './ScheduleVisualizer';
 
 const STEP_LABELS = [
   'Profile & Emergency Contacts',
@@ -51,6 +53,8 @@ export default function RegistrationWizard() {
   const [eligibility, setEligibility] = useState<EligibilityState | null>(null);
   const [error, setError] = useState('');
   const [completed, setCompleted] = useState(false);
+  const [hasScheduleConflict, setHasScheduleConflict] = useState(false);
+  const [scheduleConflicts, setScheduleConflicts] = useState<ScheduleConflict[]>([]);
 
   // Form State
   const [profile, setProfile] = useState<PersonalDetails>({
@@ -173,6 +177,10 @@ export default function RegistrationWizard() {
         setError('Please select at least one course module for the semester.');
         return;
       }
+      if (hasScheduleConflict) {
+        setError('Please resolve the timetable conflict between selected courses before proceeding.');
+        return;
+      }
     }
     if (currentStep === 3) {
       if (!acceptedFeeStructure) {
@@ -267,14 +275,26 @@ export default function RegistrationWizard() {
           <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', lineHeight: 1.6 }}>
             Your enrollment agreement has been digitally signed and your course schedule is confirmed (Status: <strong style={{ color: 'var(--success)' }}>REGISTERED</strong>).
           </p>
-          <div style={{ background: '#f0fdf4', padding: '1rem', borderRadius: 8, border: '1px solid #bbf7d0', marginBottom: '2rem', textAlign: 'left', fontSize: '0.875rem' }}>
-            <div><strong>Locked Catalog Year:</strong> {eligibility?.catalogYearId || 'CAT-2026'}</div>
-            <div><strong>Registered Credits:</strong> {totalSelectedCredits} credits</div>
+          <div style={{ background: '#f0fdf4', padding: '1.25rem', borderRadius: 8, border: '1px solid #bbf7d0', marginBottom: '1.5rem', textAlign: 'left', fontSize: '0.875rem' }}>
+            <div style={{ marginBottom: '0.5rem' }}><strong>Term:</strong> {eligibility?.term?.name || 'Academic Term'}</div>
+            <div style={{ marginBottom: '0.5rem' }}><strong>Locked Catalog Year:</strong> <span style={{ fontFamily: 'monospace' }}>{eligibility?.catalogYearId || 'CAT-2026'}</span></div>
+            <div style={{ marginBottom: '0.5rem' }}><strong>Registered Load:</strong> {totalSelectedCredits} Credits ({selectedCourseIds.length} Modules)</div>
             <div><strong>Net Balance:</strong> ${feeAgreement?.net_balance_due.toFixed(2) || '0.00'}</div>
           </div>
-          <a href="/student/dashboard" className="btn btn-gold btn-full">
-            Enter Student Portal & Dashboard →
-          </a>
+
+          <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="btn btn-outline btn-full"
+              onClick={() => window.print()}
+              style={{ flex: 1 }}
+            >
+              🖨️ Print Registration Slip
+            </button>
+            <a href="/student/dashboard" className="btn btn-gold btn-full" style={{ flex: 1 }}>
+              Enter Student Portal →
+            </a>
+          </div>
         </div>
       </div>
     );
@@ -433,6 +453,16 @@ export default function RegistrationWizard() {
                   );
                 })}
               </div>
+
+              {/* Dynamic Live Timetable & Schedule Grid */}
+              <ScheduleVisualizer
+                courses={availableCourses}
+                selectedCourseIds={selectedCourseIds}
+                onConflictDetected={(conflict, conflictsList) => {
+                  setHasScheduleConflict(conflict);
+                  setScheduleConflicts(conflictsList);
+                }}
+              />
             </div>
           )}
 
