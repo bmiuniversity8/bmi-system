@@ -23,7 +23,7 @@ export function formatE164Phone(rawPhone: string, defaultCountryCode: string = '
   if (!rawPhone || typeof rawPhone !== 'string') return null;
 
   // Strip whitespace, hyphens, parentheses, and letters
-  let cleaned = rawPhone.replace(/[\s\-\(\)\.]/g, '').trim();
+  let cleaned = rawPhone.replace(/[\s\-().]/g, '').trim();
 
   // Handle leading 00 as +
   if (cleaned.startsWith('00')) {
