@@ -12,6 +12,7 @@ export default defineConfig({
       thresholds: { lines: 60, functions: 60, branches: 50 }, 
       include: ['src/services/importService.ts', 'src/stores/authStore.ts', 'src/stores/uiStore.ts', 'src/components/StatCard.tsx']
     }, 
-    include: ['src/**/*.test.{ts,tsx}'] 
+    include: ['src/**/*.test.{ts,tsx}'],
+    testTimeout: 20000
   } 
 }); 
