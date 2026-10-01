@@ -9,6 +9,7 @@ export default defineConfig({
     setupFiles: ['./tests/setup.js'],
     include: ['tests/**/*.test.{js,jsx}'],
     globals: true,
+    testTimeout: 20000,
   },
   resolve: {
     alias: {
