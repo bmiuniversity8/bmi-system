@@ -8,6 +8,13 @@
       "when": 1786154160637,
       "tag": "0000_square_bushwacker",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790907837325,
+      "tag": "0001_wide_the_anarchist",
+      "breakpoints": true
     }
   ]
 }
