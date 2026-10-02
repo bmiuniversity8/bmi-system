@@ -3,8 +3,8 @@ import { PROGRAMS, VALID_PROGRAMS, VALID_LEVELS } from '../src/programs.js';
 import type { Program, ProgramLevel } from '../src/programs.js';
 
 describe('@bmi/shared — programs', () => {
-  it('exports exactly 17 programs', () => {
-    expect(PROGRAMS).toHaveLength(17);
+  it('exports exactly 16 active canonical programs', () => {
+    expect(PROGRAMS).toHaveLength(16);
   });
 
   it('all programs have non-empty label', () => {
@@ -39,12 +39,13 @@ describe('@bmi/shared — programs', () => {
     }
   });
 
-  it('VALID_LEVELS contains the four expected values', () => {
+  it('VALID_LEVELS contains the expected values including diploma', () => {
     expect(VALID_LEVELS).toContain('undergraduate');
     expect(VALID_LEVELS).toContain('graduate');
     expect(VALID_LEVELS).toContain('doctorate');
     expect(VALID_LEVELS).toContain('certificate');
-    expect(VALID_LEVELS).toHaveLength(4);
+    expect(VALID_LEVELS).toContain('diploma');
+    expect(VALID_LEVELS).toHaveLength(5);
   });
 
   it('has programs in each level', () => {
@@ -55,11 +56,10 @@ describe('@bmi/shared — programs', () => {
     expect(byLevel('graduate').length).toBeGreaterThan(0);
     expect(byLevel('doctorate').length).toBeGreaterThan(0);
     expect(byLevel('certificate').length).toBeGreaterThan(0);
+    expect(byLevel('diploma').length).toBeGreaterThan(0);
   });
 
   it('snapshot — program catalog shape has not changed (drift guard)', () => {
-    // This snapshot will fail if someone adds/removes/renames a program in
-    // just one repo instead of going through @bmi/shared.
     expect(PROGRAMS.map((p) => ({ label: p.label, level: p.level }))).toMatchSnapshot();
   });
 });

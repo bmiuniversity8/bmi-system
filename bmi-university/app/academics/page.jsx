@@ -11,7 +11,7 @@ export default function Academics() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${API_WORKER_URL}/api/public/programs`, { cache: 'force-cache' });
+        const res = await fetch(`${API_WORKER_URL}/api/public/programs`, { cache: 'no-store' });
         if (!res.ok) return;
         const body = await res.json();
         // Only override if the API returned a non-empty array of valid programs
@@ -28,6 +28,7 @@ export default function Academics() {
     return () => { cancelled = true; };
   }, []);
 
+  const diplomas = useMemo(() => programs.filter(p => p.level === 'diploma').map(p => ({ title: p.label, desc: p.description })), [programs]);
   const bachelors = useMemo(() => programs.filter(p => p.level === 'undergraduate').map(p => ({ title: p.label, desc: p.description })), [programs]);
   const masters = useMemo(() => programs.filter(p => p.level === 'graduate').map(p => ({ title: p.label, desc: p.description })), [programs]);
   const doctorates = useMemo(() => programs.filter(p => p.level === 'doctorate').map(p => ({ title: p.label, desc: p.description })), [programs]);
@@ -104,6 +105,28 @@ export default function Academics() {
           </div>
         </div>
       </section>
+
+      {/* Diplomas */}
+      {diplomas.length > 0 && (
+        <section id="diplomas" aria-labelledby="diplomas-heading" style={{ background: "#fff", padding: "5rem 2rem", scrollMarginTop: "120px" }}>
+          <div style={{ maxWidth: "1280px", margin: "0 auto" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "2.5rem" }}>
+              <div style={{ width: "70px", height: "70px", background: "#c5a048", borderRadius: "14px", display: "flex", alignItems: "center", justifyContent: "center", padding: "8px", flexShrink: 0 }}>
+                <img src="/images/diploma-icon.png" alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} loading="lazy" />
+              </div>
+              <div>
+                <h2 id="diplomas-heading" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: "clamp(1.6rem, 2.5vw, 2.2rem)", color: "#0f172a", lineHeight: 1.1 }}>
+                  Diploma Programmes
+                </h2>
+                <p style={{ color: "#64748b", marginTop: "0.25rem" }}>Foundational ministry and theological training</p>
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "1.5rem" }}>
+              {renderCards(diplomas)}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Bachelor's */}
       <section id="undergraduate" aria-labelledby="bachelors-heading" style={{ background: "#f8fafc", padding: "5rem 2rem", scrollMarginTop: "120px" }}>

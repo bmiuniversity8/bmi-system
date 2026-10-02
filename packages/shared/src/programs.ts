@@ -1,17 +1,14 @@
 /**
  * @bmi/shared — Programs Catalog
  *
- * Single source of truth for all academic programs offered by BMI University.
+ * Canonical program list for BMI University.
  * Both the marketing site (bmi-university) and the admissions portal (bmi-portal)
- * import from here. DO NOT duplicate this list in either consuming repo.
- *
- * To add/remove a program: edit this file, bump the package version, and update
- * the package reference in both consuming repos.
+ * import from here as fallback/types, while the database is the primary source of truth.
  */
 
 export interface Program {
   label: string;
-  level: 'undergraduate' | 'graduate' | 'doctorate' | 'certificate';
+  level: 'undergraduate' | 'graduate' | 'doctorate' | 'certificate' | 'diploma';
   description: string;
   icon?: string;
 }
@@ -21,6 +18,7 @@ const LEVEL_ICONS = {
   graduate: '/images/masters-icon.png',
   doctorate: '/images/phd-icon.png',
   certificate: undefined,
+  diploma: '/images/diploma-icon.png',
 } as const;
 
 export const PROGRAMS: Program[] = [
@@ -70,7 +68,7 @@ export const PROGRAMS: Program[] = [
     icon: LEVEL_ICONS.graduate,
   },
   {
-    label: 'MA in Theology',
+    label: 'MA in Theological Studies',
     level: 'graduate',
     description: 'Deepen your biblical knowledge and theological understanding to excel in ministry, academic, and leadership roles within the church and beyond.',
     icon: LEVEL_ICONS.graduate,
@@ -102,12 +100,6 @@ export const PROGRAMS: Program[] = [
     icon: LEVEL_ICONS.doctorate,
   },
   {
-    label: 'Doctor of Theology (ThD)',
-    level: 'doctorate',
-    description: 'Pursue high-level theological research and academic scholarship to teach, write, and lead at the highest levels of Christian education.',
-    icon: LEVEL_ICONS.doctorate,
-  },
-  {
     label: 'Doctor of Christian Education',
     level: 'doctorate',
     description: 'Equip yourself with advanced educational theory and research skills to lead and transform Christian educational institutions.',
@@ -115,11 +107,6 @@ export const PROGRAMS: Program[] = [
   },
 
   // ── Graduate Certificates ─────────────────────────────────────────────────
-  {
-    label: 'Graduate Certificate in Biblical Studies',
-    level: 'certificate',
-    description: 'Build a solid foundation in biblical interpretation and theological concepts through a flexible, short-term graduate program.',
-  },
   {
     label: 'Graduate Certificate in Christian Studies',
     level: 'certificate',
@@ -130,11 +117,19 @@ export const PROGRAMS: Program[] = [
     level: 'certificate',
     description: 'Focus on the spiritual disciplines and character formation required for deep spiritual growth and ministry longevity.',
   },
+
+  // ── Diploma ───────────────────────────────────────────────────────────────
+  {
+    label: 'Diploma in Christian Ministry and Theology',
+    level: 'diploma',
+    description: 'A foundational one-year programme equipping students with core biblical and theological understanding, spiritual formation, and practical ministry competencies.',
+    icon: LEVEL_ICONS.diploma,
+  },
 ];
 
-/** Flat list of program labels — used for server-side validation in the portal worker. */
+/** Flat list of program labels — used for validation. */
 export const VALID_PROGRAMS: string[] = PROGRAMS.map((p) => p.label);
 
 /** Valid degree level values. */
-export const VALID_LEVELS = ['undergraduate', 'graduate', 'doctorate', 'certificate'] as const;
+export const VALID_LEVELS = ['undergraduate', 'graduate', 'doctorate', 'certificate', 'diploma'] as const;
 export type ProgramLevel = (typeof VALID_LEVELS)[number];

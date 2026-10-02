@@ -19,7 +19,7 @@ export default function ApplyPage() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${API_WORKER_URL}/api/public/programs`, { cache: 'force-cache' });
+        const res = await fetch(`${API_WORKER_URL}/api/public/programs`, { cache: 'no-store' });
         if (!res.ok) return;
         const body = await res.json();
         if (!body?.success || !Array.isArray(body.data)) return;
@@ -148,17 +148,22 @@ export default function ApplyPage() {
               >
                 <option value="">Select a Program</option>
                 {[
+                  { label: "Diplomas", level: "diploma" },
                   { label: "Bachelor's Degrees", level: "undergraduate" },
                   { label: "Master's Degrees", level: "graduate" },
                   { label: "Doctorate Degrees", level: "doctorate" },
                   { label: "Graduate Certificates", level: "certificate" },
-                ].map((group) => (
-                  <optgroup key={group.level} label={group.label}>
-                    {programs.filter((p) => (p.level || "").toLowerCase() === group.level.toLowerCase()).map((p) => (
-                      <option key={p.label} value={p.label}>{p.label}</option>
-                    ))}
-                  </optgroup>
-                ))}
+                ].map((group) => {
+                  const groupPrograms = programs.filter((p) => (p.level || "").toLowerCase() === group.level.toLowerCase());
+                  if (groupPrograms.length === 0) return null;
+                  return (
+                    <optgroup key={group.level} label={group.label}>
+                      {groupPrograms.map((p) => (
+                        <option key={p.label} value={p.label}>{p.label}</option>
+                      ))}
+                    </optgroup>
+                  );
+                })}
               </select>
             </div>
 

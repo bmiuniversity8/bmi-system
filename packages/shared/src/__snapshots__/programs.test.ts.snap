@@ -31,7 +31,7 @@ exports[`@bmi/shared — programs > snapshot — program catalog shape has not c
     "level": "graduate",
   },
   {
-    "label": "MA in Theology",
+    "label": "MA in Theological Studies",
     "level": "graduate",
   },
   {
@@ -51,16 +51,8 @@ exports[`@bmi/shared — programs > snapshot — program catalog shape has not c
     "level": "doctorate",
   },
   {
-    "label": "Doctor of Theology (ThD)",
-    "level": "doctorate",
-  },
-  {
     "label": "Doctor of Christian Education",
     "level": "doctorate",
-  },
-  {
-    "label": "Graduate Certificate in Biblical Studies",
-    "level": "certificate",
   },
   {
     "label": "Graduate Certificate in Christian Studies",
@@ -69,6 +61,10 @@ exports[`@bmi/shared — programs > snapshot — program catalog shape has not c
   {
     "label": "Graduate Certificate in Spiritual Formation",
     "level": "certificate",
+  },
+  {
+    "label": "Diploma in Christian Ministry and Theology",
+    "level": "diploma",
   },
 ]
 `;
