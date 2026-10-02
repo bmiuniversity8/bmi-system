@@ -1,4 +1,5 @@
 import { pgTable, text, integer, real, timestamp, primaryKey, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 // ─── Auth / Identity ─────────────────────────────────────────────────────────
 // NOTE: Boolean-ish flags are stored as INTEGER 0/1 to stay wire-compatible
@@ -184,7 +185,9 @@ export const applications = pgTable('applications', {
   index('idx_apps_user_id').on(t.user_id),
   index('idx_apps_status').on(t.status),
   index('idx_apps_program_id').on(t.program_id),
-  uniqueIndex('idx_applications_number').on(t.application_number),
+  // Partial unique index: only enforce uniqueness when application_number is assigned.
+  // NULLs (draft applications) are exempt — Postgres would otherwise reject multiple drafts.
+  uniqueIndex('idx_applications_number').on(t.application_number).where(sql`${t.application_number} IS NOT NULL`),
 ]);
 
 export const admissionsDecisions = pgTable('admissions_decisions', {

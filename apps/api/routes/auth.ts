@@ -138,11 +138,12 @@ export async function handleRegister(request: Request, env: Env, ctx?: Execution
         });
         // Auto-create initial application record as draft using the DB programs table as source of truth
         try {
-          const defaultProg = (await tx.select({ name: programs.name, level: programs.level }).from(programs).limit(1).execute())[0];
+          const defaultProg = (await tx.select({ id: programs.id, name: programs.name, level: programs.level }).from(programs).where(eq(programs.is_active, 1)).limit(1).execute())[0];
           await tx.insert(applications).values({
             id: appId,
             user_id: userId,
             program: defaultProg?.name || 'Unspecified Program',
+            program_id: defaultProg?.id || null,
             degree_level: defaultProg?.level || 'undergraduate',
             status: 'draft',
           });
