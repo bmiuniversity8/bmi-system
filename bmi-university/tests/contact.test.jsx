@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import Contact from '../app/contact/page';
@@ -61,8 +61,10 @@ describe('Contact Page', () => {
     // Submit form
     await user.click(screen.getByRole('button', { name: /Send Message/i }));
 
-    // Verify success message
-    expect(screen.getByRole('heading', { name: /Message Sent!/i })).toBeInTheDocument();
+    // Verify success message — wait for async handleSubmit + React state update
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /Message Sent!/i })).toBeInTheDocument();
+    });
     expect(screen.getByText(/We will get back to you within 1–2 business days/i)).toBeInTheDocument();
 
     // Ensure the original form is gone
