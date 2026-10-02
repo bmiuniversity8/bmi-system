@@ -1,6 +1,6 @@
 import { withSentry } from '@sentry/cloudflare';
 import { handleRegister, handleLogin, handleRefresh, handleLogout, handleMe, handleVerifyEmail, handleResendVerification, handleForgotPassword, handleResetPassword, handleMfaSetup, handleMfaEnable, handleMfaDisable, handleOAuthLogin, handleOAuthCallback } from './routes/auth';
-import { handleSubmitApplication, handleGetMyApplication, handleListApplications, handleGetApplication, handleUpdateStatus, handleDeleteApplication, handleGetStatusLogs, handleGetLifecycle, handleSaveDraft, handleAdminCreateApplication, checkAdmissionCodeExpiries } from './routes/apply';
+import { handleSubmitApplication, handleGetMyApplication, handleListApplications, handleGetApplication, handleUpdateStatus, handleDeleteApplication, handleGetStatusLogs, handleGetLifecycle, handleSaveDraft, handleAdminCreateApplication, handleCheckDuplicate, checkAdmissionCodeExpiries } from './routes/apply';
 import { handleUploadDocument, handleDownloadDocument, handleDeleteDocument, handleListDocuments, handleAdminUploadDocument, handleUpdateDocumentVerification } from './routes/documents';
 import { handleRequestRecommendation, handleGetRecommendationInfo, handleUploadRecommendation, handleListRecommendations } from './routes/recommendations';
 import { requireAuth, rateLimit, withCors, getCorsHeaders, createLogger, requestLogger } from '@bmi/api-middleware';
@@ -54,13 +54,16 @@ import {
   handleGetRegistrationStatus,
   handleCompleteRegistration,
   handleGetAvailableModules,
+  handleListSections,
   handleGetRegistrationEligibility,
   handleReserveSeat,
   handleWaitlistSeat,
   handleDropSectionSeat,
   handleGetFinancialAid,
   handleGetFeeAgreement,
+  handleGetEnrollmentAgreement,
   handleSignEnrollmentAgreement,
+  handleFinalizeRegistration,
   handleGetCanonicalEnrollmentStatus,
   handleRunCensusJob,
 } from './routes/registration';
@@ -145,6 +148,7 @@ const ROUTES: Route[] = [
   { method: 'POST', path: /^\/api\/auth\/mfa\/disable$/, roles: [], handler: async (req, env, _p, auth) => handleMfaDisable(req, env, auth!.user.sub) },
   { method: ['POST', 'PATCH'], path: /^\/api\/applications\/draft$/, roles: ['applicant', 'student'], handler: async (req, env, _p, auth) => handleSaveDraft(req, env, auth!.user.sub) },
   { method: 'POST', path: /^\/api\/applications$/, roles: ['applicant', 'student', 'staff', 'admin'], handler: async (req, env, _p, auth, ctx) => handleSubmitApplication(req, env, auth!.user.sub, ctx) },
+  { method: 'POST', path: /^\/api\/applications\/check-duplicate$/, roles: [], handler: async (req, env) => handleCheckDuplicate(req, env) },
   { method: 'GET', path: /^\/api\/applications\/me$/, roles: [], handler: async (req, env, _p, auth) => handleGetMyApplication(req, env, auth!.user.sub) },
   { method: 'GET', path: /^\/api\/applications\/([^/]+)\/logs$/, roles: [], handler: async (req, env, p, auth) => handleGetStatusLogs(req, env, p[1], auth!.user.sub, auth!.user.role) },
   { method: 'POST', path: /^\/api\/documents\/upload$/, roles: [], handler: async (req, env, _p, auth) => handleUploadDocument(req, env, auth!.user.sub) },
@@ -190,17 +194,15 @@ const ROUTES: Route[] = [
   { method: ['PUT', 'PATCH'], path: /^\/api\/v1\/admin\/applications\/([^/]+)\/status$/, roles: ['staff', 'admin', 'registrar', 'admissions', 'superadmin'], handler: async (req, env, p, auth, ctx) => handleUpdateStatus(req, env, p[1], auth!.user.sub, ctx) },
   { method: 'DELETE', path: /^\/api\/v1\/admin\/applications\/([^/]+)$/, roles: ['staff', 'admin', 'registrar', 'admissions', 'superadmin'], handler: async (req, env, p, auth) => handleDeleteApplication(req, env, p[1], auth!.user.sub) },
   {
-    method: 'POST', path: /^\/api\/(?:v1\/)?applications\/([^/]+)\/convert$/, roles: ['staff', 'admin', 'registrar', 'admissions', 'superadmin'], handler: async (req, env, p, auth, ctx) => {
-      let body: any = {};
-      try { body = await req.json(); } catch { /* body is optional */ }
-      const status = body.status || 'accepted';
-      const notes = body.notes || 'Converted to student via UMS';
-      const convertReq = new Request(req.url, {
-        method: 'PUT',
-        headers: req.headers,
-        body: JSON.stringify({ status, notes }),
-      });
-      return handleUpdateStatus(convertReq, env, p[1], auth!.user.sub, ctx);
+    method: 'POST', path: /^\/api\/(?:v1\/)?applications\/([^/]+)\/convert$/, roles: ['staff', 'admin', 'registrar', 'admissions', 'superadmin'], handler: async (_req, _env, p) => {
+      // Legacy convert endpoint retired: conversion now happens ONLY via
+      // POST /api/admissions/decide (offer) → applicant accept → provisioning.
+      // Keep a 410 with guidance instead of silently provisioning.
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Application conversion via this endpoint is retired. Use POST /api/admissions/decide with decision "admit" to issue an offer.',
+        application_id: p[1],
+      }), { status: 410, headers: { 'Content-Type': 'application/json' } });
     }
   },
   { method: 'GET', path: /^\/api\/admin\/documents$/, roles: ['admin', 'staff'], handler: async (req, env) => handleListDocuments(req, env) },
@@ -345,7 +347,10 @@ const ROUTES: Route[] = [
   { method: 'POST', path: /^\/api\/registration\/drop$/, roles: ['student'], handler: async (req, env, _p, auth) => handleDropSectionSeat(req, env, auth!.user.sub) },
   { method: 'GET', path: /^\/api\/finance\/financial-aid$/, roles: ['student'], handler: async (req, env, _p, auth) => handleGetFinancialAid(req, env, auth!.user.sub) },
   { method: 'GET', path: /^\/api\/finance\/fee-agreement$/, roles: ['student'], handler: async (req, env, _p, auth) => handleGetFeeAgreement(req, env, auth!.user.sub) },
+  { method: 'GET', path: /^\/api\/enrollment\/agreement$/, roles: ['applicant', 'student'], handler: async (req, env) => handleGetEnrollmentAgreement(req, env) },
   { method: 'POST', path: /^\/api\/enrollment\/sign-agreement$/, roles: ['student'], handler: async (req, env, _p, auth) => handleSignEnrollmentAgreement(req, env, auth!.user.sub) },
+  { method: 'GET', path: /^\/api\/student\/sections$/, roles: ['student'], handler: async (req, env, _p, auth) => handleListSections(req, env, auth!.user.sub) },
+  { method: 'POST', path: /^\/api\/registration\/finalize$/, roles: ['student'], handler: async (req, env, _p, auth) => handleFinalizeRegistration(req, env, auth!.user.sub) },
   { method: 'GET', path: /^\/api\/enrollment\/status$/, roles: ['applicant', 'student', 'admin', 'staff'], handler: async (req, env, _p, auth) => handleGetCanonicalEnrollmentStatus(req, env, auth!.user.sub) },
   { method: 'POST', path: /^\/api\/admin\/census\/run$/, roles: ['admin'], handler: async (req, env, _p, auth) => handleRunCensusJob(req, env, auth!.user.sub) },
   // Onboarding Flow Routes
@@ -559,9 +564,14 @@ export default withSentry(
     async scheduled(controller, env, ctx) {
       const context = bootstrap(env);
       env.PLATFORM_CONTEXT = context;
-      await backupWorker.scheduled(controller, env, ctx);
-      await runArchivalJob(env);
-      await checkAdmissionCodeExpiries(env, ctx);
+      // Per-job isolation: one failing job must not abort the rest.
+      try { await backupWorker.scheduled(controller, env, ctx); } catch (e) { console.error('[cron] backup failed:', e); }
+      try { await runArchivalJob(env); } catch (e) { console.error('[cron] archival failed:', e); }
+      try { await checkAdmissionCodeExpiries(env, ctx); } catch (e) { console.error('[cron] admission-code expiry failed:', e); }
+      try {
+        const { runLifecycleCronJobs } = await import('./lib/lifecycle-cron');
+        await runLifecycleCronJobs(env, ctx);
+      } catch (e) { console.error('[cron] lifecycle (census/expiry/provisioning/reconciliation) failed:', e); }
     },
     async queue(batch, env, _ctx) {
       const context = bootstrap(env);

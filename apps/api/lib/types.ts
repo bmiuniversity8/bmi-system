@@ -77,6 +77,13 @@ export interface Env {
   WRITE_QUEUE: DurableObjectNamespace;
   SENTRY_DSN?: string;
   EMAIL_QUEUE: Queue;
+  /** Application-layer encryption key for TOTP MFA secrets (AES-GCM via lib/mfa-crypto).
+   *  Falls back to PASSWORD_PEPPER when unset — set a dedicated key in production. */
+  MFA_ENCRYPTION_KEY?: string;
+  /** Legacy admission-code claim flow kill-switch. Defaults to enabled for grace
+   *  period (no NEW codes are minted since formal decisions replaced direct accept).
+   *  Set to '0'/'false' to return 410 on POST /api/auth/claim. */
+  LEGACY_CLAIM_ENABLED?: string;
 }
 
 export type Role = 'applicant' | 'student' | 'staff' | 'admin' | 'verifier' | 'alumni';

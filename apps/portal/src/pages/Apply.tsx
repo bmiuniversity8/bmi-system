@@ -72,9 +72,13 @@ interface StagedDoc {
   validation?: DocumentValidationResult;
 }
 
-// Zod schemas (matching backend definitions)
-const SubmitApplicationSchema = z.object({
-  program: z.string().min(1, 'Program is required'),
+// Zod schemas (matching backend definitions — program_id canonical, program legacy fallback)
+const SubmitApplicationFields = {
+  // program_id is canonical; program (label) is the legacy fallback.
+  // Both optional at field level with empty-string tolerated (drafts);
+  // the refine below enforces that at least one is actually selected.
+  program: z.string().optional(),
+  program_id: z.string().optional(),
   degree_level: z.string().min(1, 'Degree level is required'),
   date_of_birth: z.string().min(1, 'Date of birth is required'),
   gender: z.string().min(1, 'Gender is required'),
@@ -89,6 +93,13 @@ const SubmitApplicationSchema = z.object({
   graduation_year: z.union([z.number(), z.string()]).optional(),
   gpa: z.union([z.number(), z.string()]).optional(),
   address: z.string().optional(),
+};
+
+// Base object schema for per-step picks; refined schema for final submit.
+const SubmitApplicationBase = z.object(SubmitApplicationFields);
+const SubmitApplicationSchema = SubmitApplicationBase.refine((d) => d.program || d.program_id, {
+  message: 'Program selection is required',
+  path: ['program_id'],
 });
 
 export default function Apply() {
@@ -122,6 +133,7 @@ export default function Apply() {
     }
     return {
       program: '',
+      program_id: '',
       degree_level: '',
       prior_education: '',
       personal_statement: '',
@@ -253,6 +265,7 @@ export default function Apply() {
         if (!body?.success || !Array.isArray(body.data)) return;
         if (cancelled) return;
         setPrograms(body.data.map((p: any) => ({
+          id: p.id ?? p.code ?? p.label ?? p.name,
           label: p.label ?? p.name,
           level: p.level,
           description: p.description,
@@ -294,18 +307,19 @@ export default function Apply() {
     );
   }, [form.nationality]);
 
-  const selectProgram = (p: { label: string; level: string }) => {
+  const selectProgram = (p: { id?: string; label: string; level: string }) => {
     update('program', p.label);
+    if (p.id) update('program_id', p.id);
     update('degree_level', p.level);
   };
 
   const next = () => setStep(s => Math.min(s + 1, STEPS.length - 1));
   const prev = () => setStep(s => Math.max(s - 1, 0));
 
-  const canProceedStep0 = SubmitApplicationSchema.pick({ program: true, degree_level: true }).safeParse(form).success;
-  const canProceedStep1 = SubmitApplicationSchema.pick({ date_of_birth: true, gender: true, nationality: true }).safeParse(form).success;
-  const canProceedStep2 = SubmitApplicationSchema.pick({ prior_education: true }).safeParse(form).success;
-  const canProceedStep3 = SubmitApplicationSchema.pick({ personal_statement: true }).safeParse(form).success;
+  const canProceedStep0 = Boolean((form.program || form.program_id) && form.degree_level);
+  const canProceedStep1 = SubmitApplicationBase.pick({ date_of_birth: true, gender: true, nationality: true }).safeParse(form).success;
+  const canProceedStep2 = SubmitApplicationBase.pick({ prior_education: true }).safeParse(form).success;
+  const canProceedStep3 = SubmitApplicationBase.pick({ personal_statement: true }).safeParse(form).success;
 
   const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -348,7 +362,8 @@ export default function Apply() {
     setLoading(true);
     try {
       const res = await api.applications.submit({
-        program: form.program,
+        program: form.program || undefined,
+        program_id: form.program_id || undefined,
         degree_level: form.degree_level,
         personal_statement: form.personal_statement,
         prior_education: form.prior_education,

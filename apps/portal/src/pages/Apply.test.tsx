@@ -108,6 +108,11 @@ describe('Apply Page (Portal)', () => {
     await waitFor(() => {
       expect(api.applications.submit).toHaveBeenCalled();
     });
+
+    // Canonical payload: program_id sent alongside the display label
+    const payload = (api.applications.submit as any).mock.calls[0][0];
+    expect(payload.degree_level).toBeTruthy();
+    expect(payload.program || payload.program_id).toBeTruthy();
     
     // Note: The actual Apply component might redirect or show a success message.
     // The test confirms the API was called correctly.

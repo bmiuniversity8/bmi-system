@@ -32,7 +32,25 @@ interface PaymentBody {
 export async function handleCreatePaymentIntent(req: Request, env: Env, userId: string): Promise<Response> {
   try {
     const body = await typedJson<PaymentBody>(req);
-    const { amount, reason, invoiceId } = body;
+    const { reason, invoiceId } = body;
+    let { amount } = body;
+
+    // Server is authoritative for the amount: when an invoice is referenced,
+    // resolve the charge from the invoice row and ignore any client-supplied amount.
+    if (invoiceId) {
+      const invoice = await env.PLATFORM_CONTEXT!.db
+        .prepare('SELECT id, amount, status, student_id FROM invoices WHERE id = ?')
+        .bind(invoiceId)
+        .first<{ id: string; amount: number; status: string; student_id: string }>()
+        .catch(() => null);
+      if (!invoice) return error('Invoice not found', 404);
+      if (invoice.status === 'paid') return error('Invoice is already paid', 409);
+      // Ownership: invoice must belong to the caller (when tracked).
+      if (invoice.student_id && invoice.student_id !== userId) {
+        return error('Invoice does not belong to this student', 403);
+      }
+      amount = Number(invoice.amount);
+    }
 
     if (!amount || Number(amount) <= 0) return error('Amount is required', 400);
 
@@ -202,18 +220,20 @@ export async function fulfillSuccessfulPayment(
         );
         return { invoiceId, amountMatched: false };
       }
-      await db.prepare('UPDATE invoices SET status = "paid" WHERE id = ?').bind(invoiceId).run().catch(() => {});
+      await db.prepare('UPDATE invoices SET status = ? WHERE id = ?').bind('paid', invoiceId).run();
     }
   }
 
   if (userId) {
     await db.prepare(
       `UPDATE student_holds SET is_active = 0, resolved_at = datetime('now') WHERE student_id = ? AND hold_type = 'payment' AND is_active = 1`
-    ).bind(userId).run().catch(() => {});
+    ).bind(userId).run();
 
     const user = await db.prepare('SELECT email, first_name FROM users WHERE id = ?').bind(userId).first<{ email: string; first_name: string }>().catch(() => null);
     if (user?.email && isValidEmail(user.email)) {
       const reference = intent.reference || intent.id;
+      // Normalize subunit amounts (Paystack kobo/cents) for display.
+      const displayAmount = Number(intent.amount) >= 1000 ? (Number(intent.amount) / 100).toLocaleString(undefined, { minimumFractionDigits: 2 }) : Number(intent.amount).toLocaleString(undefined, { minimumFractionDigits: 2 });
       const runNotify = async () => {
         await safeDispatchEmail(env, ctx, {
           to: user.email,
@@ -222,7 +242,7 @@ export async function fulfillSuccessfulPayment(
             <h2 style="color: #0f172a;">Thank you, ${user.first_name}!</h2>
             <p style="color: #475569; line-height: 1.6;">
               We have successfully processed your tuition/fee payment of
-              <strong>${intent.currency.toUpperCase()} ${Number(intent.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>.
+              <strong>${intent.currency.toUpperCase()} ${displayAmount}</strong>.
               Your payment hold has been cleared and your student account is in good standing.
             </p>
             <div style="background: #f8fafc; border-left: 4px solid #d4af37; padding: 16px; margin: 20px 0; border-radius: 4px;">

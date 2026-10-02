@@ -3,9 +3,8 @@ import type { Env } from '../lib/types';
 import type { ExecutionContext } from '@cloudflare/workers-types';
 import { createCoreDb, isNeon, setRequestContext } from '../lib/db';
 import { documents, applications, users } from '../schema/core';
-import { studentHolds } from '../schema/academic';
-import { safeDispatchEmail, buildEmailLayout, onboardingStepCompletedEmail, isValidEmail } from '../lib/email';
-import { eq, and } from 'drizzle-orm';
+import { safeDispatchEmail, buildEmailLayout, isValidEmail } from '../lib/email';
+import { eq } from 'drizzle-orm';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
@@ -80,10 +79,10 @@ export async function handleUploadStudentDocument(request: Request, env: Env, us
   });
 
   const docId = crypto.randomUUID();
-  let holdJustCleared = false;
 
-  // ACID: insert document + clear document hold atomically so a partial write
-  // (doc inserted without hold cleared) never leaves the student stuck.
+  // Upload creates a PENDING_VERIFICATION record. It must NOT clear the
+  // document hold — only staff verification (PATCH /admin/documents/:id/verification
+  // with verification_status=verified) may resolve the hold.
   await db.transaction(async (tx) => {
     await tx.insert(documents).values({
       id: docId,
@@ -94,24 +93,12 @@ export async function handleUploadStudentDocument(request: Request, env: Env, us
       r2_key: r2Key,
       mime_type: detectedMime,
       file_size_bytes: file.size,
+      verification_status: 'pending',
     });
-
-    if (docType === 'id_document') {
-      const holdUpdateRes = await tx.update(studentHolds)
-        .set({ is_active: 0, resolved_at: new Date() })
-        .where(and(
-          eq(studentHolds.student_id, userId),
-          eq(studentHolds.hold_type, 'document'),
-          eq(studentHolds.is_active, 1)
-        ));
-      const updateRes: any = holdUpdateRes;
-      holdJustCleared = ((updateRes?.rowCount ?? updateRes?.rowsAffected ?? 0) as number) > 0;
-    }
   });
 
-  // RC #6: Send an onboarding progress notification after uploading an ID document
-  // (which clears the document hold and unlocks course registration).
-  if (docType === 'id_document' || holdJustCleared) {
+  // Notify receipt — explicitly NOT verification. Staff must still review.
+  {
     const user = (await db.select({ first_name: users.first_name, email: users.email })
       .from(users)
       .where(eq(users.id, userId))
@@ -122,22 +109,18 @@ export async function handleUploadStudentDocument(request: Request, env: Env, us
       const runNotify = async () => {
         await safeDispatchEmail(env, ctx, {
           to: user.email,
-          subject: holdJustCleared
-            ? 'BMI University — Document Hold Cleared'
-            : 'BMI University — ID Document Received',
-          html: holdJustCleared
-            ? onboardingStepCompletedEmail(user.first_name!, 'id_verification', 'Your ID document has been verified and the document hold has been removed.')
-            : buildEmailLayout('Document Received', `
+          subject: 'BMI University — ID Document Received',
+          html: buildEmailLayout('Document Received', `
                 <h2 style="color: #0f172a;">Hi ${user.first_name},</h2>
                 <p style="color: #475569; line-height: 1.6;">
                   We've received your ID document upload (<strong>${safeFileName}</strong>).
                 </p>
                 <p style="color: #475569; line-height: 1.6;">
-                  Log in to the student portal to continue your onboarding process.
+                  Our admissions team will verify it shortly. You can track progress in the student portal.
                 </p>
               `),
-          templateName: holdJustCleared ? 'document_hold_cleared' : 'id_document_received',
-          context: { action: holdJustCleared ? 'document_hold_cleared' : 'id_document_received', user_id: userId, doc_type: docType },
+          templateName: 'id_document_received',
+          context: { action: 'id_document_received', user_id: userId, doc_type: docType },
         });
       };
       if (ctx) {
@@ -148,5 +131,5 @@ export async function handleUploadStudentDocument(request: Request, env: Env, us
     }
   }
 
-  return ok({ document_id: docId, file_name: safeFileName, doc_type: docType });
+  return ok({ document_id: docId, file_name: safeFileName, doc_type: docType, verification_status: 'pending' });
 }

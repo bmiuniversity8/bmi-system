@@ -91,6 +91,8 @@ export class D1IdentityAdapter implements IIdentityProvider {
   }
 
   async setupMfa(userId: string, type: 'totp' | 'webauthn'): Promise<MfaSetup> {
+    // STUB — not the production path (see apps/api routes/auth.ts + lib/mfa-crypto.ts).
+    // If promoted, secrets MUST be encrypted via encryptMfaSecret() before storage.
     const secret = randomBytes(20).toString('hex');
     await this.db.query('UPDATE users SET mfa_secret = ?, updated_at = datetime("now") WHERE id = ?', [secret, userId]);
     return { type, secret, qrCodeUrl: `https://example.com/qr?secret=${secret}` };

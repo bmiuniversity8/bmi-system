@@ -41,10 +41,13 @@ const STATUS_COLORS: Record<string, string> = {
 const NEXT_STATUSES: Record<string, string[]> = {
   draft: ["submitted"],
   submitted: ["under_review", "rejected"],
-  under_review: ["accepted", "rejected", "waitlisted"],
-  accepted: ["waitlisted"],
+  // NOTE: "accepted" is intentionally absent. Offers are issued ONLY via the
+  // formal decision flow (POST /api/admissions/decide → OFFER_EXTENDED) and
+  // provisioning runs only after the applicant accepts. See handleFormalDecision.
+  under_review: ["rejected", "waitlisted"],
+  accepted: [],
   rejected: ["under_review"],
-  waitlisted: ["accepted", "rejected"],
+  waitlisted: ["rejected", "under_review"],
 };
 
 export default function Admissions() {
@@ -174,6 +177,11 @@ export default function Admissions() {
 
   const handleUpdateStatus = async (newStatus: string) => {
     if (!selectedApp) return;
+    // Guard: legacy direct-accept is disabled — route staff to formal decisions.
+    if (newStatus === 'accepted') {
+      setError('Direct approval is disabled. Use "Issue Formal Admissions Decision" (admit) to extend an offer — the student must accept before any provisioning.');
+      return;
+    }
     setUpdating(true);
     try {
       await admissionsService.updateStatus(selectedApp.id, newStatus, notes);
@@ -297,6 +305,11 @@ export default function Admissions() {
 
   const handleBulkUpdate = async (newStatus: string) => {
     if (selectedIds.size === 0) return;
+    // Bulk approve would bypass the offer→accept→provision lifecycle — forbid it.
+    if (newStatus === 'accepted') {
+      setError('Bulk approve is disabled. Issue formal decisions per application so offers, expiry and deposits are tracked.');
+      return;
+    }
     setUpdating(true);
     try {
       await Promise.all(
@@ -564,13 +577,6 @@ export default function Admissions() {
               className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded uppercase text-[10px] tracking-wider transition-all min-h-[36px]"
             >
               Move to Review
-            </button>
-            <button
-              onClick={() => handleBulkUpdate("accepted")}
-              disabled={updating}
-              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded uppercase text-[10px] tracking-wider transition-all min-h-[36px]"
-            >
-              Bulk Approve
             </button>
             <button
               onClick={handleBulkDelete}
@@ -917,17 +923,16 @@ export default function Admissions() {
                         disabled={updating}
                         onClick={() => handleUpdateStatus(status)}
                         className={`flex-1 py-2.5 px-4 rounded-lg text-xs font-black uppercase tracking-wider text-white shadow-md transition-all active:scale-95
-                          ${status === 'accepted' ? 'bg-emerald-600 hover:bg-emerald-700' :
-                            status === 'rejected' ? 'bg-rose-600 hover:bg-rose-700' :
+                          ${status === 'rejected' ? 'bg-rose-600 hover:bg-rose-700' :
                               status === 'waitlisted' ? 'bg-purple-700 hover:bg-purple-800' :
                                 'bg-[#2E004F] hover:bg-purple-950'}`}
                       >
-                        {updating ? 'Processing...' : status === 'accepted' ? 'Approve Admission' : status === 'rejected' ? 'Decline Application' : 'Mark ' + status.replace('_', ' ')}
+                        {updating ? 'Processing...' : status === 'rejected' ? 'Decline Application' : 'Mark ' + status.replace('_', ' ')}
                       </button>
                     ))}
                   </div>
-                  {/* Formal Decision Button — available for under_review / submitted apps */}
-                  {(selectedApp.status === 'under_review' || selectedApp.status === 'submitted') && (
+                  {/* Formal Decision — the ONLY path to an offer (admit/conditional → OFFER_EXTENDED/CONDITIONAL) */}
+                  {(selectedApp.status === 'under_review' || selectedApp.status === 'submitted' || selectedApp.status === 'waitlisted') && (
                     <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-800">
                       <button
                         onClick={() => openFormalDecisionModal(selectedApp)}

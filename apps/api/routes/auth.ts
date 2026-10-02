@@ -6,6 +6,7 @@ import { ok, error, generateCsrfToken } from '../lib/types';
 import { safeDispatchEmail, isValidEmail, generateTraceId, emailVerificationEmail, accountActivationConfirmationEmail, welcomeEmail, passwordResetEmail } from '../lib/email';
 import { getPortalUrl, getUmsUrl } from '../lib/config';
 import { generateTOTPSecret, verifyTOTP, getTOTPAuthUrl } from '../lib/totp';
+import { encryptMfaSecret, decryptMfaSecret } from '../lib/mfa-crypto';
 import { getOAuthConfig, exchangeCodeForToken, getUserInfo, type OAuthProvider } from '../lib/sso';
 import { parseBody, RegisterSchema, LoginSchema } from '../lib/schemas';
 import { executeWithMonitoring } from '../lib/performance';
@@ -379,7 +380,8 @@ if (!valid) {
     if (!mfa_token) {
       return ok({ requires_mfa: true });
     }
-    const validMfa = await verifyTOTP(user.mfa_secret, mfa_token);
+    const mfaSecret = await decryptMfaSecret(user.mfa_secret, env);
+    const validMfa = await verifyTOTP(mfaSecret, mfa_token);
     if (!validMfa) {
       return error('Invalid MFA token', 401);
     }
@@ -664,13 +666,14 @@ export async function handleMfaSetup(request: Request, env: Env, userId: string)
 
   if (user.mfa_enabled) return error('MFA is already enabled', 400);
 
-  let secret = user.mfa_secret;
+  let secret = user.mfa_secret ? await decryptMfaSecret(user.mfa_secret, env) : null;
   if (!secret) {
-    secret = await generateTOTPSecret();
+    const raw = await generateTOTPSecret();
+    const stored = await encryptMfaSecret(raw, env);
     try {
       await db.transaction(async (tx) => {
         await tx.update(users)
-          .set({ mfa_secret: secret, updated_at: new Date() })
+          .set({ mfa_secret: stored, updated_at: new Date() })
           .where(eq(users.id, ctx.userId));
       });
     } catch (txErr) {
@@ -678,6 +681,7 @@ export async function handleMfaSetup(request: Request, env: Env, userId: string)
       console.error(`[auth:mfa-setup:${ctx.traceId}] MFA secret write transaction FAILED:`, msg);
       return error('Failed to save MFA secret. Please try again.', 500);
     }
+    secret = raw;
   }
 
   const otpAuthUrl = getTOTPAuthUrl(secret, user.email);
@@ -703,7 +707,8 @@ export async function handleMfaEnable(request: Request, env: Env, userId: string
   if (!user.mfa_secret) return error('MFA not set up. Please call /api/auth/mfa/setup first.', 400);
   if (user.mfa_enabled) return error('MFA is already enabled', 400);
 
-  const valid = await verifyTOTP(user.mfa_secret, body.token);
+  const mfaSecret = await decryptMfaSecret(user.mfa_secret, env);
+  const valid = await verifyTOTP(mfaSecret, body.token);
   if (!valid) return error('Invalid token', 400);
 
   try {

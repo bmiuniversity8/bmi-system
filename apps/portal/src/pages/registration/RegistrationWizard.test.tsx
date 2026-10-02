@@ -13,6 +13,9 @@ vi.mock('../../lib/api', () => ({
     student: {
       getRegistrationEligibility: vi.fn(),
       getCurriculum: vi.fn(),
+      getSections: vi.fn(),
+      autoEnrollMandatory: vi.fn(),
+      generateInvoice: vi.fn(),
     },
     finance: {
       getFeeAgreement: vi.fn(),
@@ -27,9 +30,11 @@ vi.mock('../../lib/api', () => ({
       dropCourse: vi.fn(),
       saveStep: vi.fn(),
       complete: vi.fn(),
+      finalize: vi.fn(),
     },
     enrollment: {
       getStatus: vi.fn(),
+      getAgreement: vi.fn(),
       signAgreement: vi.fn(),
     },
   },
@@ -79,8 +84,13 @@ describe('RegistrationWizard Page', () => {
       { id: 'c2', code: 'THE101', name: 'Systematic Theology', credits: 3 },
     ]);
     vi.mocked(api.registration.reserveSeat).mockResolvedValue({ status: 'reserved', sectionId: 'c1', message: 'Reserved' });
+    vi.mocked((api.student as any).getSections).mockResolvedValue({ sections: [], my_section_ids: [] });
+    vi.mocked((api.student as any).autoEnrollMandatory).mockResolvedValue({ success: true, message: 'ok' });
+    vi.mocked(api.registration.saveStep).mockResolvedValue({ message: 'saved' });
+    vi.mocked((api.enrollment as any).getAgreement).mockResolvedValue({ document_id: 'ENROLL-AGREEMENT-2026', version: '2026.1', version_hash: 'sha256:test', text: 'Agreement' });
     vi.mocked(api.enrollment.signAgreement).mockResolvedValue({ success: true, signature_id: 'sig-1', status: 'REGISTERED', message: 'Signed' });
     vi.mocked(api.registration.complete).mockResolvedValue({ message: 'completed' });
+    vi.mocked((api.registration as any).finalize).mockResolvedValue({ success: true, status: 'REGISTERED', registered_sections: 1, message: 'ok' });
   });
 
   const renderPage = async () => {

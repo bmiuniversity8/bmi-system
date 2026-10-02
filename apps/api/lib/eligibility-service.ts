@@ -37,12 +37,13 @@ export async function checkRegistrationEligibility(
   const reasons: string[] = [];
 
   // 1. Check Canonical State Machine Status
+  // Only ELIGIBLE / IN_PROGRESS may initiate or continue registration.
+  // REGISTERED / OFFICIALLY_ENROLLED re-enter via REGISTRATION_ELIGIBLE
+  // (next-term flow) — they must not bypass holds/advising here.
   const enrollment = await getEnrollmentStatus(db, userId);
   const eligibleStatuses = [
     ENROLLMENT_STATUS.REGISTRATION_ELIGIBLE,
     ENROLLMENT_STATUS.REGISTRATION_IN_PROGRESS,
-    ENROLLMENT_STATUS.REGISTERED,
-    ENROLLMENT_STATUS.OFFICIALLY_ENROLLED,
   ];
 
   if (!eligibleStatuses.includes(enrollment.status as any)) {
@@ -85,6 +86,8 @@ export async function checkRegistrationEligibility(
     }
   } catch (e) {
     console.warn('[eligibility] Error querying holds:', e);
+    // FAIL CLOSED: do not treat student as eligible if holds cannot be verified
+    reasons.push('Unable to verify active student holds. Registration blocked until clearance check succeeds.');
   }
 
   // 4. Determine Active Term
@@ -96,7 +99,7 @@ export async function checkRegistrationEligibility(
       ).bind(targetTermId).first<{ id: string; name: string; academic_year: string; status: string }>();
     } else {
       term = await db.prepare(
-        `SELECT id, name, academic_year, status FROM academic_terms WHERE status = 'active' ORDER BY start_date DESC LIMIT 1`
+        `SELECT id, name, academic_year, status FROM academic_terms WHERE status IN ('active', 'registration') ORDER BY start_date DESC LIMIT 1`
       ).first<{ id: string; name: string; academic_year: string; status: string }>();
     }
   } catch (e) {
@@ -118,6 +121,10 @@ export async function checkRegistrationEligibility(
       }
     } catch (e) {
       console.warn('[eligibility] Error querying advising releases:', e);
+      if (activeHolds.some(h => h.hold_type === 'advising')) {
+        advisingReleased = false;
+        reasons.push('Academic advising release verification failed. Please contact your advisor.');
+      }
     }
   }
 

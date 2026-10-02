@@ -164,6 +164,7 @@ export const applications = pgTable('applications', {
   id: text('id').primaryKey(),
   user_id: text('user_id').notNull(),
   program: text('program').notNull(),
+  program_id: text('program_id'),
   degree_level: text('degree_level').notNull(),
   status: text('status').notNull().default('draft'),
   personal_statement: text('personal_statement'),
@@ -182,6 +183,7 @@ export const applications = pgTable('applications', {
 }, (t) => [
   index('idx_apps_user_id').on(t.user_id),
   index('idx_apps_status').on(t.status),
+  index('idx_apps_program_id').on(t.program_id),
   uniqueIndex('idx_applications_number').on(t.application_number),
 ]);
 

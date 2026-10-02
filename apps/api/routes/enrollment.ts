@@ -7,7 +7,6 @@ import {
   programCurriculum,
   programCourses,
   enrollments,
-  students,
   programFees,
 } from '../schema/academic';
 import {
@@ -520,12 +519,9 @@ export async function handleGetRegistrationProgress(_req: Request, env: Env, use
     .where(and(eq(documents.user_id, userId), eq(documents.doc_type, 'id_document')))
     .limit(1)
     .execute())[0];
-  const studentPhoto = (await db.select({ photo: students.photo })
-    .from(students)
-    .where(eq(students.user_id, userId))
-    .limit(1)
-    .execute())[0];
-  const hasUploadedId = !!idDoc || !!studentPhoto?.photo;
+  // A profile photo is NOT an identity document — only a verified ID upload
+  // satisfies the document requirement. Photo may still be displayed separately.
+  const hasUploadedId = !!idDoc;
 
   const currentTerm = await getActiveTerm(db);
 
@@ -629,7 +625,7 @@ export async function handleGetRegistrationProgress(_req: Request, env: Env, use
 
 // ─── Orientation ────────────────────────────────────────────────────────────
 
-export async function handleCompleteOrientation(_req: Request, env: Env, userId: string): Promise<Response> {
+export async function handleCompleteOrientation(req: Request, env: Env, userId: string): Promise<Response> {
   const db = createCoreDb(env);
 
   const hold = (await db.select({ id: studentHolds.id })
@@ -643,11 +639,25 @@ export async function handleCompleteOrientation(_req: Request, env: Env, userId:
 
   if (!hold) return error('Orientation hold not found or already resolved.', 404);
 
+  // Record content version + completion method so requirement changes are auditable.
+  let contentVersion = 'v1';
+  let completionMethod = 'online';
+  try {
+    const body = await req.clone().json().catch(() => null) as { content_version?: string; completion_method?: string } | null;
+    if (body?.content_version) contentVersion = String(body.content_version).slice(0, 32);
+    if (body?.completion_method) completionMethod = String(body.completion_method).slice(0, 32);
+  } catch { /* body optional — defaults apply */ }
+
+  const completedAt = new Date().toISOString();
   await db.update(studentHolds)
-    .set({ is_active: 0, resolved_at: new Date(), metadata: '{"completed_via":"online"}' })
+    .set({
+      is_active: 0,
+      resolved_at: new Date(),
+      metadata: JSON.stringify({ completed_via: completionMethod, content_version: contentVersion, completed_at: completedAt }),
+    })
     .where(eq(studentHolds.id, hold.id));
 
-  return ok({ message: 'Orientation completed successfully. Course registration is now available.' });
+  return ok({ message: 'Orientation completed successfully. Course registration is now available.', content_version: contentVersion });
 }
 
 // ─── Program Fee Invoice ────────────────────────────────────────────────────

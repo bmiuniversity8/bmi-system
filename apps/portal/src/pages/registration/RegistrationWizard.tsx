@@ -77,6 +77,9 @@ export default function RegistrationWizard() {
   const [curriculum, setCurriculum] = useState<any>(null);
   const [availableCourses, setAvailableCourses] = useState<CourseItem[]>([]);
   const [selectedCourseIds, setSelectedCourseIds] = useState<string[]>([]);
+  // courseId -> chosen sectionId (canonical: students reserve SECTIONS, not courses)
+  const [selectedSections, setSelectedSections] = useState<Record<string, string>>({});
+  const [courseSections, setCourseSections] = useState<Record<string, Array<{ id: string; section_code: string; seats_available: number; is_full: boolean; schedule?: string; room?: string }>>>({});
   const [seatStatuses, setSeatStatuses] = useState<Record<string, { status: string; waitlistPosition?: number; message?: string }>>({});
 
   const [feeAgreement, setFeeAgreement] = useState<{
@@ -95,6 +98,7 @@ export default function RegistrationWizard() {
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [dataConfirmed, setDataConfirmed] = useState(false);
   const [signedName, setSignedName] = useState('');
+  const [agreementMeta, setAgreementMeta] = useState<{ document_id: string; version: string; version_hash: string; text: string } | null>(null);
 
   useEffect(() => {
     fetchInitialData();
@@ -103,17 +107,19 @@ export default function RegistrationWizard() {
   const fetchInitialData = async () => {
     setCheckingEligibility(true);
     try {
-      const [eligRes, statusRes, feeRes, currRes, modRes] = await Promise.all([
+      const [eligRes, statusRes, feeRes, currRes, modRes, agrRes] = await Promise.all([
         api.student.getRegistrationEligibility().catch(() => null),
         api.registration.getStatus().catch(() => null),
         api.finance.getFeeAgreement().catch(() => null),
         api.student.getCurriculum().catch(() => null),
         api.registration.getModules().catch(() => [] as any[]),
+        api.enrollment.getAgreement().catch(() => null),
       ]);
 
       if (eligRes) setEligibility(eligRes);
       if (feeRes) setFeeAgreement(feeRes);
       if (currRes) setCurriculum(currRes);
+      if (agrRes) setAgreementMeta(agrRes);
 
       if (statusRes?.current_data?.personal_details) {
         setProfile(prev => ({
@@ -131,8 +137,13 @@ export default function RegistrationWizard() {
           credits: m.credits || 3,
           is_mandatory: true,
         })));
-        // Auto-select initial courses if not yet selected
-        setSelectedCourseIds(modRes.slice(0, 4).map(m => m.id));
+        // Do NOT auto-select courses: mandatory enrolment must come from the
+        // canonical curriculum endpoint (POST /student/enroll/mandatory), and
+        // electives require explicit student choice with section selection.
+        // Attempt mandatory auto-enrol in the background (best-effort).
+        try {
+          await (api.student as any).autoEnrollMandatory?.()?.catch?.(() => null);
+        } catch { /* endpoint may not exist in older mocks — non-fatal */ }
       }
     } catch (err: unknown) {
       console.warn('Initial data load warning:', err);
@@ -147,34 +158,103 @@ export default function RegistrationWizard() {
 
   const handleToggleCourse = async (courseId: string) => {
     if (selectedCourseIds.includes(courseId)) {
+      const sectionId = selectedSections[courseId];
       setSelectedCourseIds(prev => prev.filter(id => id !== courseId));
+      setSelectedSections(prev => {
+        const next = { ...prev };
+        delete next[courseId];
+        return next;
+      });
       try {
-        await api.registration.dropCourse(courseId);
+        await api.registration.dropCourse(courseId, sectionId);
         setSeatStatuses(prev => {
           const next = { ...prev };
           delete next[courseId];
           return next;
         });
-      } catch {
-        // Continue
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Failed to drop course section.');
       }
     } else {
-      setSelectedCourseIds(prev => [...prev, courseId]);
+      // Resolve sections for this course, then reserve a SECTION (never a bare courseId).
+      setError('');
       try {
-        const res = await api.registration.reserveSeat(courseId);
+        let sections = courseSections[courseId];
+        if (!sections) {
+          try {
+            const res = await (api.student as any).getSections?.(courseId, eligibility?.term?.id);
+            sections = res?.sections || [];
+            setCourseSections(prev => ({ ...prev, [courseId]: sections! }));
+            if (res?.my_section_ids?.length) {
+              setSelectedSections(prev => ({ ...prev, [courseId]: res.my_section_ids[0] }));
+              setSelectedCourseIds(prev => [...prev, courseId]);
+              setSeatStatuses(prev => ({ ...prev, [courseId]: { status: 'reserved', message: 'Already registered in this section.' } }));
+              return;
+            }
+          } catch {
+            sections = [];
+          }
+        }
+        const open = (sections || []).find(s => !s.is_full) || (sections || [])[0];
+        if (!open) {
+          // Fallback for environments without section data (e.g. legacy tests):
+          // attempt reservation and let the server validate the section.
+          try {
+            const legacy = await api.registration.reserveSeat(courseId, eligibility?.term?.id);
+            setSelectedSections(prev => ({ ...prev, [courseId]: courseId }));
+            setSelectedCourseIds(prev => [...prev, courseId]);
+            setSeatStatuses(prev => ({ ...prev, [courseId]: legacy }));
+            return;
+          } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'No sections available for this course yet. Please contact the registrar.');
+            return;
+          }
+        }
+        const res = await api.registration.reserveSeat(open.id, eligibility?.term?.id);
+        setSelectedSections(prev => ({ ...prev, [courseId]: open.id }));
+        setSelectedCourseIds(prev => [...prev, courseId]);
         setSeatStatuses(prev => ({ ...prev, [courseId]: res }));
+        if (res.status === 'waitlisted') {
+          setError(`Section ${open.section_code} is full — waitlisted at position #${res.waitlistPosition ?? '?'}.`);
+        }
       } catch (err: unknown) {
-        console.warn('Course reservation notice:', err);
+        setError(err instanceof Error ? err.message : 'Seat reservation failed.');
       }
     }
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     setError('');
     if (currentStep === 0) {
       if (!profile.first_name || !profile.last_name || !profile.emergency_contact_phone) {
         setError('Please complete all required contact and emergency details.');
         return;
+      }
+      // Persist to the canonical backend (server is authoritative; local state is a cache).
+      setLoading(true);
+      try {
+        await api.registration.saveStep('personal_details', {
+          first_name: profile.first_name,
+          last_name: profile.last_name,
+          date_of_birth: profile.date_of_birth,
+          gender: profile.gender,
+          nationality: profile.nationality,
+          phone: profile.phone,
+        });
+        await api.registration.saveStep('address', {
+          current_address: profile.current_address,
+          city: '',
+          state: '',
+          country: profile.nationality,
+          emergency_contact_name: profile.emergency_contact_name,
+          emergency_contact_phone: profile.emergency_contact_phone,
+        });
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Failed to save profile. Please try again.');
+        setLoading(false);
+        return;
+      } finally {
+        setLoading(false);
       }
     }
     if (currentStep === 2) {
@@ -210,11 +290,25 @@ export default function RegistrationWizard() {
 
     setSubmitting(true);
     try {
-      // 1. Legally binding e-signature
-      await api.enrollment.signAgreement('ENROLL-AGREEMENT-2026', signedName.trim(), 'v1.0-sha256-standard');
+      // 1. Legally binding e-signature (records agreement_signed — does NOT confer REGISTERED).
+      //    Version metadata comes from GET /enrollment/agreement so the signature
+      //    binds to a real auditable revision, never a hardcoded placeholder hash.
+      const signRes = await api.enrollment.signAgreement(
+        agreementMeta?.document_id || 'ENROLL-AGREEMENT-2026',
+        signedName.trim(),
+        agreementMeta?.version_hash || 'v1.0-sha256-standard'
+      );
+      if (!signRes?.success && !(signRes as any)?.agreement_signed) {
+        throw new Error('Agreement signature was not recorded. Please try again.');
+      }
 
-      // 2. Complete registration
-      await api.registration.complete().catch(() => {});
+      // 2. Canonical finalize transaction owns the REGISTERED transition.
+      //    It validates holds, advising, sections, payment and signature together.
+      //    Errors MUST surface — never swallow with .catch(()=>{}).
+      const finalRes = await api.registration.finalize();
+      if (!finalRes?.success || finalRes.status !== 'REGISTERED') {
+        throw new Error(finalRes?.message || 'Registration finalization did not complete. No changes were lost — please resolve the outstanding items and retry.');
+      }
 
       setCompleted(true);
     } catch (err: unknown) {
@@ -417,6 +511,9 @@ export default function RegistrationWizard() {
                 {availableCourses.map(c => {
                   const isSelected = selectedCourseIds.includes(c.id);
                   const seatInfo = seatStatuses[c.id];
+                  const sectionId = selectedSections[c.id];
+                  const sections = courseSections[c.id] || [];
+                  const chosen = sections.find(s => s.id === sectionId);
                   return (
                     <div
                       key={c.id}
@@ -444,9 +541,19 @@ export default function RegistrationWizard() {
                           <div style={{ fontWeight: 700, color: 'var(--navy)', fontSize: '0.95rem' }}>
                             {c.code} — {c.title}
                           </div>
+                          {isSelected && chosen && (
+                            <span style={{ color: 'var(--navy)', fontSize: '0.75rem', fontWeight: 600 }}>
+                              Section {chosen.section_code}{chosen.schedule ? ` • ${chosen.schedule}` : ''}{chosen.room ? ` • ${chosen.room}` : ''} • {chosen.seats_available} seats left
+                            </span>
+                          )}
                           {seatInfo?.status === 'waitlisted' && (
                             <span style={{ color: '#b45309', fontSize: '0.75rem', fontWeight: 600 }}>
                               ⏳ Waitlisted (Position #{seatInfo.waitlistPosition})
+                            </span>
+                          )}
+                          {seatInfo?.status === 'reserved' && seatInfo.message && (
+                            <span style={{ color: 'var(--success)', fontSize: '0.75rem', fontWeight: 600, display: 'block' }}>
+                              ✓ {seatInfo.message}
                             </span>
                           )}
                         </div>
@@ -518,8 +625,8 @@ export default function RegistrationWizard() {
           {currentStep === 4 && (
             <div>
               <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: 8, border: '1px solid var(--border)', marginBottom: '1.5rem', maxHeight: 180, overflowY: 'auto', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                <p><strong>BMI University Matriculation & Honor Agreement:</strong></p>
-                <p>By completing this registration, I commit to upholding the highest standards of academic integrity, ethical conduct, and respect within the BMI community. I agree to abide by all university policies, course requirements, and payment schedules.</p>
+                <p><strong>BMI University Matriculation & Honor Agreement{agreementMeta ? ` (v${agreementMeta.version})` : ''}:</strong></p>
+                <p>{agreementMeta?.text || 'By completing this registration, I commit to upholding the highest standards of academic integrity, ethical conduct, and respect within the BMI community. I agree to abide by all university policies, course requirements, and payment schedules.'}</p>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem' }}>
@@ -543,7 +650,7 @@ export default function RegistrationWizard() {
                   style={{ fontFamily: 'serif', fontSize: '1.1rem' }}
                 />
                 <span style={{ fontSize: '0.75rem', color: 'var(--slate)', marginTop: 4, display: 'block' }}>
-                  Binding electronic signature recorded with IP, timestamp, and document version hash.
+                  Binding electronic signature recorded with IP, timestamp, and document version hash{agreementMeta ? ` (${agreementMeta.version_hash.slice(0, 19)}…)` : ''}.
                 </span>
               </div>
             </div>

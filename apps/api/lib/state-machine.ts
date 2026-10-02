@@ -103,6 +103,8 @@ export const ALLOWED_TRANSITIONS: Record<string, string[]> = {
 
 /**
  * Log an enrollment status change into the immutable audit table.
+ * Enforces ALLOWED_TRANSITIONS — the canonical lifecycle authority.
+ * No caller may mutate enrollment status except through this function.
  */
 export async function setEnrollmentStatus(
   db: IDatabase,
@@ -113,28 +115,60 @@ export async function setEnrollmentStatus(
     personId?: string | null;
     termId?: string | null;
     reason?: string | null;
+    force?: boolean;
   }
 ): Promise<void> {
+  // Enforce valid transition unless this is the first status or forced (e.g. admin repair).
+  if (!params.force) {
+    let current: string | null = null;
+    try {
+      const row = await db.prepare(
+        `SELECT status FROM enrollment_status_logs
+         WHERE user_id = ?
+         ORDER BY changed_at DESC, rowid DESC LIMIT 1`
+      ).bind(params.userId).first<{ status: string }>();
+      current = row?.status ?? null;
+    } catch {
+      current = null;
+    }
+    if (current && current !== params.status) {
+      const allowed = ALLOWED_TRANSITIONS[current] ?? [];
+      if (!allowed.includes(params.status)) {
+        throw new Error(
+          `Invalid enrollment transition: ${current} → ${params.status}. Allowed: ${allowed.join(', ') || '(terminal)'}.`
+        );
+      }
+    }
+  }
+
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
 
-  await db.prepare(
-    `INSERT INTO enrollment_status_logs 
-     (id, user_id, person_id, status, term_id, changed_by, reason, changed_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(
-    id,
-    params.userId,
-    params.personId ?? null,
-    params.status,
-    params.termId ?? null,
-    params.changedBy,
-    params.reason ?? null,
-    now
-  ).run().catch((e: unknown) => {
-    // If table not migrated in test environment, don't fail operation
-    console.warn('[state-machine] Note on enrollment_status_logs insert:', e);
-  });
+  try {
+    await db.prepare(
+      `INSERT INTO enrollment_status_logs
+      (id, user_id, person_id, status, term_id, changed_by, reason, changed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+      id,
+      params.userId,
+      params.personId ?? null,
+      params.status,
+      params.termId ?? null,
+      params.changedBy,
+      params.reason ?? null,
+      now
+    ).run();
+  } catch (e: unknown) {
+    // Fail closed: lifecycle writes must not be silently lost.
+    // Only tolerate a missing table in unmigrated test envs (detected by message).
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/no such table/i.test(msg)) {
+      console.warn('[state-machine] enrollment_status_logs table missing, skipping audit write:', msg);
+      return;
+    }
+    throw e;
+  }
 }
 
 /**
@@ -146,10 +180,10 @@ export async function getEnrollmentStatus(
 ): Promise<{ status: EnrollmentStatus; lastChangedAt: string; reason: string | null }> {
   try {
     const row = await db.prepare(
-      `SELECT status, changed_at, reason 
-       FROM enrollment_status_logs 
-       WHERE user_id = ? 
-       ORDER BY changed_at DESC LIMIT 1`
+      `SELECT status, changed_at, reason
+       FROM enrollment_status_logs
+       WHERE user_id = ?
+       ORDER BY changed_at DESC, rowid DESC LIMIT 1`
     ).bind(userId).first<{ status: EnrollmentStatus; changed_at: string; reason: string | null }>();
 
     if (row?.status) {

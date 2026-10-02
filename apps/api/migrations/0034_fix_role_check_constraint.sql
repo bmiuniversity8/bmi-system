@@ -22,11 +22,30 @@ CREATE TABLE IF NOT EXISTS users_new (
   account_claimed INTEGER NOT NULL DEFAULT 0,
   student_email TEXT,
   person_id TEXT,
+  admission_code TEXT,
+  admission_code_expires_at TEXT,
+  date_of_birth TEXT,
+  nationality TEXT,
+  address TEXT,
+  gender TEXT,
   created_at  TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
-INSERT INTO users_new SELECT * FROM users;
+INSERT INTO users_new (
+  id, email, password_hash, first_name, last_name, phone, role, is_verified,
+  verification_token, mfa_secret, mfa_enabled, session_version, failed_login_attempts,
+  locked_until, account_claimed, student_email, person_id, admission_code,
+  admission_code_expires_at, date_of_birth, nationality, address, gender,
+  created_at, updated_at
+)
+SELECT 
+  id, email, password_hash, first_name, last_name, phone, role, is_verified,
+  verification_token, mfa_secret, mfa_enabled, session_version, failed_login_attempts,
+  locked_until, account_claimed, NULL AS student_email, person_id, admission_code,
+  admission_code_expires_at, date_of_birth, nationality, address, gender,
+  created_at, updated_at
+FROM users;
 
 DROP TABLE users;
 ALTER TABLE users_new RENAME TO users;

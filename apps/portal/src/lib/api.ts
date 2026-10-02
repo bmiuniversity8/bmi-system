@@ -127,7 +127,8 @@ export const api = {
       request<{ message: string; throttled: boolean }>('/applications/draft', { method: 'PATCH', body: JSON.stringify(body) }),
 
     submit: (body: {
-      program: string;
+      program?: string;
+      program_id?: string;
       degree_level: string;
       personal_statement?: string;
       prior_education?: string;
@@ -208,6 +209,8 @@ export const api = {
   enrollment: {
     getStatus: () =>
       request<{ status: string; lastChangedAt: string; reason: string | null }>('/enrollment/status'),
+    getAgreement: () =>
+      request<{ document_id: string; version: string; version_hash: string; text: string }>('/enrollment/agreement'),
     signAgreement: (documentId: string, signedName: string, documentVersionHash = 'v1.0-sha256') =>
       request<{ success: boolean; signature_id: string; status: string; message: string }>('/enrollment/sign-agreement', {
         method: 'POST',
@@ -382,6 +385,14 @@ export const api = {
         body: data ? JSON.stringify(data) : undefined,
       }),
     getCurriculum: () => request<any>('/student/curriculum'),
+    getSections: (courseId: string, termId?: string) => {
+      const qs = `?course_id=${encodeURIComponent(courseId)}${termId ? `&term_id=${encodeURIComponent(termId)}` : ''}`;
+      return request<{ sections: Array<{ id: string; section_code: string; capacity: number; seats_taken: number; seats_available: number; is_full: boolean; schedule?: string; room?: string; code: string; title: string }>; my_section_ids: string[] }>(`/student/sections${qs}`);
+    },
+    autoEnrollMandatory: () =>
+      request<{ success: boolean; message: string }>('/student/enroll/mandatory', { method: 'POST' }),
+    generateInvoice: () =>
+      request<{ invoice_id: string; amount: number; status: string }>('/student/invoice/generate', { method: 'POST' }),
     getHolds: () => request<any[]>('/student/holds'),
     getAttendance: () => request<any[]>('/v1/attendance'),
     getRegistrationProgress: () => request<any>('/student/registration-progress'),
@@ -443,7 +454,8 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(data)
       }),
-    complete: () => request<any>('/registration/complete', { method: 'POST' })
+    complete: () => request<any>('/registration/complete', { method: 'POST' }),
+    finalize: () => request<{ success: boolean; status: string; registered_sections: number; message: string }>('/registration/finalize', { method: 'POST' }),
   }
 };
 

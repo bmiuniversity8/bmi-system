@@ -239,9 +239,9 @@ describe('End-to-End Live Student Enrollment Journey', () => {
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // Stage 3: Admin acceptance → role=student, admission code
+  // Stage 3: Legacy direct-accept is retired — formal decisions own offers.
   // ═══════════════════════════════════════════════════════════════════════════
-  it('Stage 3 — Admin accepts application (sets role, generates admission code)', async () => {
+  it('Stage 3 — Legacy direct accept is rejected (use formal decision flow)', async () => {
     const drizzle = makeDrizzleMock([{ id: 'admin-1', role: 'admin', first_name: 'Admin', email: 'admin@test.com' }]);
     vi.mocked(createCoreDb).mockReturnValue(drizzle);
 
@@ -284,11 +284,62 @@ describe('End-to-End Live Student Enrollment Journey', () => {
     });
 
     const res = await handleUpdateStatus(req, env as any, 'app-1', 'admin-1');
+    // Direct acceptance is retired: formal decision (admit → OFFER_EXTENDED →
+    // applicant accept → provisioning) is the sole authority.
+    expect(res.status).toBe(410);
+
+    const body = await res.json() as any;
+    expect(body.success).toBe(false);
+  });
+
+  it('Stage 3b — Triage to under_review still works via legacy endpoint', async () => {
+    const drizzle = makeDrizzleMock([{ id: 'admin-1', role: 'admin', first_name: 'Admin', email: 'admin@test.com' }]);
+    vi.mocked(createCoreDb).mockReturnValue(drizzle);
+
+    const defaultBinding = { first: vi.fn().mockResolvedValue(null), all: vi.fn().mockResolvedValue({ results: [] }), run: vi.fn().mockResolvedValue({ success: true }) };
+    const db: any = {
+      prepare: vi.fn().mockImplementation((sql: string) => {
+        if (sql.includes('FROM applications a JOIN users u')) {
+          return {
+            bind: vi.fn().mockReturnValue({
+              first: vi.fn().mockResolvedValue({
+                id: 'app-1', status: 'submitted', program: 'BA in Biblical Studies',
+                user_id: 'user-john-1', email: 'john@example.com', first_name: 'John',
+              }),
+            }),
+          };
+        }
+        return {
+          bind: vi.fn().mockReturnValue(defaultBinding),
+          first: vi.fn().mockResolvedValue(null),
+          all: vi.fn().mockResolvedValue({ results: [] }),
+        };
+      }),
+      transaction: vi.fn().mockImplementation(async (cb: any) => {
+        const tx = { prepare: vi.fn().mockReturnValue({ bind: vi.fn().mockReturnValue({ run: vi.fn().mockResolvedValue({ success: true }) }) }) };
+        return cb(tx);
+      }),
+    };
+
+    const env = {
+      PLATFORM_CONTEXT: { db, document: null },
+      RESEND_API_KEY: 'test-key',
+      ADMIN_EMAIL: 'admin@test.com',
+      ENVIRONMENT: 'test',
+    };
+
+    const req = new Request('http://localhost/api/admin/applications/app-1/status', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'under_review', notes: 'Moving to committee review.' }),
+    });
+
+    const res = await handleUpdateStatus(req, env as any, 'app-1', 'admin-1');
     expect(res.status).toBe(200);
 
     const body = await res.json() as any;
     expect(body.success).toBe(true);
-    expect(body.data.new_status).toBe('accepted');
+    expect(body.data.new_status).toBe('under_review');
   });
 
   // ═══════════════════════════════════════════════════════════════════════════

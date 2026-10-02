@@ -7,6 +7,8 @@
 --
 -- The program names here exactly match the `VALID_PROGRAMS` exported from `@bmi/shared`.
 
+PRAGMA foreign_keys=off;
+
 -- 1. Seed Faculties
 INSERT OR IGNORE INTO faculties (id, name, code, description) VALUES 
 ('f-theology', 'Faculty of Theology and Ministry', 'FTM', 'Theological and ministry training'),
@@ -14,10 +16,10 @@ INSERT OR IGNORE INTO faculties (id, name, code, description) VALUES
 
 -- 2. Seed Departments
 INSERT OR IGNORE INTO departments (id, name, code, faculty_id, description) VALUES 
-('d-biblical', 'Department of Biblical Studies', 'DBS', 'f-theology', 'Biblical and theological studies'),
-('d-ministry', 'Department of Ministry & Leadership', 'DML', 'f-theology', 'Practical ministry and leadership'),
-('d-counseling', 'Department of Christian Counseling', 'DCC', 'f-education', 'Counseling and psychological studies'),
-('d-education', 'Department of Christian Education', 'DCE', 'f-education', 'Education and teaching methodologies');
+('d-biblical', 'Department of Biblical Studies', 'DBS', COALESCE((SELECT id FROM faculties WHERE code = 'FTM' LIMIT 1), 'fac-theology-00000000000000000'), 'Biblical and theological studies'),
+('d-ministry', 'Department of Ministry & Leadership', 'DML', COALESCE((SELECT id FROM faculties WHERE code = 'FTM' LIMIT 1), 'fac-theology-00000000000000000'), 'Practical ministry and leadership'),
+('d-counseling', 'Department of Christian Counseling', 'DCC', COALESCE((SELECT id FROM faculties WHERE code = 'FCE' LIMIT 1), 'f-education'), 'Counseling and psychological studies'),
+('d-education', 'Department of Christian Education', 'DCE', COALESCE((SELECT id FROM faculties WHERE code = 'FCE' LIMIT 1), 'f-education'), 'Education and teaching methodologies');
 
 -- 3. Seed Programs
 -- Undergraduate
@@ -48,6 +50,8 @@ INSERT OR IGNORE INTO programs (id, name, code, degree_type, level, department_i
 ('p-cert-biblical', 'Graduate Certificate in Biblical Studies', 'GCBS', 'Certificate', 'certificate', 'd-biblical', 1, 15, 'online'),
 ('p-cert-christian', 'Graduate Certificate in Christian Studies', 'GCCS', 'Certificate', 'certificate', 'd-biblical', 1, 15, 'online'),
 ('p-cert-formation', 'Graduate Certificate in Spiritual Formation', 'GCSF', 'Certificate', 'certificate', 'd-ministry', 1, 15, 'online');
+
+PRAGMA foreign_keys=on;
 
 -- Record Migration
 INSERT OR IGNORE INTO _migrations (name) VALUES ('0032_seed_programs');

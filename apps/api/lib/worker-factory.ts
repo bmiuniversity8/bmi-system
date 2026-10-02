@@ -144,6 +144,8 @@ export function createWorker(routes: Route[]) {
         env.PLATFORM_CONTEXT = context;
         await backupWorker.scheduled(controller, env, ctx);
         await runArchivalJob(env);
+        const { runLifecycleCronJobs } = await import('./lifecycle-cron');
+        await runLifecycleCronJobs(env, ctx);
       },
       async queue(batch: any, env: Env, _ctx: ExecutionContext) {
         const context = bootstrap(env);

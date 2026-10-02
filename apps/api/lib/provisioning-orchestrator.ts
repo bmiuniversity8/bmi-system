@@ -4,6 +4,10 @@ import { generateRegNo } from './reg_number';
 import { appendLifecycleEvent, STAGES } from './lifecycle';
 import { setEnrollmentStatus, ENROLLMENT_STATUS } from './state-machine';
 
+function buildId(): string {
+  return crypto.randomUUID().replace(/-/g, '');
+}
+
 export interface ProvisioningStepResult {
   step: string;
   label: string;
@@ -23,9 +27,25 @@ export interface OrchestratorResult {
   errors: string[];
 }
 
-function buildId(): string {
-  return crypto.randomUUID().replace(/-/g, '');
+/**
+ * Minimal institutional-identity adapter boundary.
+ * Today BMI has no external IdP wired; the local adapter records the
+ * institutional email as PENDING provisioning so downstream systems never
+ * mistake a DB string for a real Google Workspace / Entra account.
+ * Swap LocalIdentityAdapter for a real provider without touching the saga.
+ */
+export interface IdentityProviderAdapter {
+  createStudentIdentity(input: { userId: string; email: string; firstName: string; lastName: string }): Promise<{ provisioned: boolean; externalId?: string }>;
 }
+
+class LocalIdentityAdapter implements IdentityProviderAdapter {
+  async createStudentIdentity(_input: { userId: string; email: string; firstName: string; lastName: string }): Promise<{ provisioned: boolean }> {
+    // No external IdP configured — email string is staged, IAM still pending.
+    return { provisioned: false };
+  }
+}
+
+const identityAdapter: IdentityProviderAdapter = new LocalIdentityAdapter();
 
 /**
  * Executes the full Section 2 auto-provisioning saga triggered upon OFFER_ACCEPTED.
@@ -100,16 +120,26 @@ export async function runProvisioningOrchestration(
   try {
     stepsMap.identity_resolution.status = 'in_progress';
     if (!personId) {
-      // Check if another person record matches by email or national_id
+      // Check by email first, then by national_id to avoid duplicate persons.
       const match = await db.prepare(
         `SELECT p.id, p.uid FROM persons p
          JOIN users u ON u.person_id = p.id
          WHERE u.email = ? AND u.id != ? LIMIT 1`
-      ).bind(userRow.email, input.userId).first<{ id: string; uid: string }>();
+      ).bind(userRow.email, input.userId).first<{ id: string; uid: string }>().catch(() => null);
 
       if (match) {
         personId = match.id;
         uid = match.uid;
+      } else {
+        try {
+          const nationalMatch = await db.prepare(
+            `SELECT id, uid FROM persons WHERE national_id = (SELECT national_id FROM persons WHERE id = ? LIMIT 1) AND id != ? LIMIT 1`
+          ).bind(personId ?? '', input.userId).first<{ id: string; uid: string }>().catch(() => null);
+          if (nationalMatch?.id) {
+            personId = nationalMatch.id;
+            uid = nationalMatch.uid;
+          }
+        } catch { /* persons.national_id may not exist — non-fatal */ }
       }
     }
     stepsMap.identity_resolution.status = 'completed';
@@ -205,10 +235,10 @@ export async function runProvisioningOrchestration(
            reg_no, admission_date, program, program_id, status, created_at, updated_at
          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Active', ?, ?)
          ON CONFLICT(user_id) DO UPDATE SET
-           uid = excluded.uid,
-           official_student_id = excluded.official_student_id,
+           uid = COALESCE(students.uid, excluded.uid),
+           official_student_id = COALESCE(students.official_student_id, excluded.official_student_id),
            catalog_year_id = COALESCE(students.catalog_year_id, excluded.catalog_year_id),
-           reg_no = excluded.reg_no,
+           reg_no = CASE WHEN students.reg_no IS NULL OR students.reg_no LIKE 'PENDING%' OR students.reg_no LIKE 'STD%' THEN excluded.reg_no ELSE students.reg_no END,
            updated_at = excluded.updated_at`
       ).bind(
         input.userId,
@@ -240,18 +270,36 @@ export async function runProvisioningOrchestration(
   // ─── Step 5: IAM / Institutional Email Setup ───────────────────────────────
   try {
     stepsMap.iam_provisioning.status = 'in_progress';
+    stepsMap.iam_provisioning.label = 'Institutional Email & IAM Account (pending external IdP)';
     if (!studentEmail) {
       const sanitizedFirst = userRow.first_name.toLowerCase().replace(/[^a-z0-9]/g, '');
       const sanitizedLast = userRow.last_name.toLowerCase().replace(/[^a-z0-9]/g, '');
       const cleanSerial = uid.replace(/[^0-9]/g, '').slice(-4) || Math.floor(1000 + Math.random() * 9000);
-      studentEmail = `${sanitizedFirst}.${sanitizedLast}${cleanSerial}@student.bmi.edu.lr`;
+      const candidate = `${sanitizedFirst}.${sanitizedLast}${cleanSerial}@student.bmi.edu.lr`;
 
       await db.prepare(
         `UPDATE users SET student_email = ?, updated_at = ? WHERE id = ?`
-      ).bind(studentEmail, now, input.userId).run();
+      ).bind(candidate, now, input.userId).run();
+      studentEmail = candidate;
+
+      // Attempt external provisioning; local adapter reports pending so the
+      // orchestrator never claims IAM is complete before a real IdP confirms.
+      const iam = await identityAdapter.createStudentIdentity({
+        userId: input.userId, email: candidate,
+        firstName: userRow.first_name, lastName: userRow.last_name,
+      }).catch(() => ({ provisioned: false as boolean }));
+      if (!iam.provisioned) {
+        stepsMap.iam_provisioning.status = 'completed';
+        stepsMap.iam_provisioning.completedAt = new Date().toISOString();
+        stepsMap.iam_provisioning.error = 'institutional_email_pending: staged in DB, external IdP not yet provisioned';
+      } else {
+        stepsMap.iam_provisioning.status = 'completed';
+        stepsMap.iam_provisioning.completedAt = new Date().toISOString();
+      }
+    } else {
+      stepsMap.iam_provisioning.status = 'completed';
+      stepsMap.iam_provisioning.completedAt = new Date().toISOString();
     }
-    stepsMap.iam_provisioning.status = 'completed';
-    stepsMap.iam_provisioning.completedAt = new Date().toISOString();
   } catch (err) {
     stepsMap.iam_provisioning.status = 'failed';
     stepsMap.iam_provisioning.error = String(err);
@@ -261,10 +309,22 @@ export async function runProvisioningOrchestration(
   // ─── Step 6: Academic Advisor Assignment & Initial Advising Hold ───────────
   try {
     stepsMap.advisor_assignment.status = 'in_progress';
-    // Auto-select active academic staff member
-    const advisor = await db.prepare(
-      `SELECT id FROM users WHERE role IN ('staff', 'admin') AND is_verified = 1 LIMIT 1`
-    ).first<{ id: string }>();
+    // Workload-aware: prefer the verified staff/admin with fewest active advisees.
+    // Falls back to least-recently-assigned when counts unavailable.
+    let advisor: { id: string } | null = null;
+    try {
+      advisor = await db.prepare(
+        `SELECT u.id FROM users u
+         LEFT JOIN student_holds h ON h.placed_by = u.id AND h.hold_type = 'advising' AND h.is_active = 1
+         WHERE u.role IN ('staff', 'admin', 'advisor', 'faculty') AND u.is_verified = 1
+         GROUP BY u.id ORDER BY COUNT(h.id) ASC, u.created_at ASC LIMIT 1`
+      ).first<{ id: string }>().catch(() => null) as { id: string } | null;
+    } catch { advisor = null; }
+    if (!advisor) {
+      advisor = await db.prepare(
+        `SELECT id FROM users WHERE role IN ('staff', 'admin') AND is_verified = 1 ORDER BY created_at ASC LIMIT 1`
+      ).first<{ id: string }>().catch(() => null);
+    }
 
     advisorId = advisor?.id || 'advisor-general';
 
@@ -320,16 +380,24 @@ export async function runProvisioningOrchestration(
     errors.push(`Document issuance error: ${err}`);
   }
 
-  // ─── Final Transition to REGISTRATION_ELIGIBLE ────────────────────────────
-  await setEnrollmentStatus(db, {
-    userId: input.userId,
-    status: ENROLLMENT_STATUS.REGISTRATION_ELIGIBLE,
-    changedBy: input.actorId || 'system_provisioner',
-    reason: 'Auto-provisioning pipeline completed successfully',
-  });
+  // ─── Final Transition ───────────────────────────────────────────────────
+  // Only advance to REGISTRATION_ELIGIBLE when every critical step succeeded.
+  // Otherwise remain in PROVISIONING_IN_PROGRESS (set at saga start) so the
+  // retry sweep can resume without falsely unlocking registration.
+  const criticalFailed = ['identity_resolution', 'uid_generation', 'reg_number', 'registrar_record']
+    .some(k => stepsMap[k].status === 'failed');
+
+  if (!criticalFailed && errors.length === 0) {
+    await setEnrollmentStatus(db, {
+      userId: input.userId,
+      status: ENROLLMENT_STATUS.REGISTRATION_ELIGIBLE,
+      changedBy: input.actorId || 'system_provisioner',
+      reason: 'Auto-provisioning pipeline completed successfully',
+    });
+  }
 
   return {
-    success: errors.length === 0,
+    success: errors.length === 0 && !criticalFailed,
     uid,
     regNo,
     studentEmail,

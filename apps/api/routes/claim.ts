@@ -14,6 +14,21 @@ interface ClaimBody {
 }
 
 export async function handleClaimAccount(req: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
+  // LEGACY flow — no new admission codes have been minted since formal
+  // decisions (POST /api/admissions/decide) replaced direct-accept provisioning.
+  // Kept functional for the grace period so already-issued codes still redeem.
+  // Set LEGACY_CLAIM_ENABLED=0 to disable with a 410 + migration guidance.
+  // All calls emit a Deprecation header + audit log for removal tracking.
+  if (env.LEGACY_CLAIM_ENABLED === '0' || env.LEGACY_CLAIM_ENABLED === 'false') {
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: 'Account claim via admission code is retired. Your applicant account transitions automatically on offer acceptance — sign in with your original credentials.',
+      }),
+      { status: 410, headers: { 'Content-Type': 'application/json', Deprecation: 'true' } }
+    );
+  }
+
   const body = await typedJson<ClaimBody>(req);
   const { admissionCode, password } = body;
 
@@ -113,7 +128,17 @@ export async function handleClaimAccount(req: Request, env: Env, ctx?: Execution
       await runPostClaimTasks();
     }
 
-    return ok({ message: 'Account claimed successfully.' });
+    try {
+      await env.PLATFORM_CONTEXT?.db.prepare(
+        `INSERT INTO admin_audit_logs (id, admin_id, action, target_type, target_id, details, created_at)
+         VALUES (?, 'system', 'LEGACY_CLAIM_USED', 'user', ?, ?, datetime('now'))`
+      ).bind(crypto.randomUUID(), user.id, JSON.stringify({ via: 'admission_code' })).run();
+    } catch { /* audit best-effort */ }
+
+    const res = ok({ message: 'Account claimed successfully.' });
+    res.headers.set('Deprecation', 'true');
+    res.headers.set('Link', '</api/admissions/accept>; rel="successor-version"');
+    return res;
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Failed to claim account';
     console.error(e);

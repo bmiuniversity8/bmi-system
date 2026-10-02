@@ -1,10 +1,8 @@
 import type { IDatabase } from '@bmi/ports';
-import { REGISTRAR_EMAIL } from '@bmi/shared';
 import { ok, error, logAdminAction } from '../lib/types';
 import {
   applicationSubmittedEmail,
   statusUpdateEmail,
-  accountSetupPromptEmail,
   isValidEmail,
   generateTraceId,
   buildEmailLayout,
@@ -14,29 +12,39 @@ import type { Env } from '../lib/types';
 import { dispatchWebhook } from '../lib/webhook';
 import { generateApplicationNumber } from '../lib/app_number';
 import { getLifecycleHistory } from '../lib/lifecycle';
-import { dispatchPendingJobs } from '../lib/provisioning';
 import { parseBody, SubmitApplicationSchema, ApplicationDraftSchema } from '../lib/schemas';
-import { executeAdmissionPipelineOptimized, executeWithMonitoring } from '../lib/performance';
+import { executeWithMonitoring } from '../lib/performance';
 import { createCoreDb, setRequestContext, isNeon } from '../lib/db';
 import { users } from '../schema/core';
 import { eq } from 'drizzle-orm';
 import type { NeonHttpDatabase } from 'drizzle-orm/neon-http';
 
 /**
- * Validate a program name against the SINGLE SOURCE OF TRUTH — the programs DB table.
- *
- * Previously this used a hardcoded VALID_PROGRAMS list imported from @bmi/shared,
- * which drifted from the actual curriculum. Now we query the DB so any program
- * added/archived via the UMS is immediately reflected in application validation.
- *
- * Results are in-memory cached per Worker invocation for 60s to avoid N+1 lookups
- * during the same request lifecycle.
+ * Resolve a program to its canonical { id, name } against the SINGLE SOURCE
+ * OF TRUTH — the programs DB table. program_id is authoritative; a legacy
+ * program name is resolved to its id for backwards compatibility.
  */
-async function isValidProgramName(env: Env, programName: string): Promise<boolean> {
-  const row = await env.PLATFORM_CONTEXT!.db.prepare(
-    `SELECT 1 AS found FROM programs WHERE name = ? AND is_active = 1 LIMIT 1`,
-  ).bind(programName).first<{ found: number }>();
-  return (row?.found ?? 0) === 1;
+async function resolveProgram(
+  env: Env,
+  input: { program?: string; program_id?: string }
+): Promise<{ id: string; name: string } | null> {
+  const db = env.PLATFORM_CONTEXT!.db;
+  if (input.program_id) {
+    const row = await db.prepare(
+      `SELECT id, name FROM programs WHERE id = ? AND is_active = 1 LIMIT 1`,
+    ).bind(input.program_id).first<{ id: string; name: string }>();
+    if (row) return row;
+    // Fall through to name lookup: offline fallback catalogs reuse the
+    // label as id, so an unknown id with a valid name must still resolve.
+  }
+  if (input.program) {
+    const row = await db.prepare(
+      `SELECT id, name FROM programs WHERE name = ? AND is_active = 1 LIMIT 1`,
+    ).bind(input.program).first<{ id: string; name: string }>();
+    if (row) return row;
+    return null;
+  }
+  return null;
 }
 
 function sanitizeHtml(input: string): string {
@@ -54,11 +62,14 @@ export async function handleSubmitApplication(request: Request, env: Env, userId
   const parsed = await parseBody(request, SubmitApplicationSchema);
   if (parsed instanceof Response) return parsed;
 
-  const { program, degree_level, personal_statement, prior_education, date_of_birth, nationality, address, gender, high_school, graduation_year, gpa } = parsed;
+  const { program, program_id, degree_level, personal_statement, prior_education, date_of_birth, nationality, address, gender, high_school, graduation_year, gpa } = parsed;
 
-  if (!(await isValidProgramName(env, program))) {
+  const resolved = await resolveProgram(env, { program, program_id });
+  if (!resolved) {
     return error('Invalid program selected', 400);
   }
+  const programName = resolved.name;
+  const programId = resolved.id;
 
   const db = env.PLATFORM_CONTEXT!.db;
 
@@ -102,11 +113,23 @@ export async function handleSubmitApplication(request: Request, env: Env, userId
   const sanitizedStatement = personal_statement ? sanitizeHtml(personal_statement) : null;
   const sanitizedEducation = prior_education ? sanitizeHtml(prior_education) : null;
 
+  // Generate the official application number INSIDE the submission path so the
+  // applicant never sees "PENDING". Counter increment is atomic (single UPSERT).
+  const year = new Date().getUTCFullYear();
+  let applicationNumber: string;
+  try {
+    applicationNumber = await generateApplicationNumber(db, year);
+  } catch (e) {
+    console.error('Application number generation failed:', e);
+    return error('Failed to submit application. Please try again.');
+  }
+
   try {
     await createApplicationWithDependenciesOptimized(db, {
       appId,
       userId,
-      program,
+      program: programName,
+      programId,
       degreeLevel: degree_level,
       personalStatement: sanitizedStatement ?? undefined,
       priorEducation: sanitizedEducation ? JSON.stringify(sanitizedEducation) : undefined,
@@ -116,7 +139,8 @@ export async function handleSubmitApplication(request: Request, env: Env, userId
       gender,
       highSchool: high_school,
       graduationYear: graduation_year,
-      gpa
+      gpa,
+      applicationNumber,
     });
   } catch (e) {
     console.error('Application creation failed:', e);
@@ -132,19 +156,13 @@ export async function handleSubmitApplication(request: Request, env: Env, userId
     }
   };
 
-  // Async operations for non-critical tasks
-  let applicationNumber: string | null = null;
-
+  // Async operations for non-critical tasks only (notifications + draft cleanup).
+  // Application number is already assigned transactionally above — no background minting.
   const runBgTasks = async () => {
     const promises: Promise<unknown>[] = [deleteDraft()];
 
     promises.push(
-      generateAndUpdateApplicationNumber(db, appId)
-        .catch(e => console.error('[app_number] Background generation failed:', e))
-    );
-
-    promises.push(
-      sendApplicationNotificationsOptimized(env, userId, program, appId)
+      sendApplicationNotificationsOptimized(env, userId, programName, appId, applicationNumber)
         .catch(e => console.error('[email] Background notification failed:', e))
     );
 
@@ -155,17 +173,6 @@ export async function handleSubmitApplication(request: Request, env: Env, userId
     ctx.waitUntil(runBgTasks());
   } else {
     await runBgTasks();
-    // Synchronously populate applicationNumber in the non-ctx (fallback/testing) path
-    const year = new Date().getUTCFullYear();
-    try {
-      const generated = await generateApplicationNumber(db, year).catch(() => null);
-      if (generated) {
-        applicationNumber = generated;
-        await db.prepare('UPDATE applications SET application_number = ?, updated_at = datetime(\'now\') WHERE id = ?').bind(generated, appId).run();
-      }
-    } catch (e) {
-      console.error('[app_number] Fallback generation failed:', e);
-    }
   }
 
   const duration = performance.now() - startTime;
@@ -175,7 +182,7 @@ export async function handleSubmitApplication(request: Request, env: Env, userId
 
   return ok({
     application_id: appId,
-    application_number: applicationNumber || 'PENDING',
+    application_number: applicationNumber,
     status: 'submitted',
     _perf: { duration_ms: Math.round(duration) }
   });
@@ -227,6 +234,7 @@ async function createApplicationWithDependenciesOptimized(
     appId: string;
     userId: string;
     program: string;
+    programId?: string;
     degreeLevel: string;
     personalStatement?: string;
     priorEducation?: string;
@@ -237,9 +245,10 @@ async function createApplicationWithDependenciesOptimized(
     highSchool?: string;
     graduationYear?: number;
     gpa?: number;
+    applicationNumber?: string;
   }
 ): Promise<string> {
-  const { appId, userId, program, degreeLevel, personalStatement, priorEducation, dateOfBirth, nationality, address, gender, highSchool, graduationYear, gpa } = applicationData;
+  const { appId, userId, program, programId, degreeLevel, personalStatement, priorEducation, dateOfBirth, nationality, address, gender, highSchool, graduationYear, gpa, applicationNumber } = applicationData;
 
   await db.transaction(async (tx) => {
     // 1. Update user's personal info
@@ -247,43 +256,38 @@ async function createApplicationWithDependenciesOptimized(
       `UPDATE users SET date_of_birth = ?, nationality = ?, address = ?, gender = ?, updated_at = datetime('now') WHERE id = ?`
     ).bind(dateOfBirth ?? null, nationality ?? null, address ?? null, gender ?? null, userId).run();
 
-    // 2. Main application record with optimized fields
-    await tx.prepare(
-      `INSERT INTO applications (id, user_id, program, degree_level, status, personal_statement, prior_education, high_school, graduation_year, gpa, submitted_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, 'submitted', ?, ?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now'))`
-    ).bind(appId, userId, program, degreeLevel, personalStatement ?? null, priorEducation ?? null, highSchool ?? null, graduationYear ?? null, gpa ?? null).run();
+    // 2. Main application record with official reference number assigned atomically.
+    //    The number is minted before this transaction via an atomic counter UPSERT,
+    //    then persisted here so the applicant never sees "PENDING".
+    //    program_id is canonical; program (name) is denormalized display.
+    //    Column may not exist until migration 0043 — fall back gracefully.
+    try {
+      await tx.prepare(
+        `INSERT INTO applications (id, user_id, program, program_id, degree_level, status, personal_statement, prior_education, high_school, graduation_year, gpa, application_number, submitted_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 'submitted', ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now'))`
+      ).bind(appId, userId, program, programId ?? null, degreeLevel, personalStatement ?? null, priorEducation ?? null, highSchool ?? null, graduationYear ?? null, gpa ?? null, applicationNumber ?? null).run();
+    } catch {
+      await tx.prepare(
+        `INSERT INTO applications (id, user_id, program, degree_level, status, personal_statement, prior_education, high_school, graduation_year, gpa, application_number, submitted_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'submitted', ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now'))`
+      ).bind(appId, userId, program, degreeLevel, personalStatement ?? null, priorEducation ?? null, highSchool ?? null, graduationYear ?? null, gpa ?? null, applicationNumber ?? null).run();
+    }
 
     // 3. Initial status log with timestamp
     await tx.prepare(
       `INSERT INTO application_status_logs (id, application_id, changed_by, old_status, new_status, notes, changed_at)
        VALUES (?, ?, ?, NULL, 'submitted', 'Initial submission', datetime('now'))`
     ).bind(crypto.randomUUID(), appId, userId).run();
+
+    // 4. Clean up server-side draft atomically with submission (authoritative draft).
+    try {
+      await tx.prepare('DELETE FROM application_drafts WHERE user_id = ?').bind(userId).run();
+    } catch {
+      // Draft table may not exist in some test envs — submission itself must still succeed.
+    }
   });
 
   return appId;
-}
-
-// Background application number generation (ACID-wrapped)
-async function generateAndUpdateApplicationNumber(db: IDatabase, appId: string): Promise<void> {
-  const year = new Date().getUTCFullYear();
-  try {
-    const applicationNumber = await generateApplicationNumber(db, year);
-
-    await db.transaction(async (tx) => {
-      await tx.prepare(
-        'UPDATE applications SET application_number = ?, updated_at = datetime(\'now\') WHERE id = ?'
-      ).bind(applicationNumber, appId).run();
-
-      const noteMsg = `Application Reference Number assigned: ${applicationNumber}`;
-      await tx.prepare(
-        `INSERT INTO application_status_logs (id, application_id, changed_by, old_status, new_status, notes, changed_at)
-         VALUES (?, ?, 'system', NULL, 'application_number_generated', ?, datetime('now'))`
-      ).bind(crypto.randomUUID(), appId, noteMsg).run();
-    });
-  } catch (e) {
-    console.error('[app_number] Background generation failed for', appId, ':', e);
-    throw e;
-  }
 }
 
 // Optimized notification email sending — per-email independent failure handling
@@ -436,8 +440,18 @@ export async function handleUpdateStatus(
   }
 
   const { status, notes } = body;
-  const validStatuses = ['under_review', 'accepted', 'rejected', 'waitlisted'];
+  // Canonical lifecycle: formal admissions decisions (POST /api/admissions/decide)
+  // are the SOLE authority for offers. This legacy status endpoint must never
+  // create an "accepted" student state or trigger provisioning.
+  // Allowed here: triage only (under_review / rejected / waitlisted).
+  const validStatuses = ['under_review', 'rejected', 'waitlisted'];
   if (!validStatuses.includes(status)) {
+    if (status === 'accepted') {
+      return error(
+        'Direct acceptance via this endpoint is disabled. Use POST /api/admissions/decide with decision "admit" to issue an offer; provisioning runs only after the applicant accepts the offer.',
+        410
+      );
+    }
     return error(`Status must be one of: ${validStatuses.join(', ')}`);
   }
 
@@ -504,8 +518,6 @@ export async function handleUpdateStatus(
   }
 
   const oldStatus = app.status;
-  let pipelineResult: { uid: string | null; registration_number: string | null } | null = null;
-  let admissionCode: string | undefined;
 
   const sanitizedNotes = notes ? notes.replace(/<[^>]*>/g, '').substring(0, 2000) : null;
 
@@ -521,13 +533,9 @@ export async function handleUpdateStatus(
          VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`
       ).bind(crypto.randomUUID(), appId, trimmedAdminId, oldStatus, status, sanitizedNotes).run();
 
-      if (status === 'accepted') {
-        admissionCode = crypto.randomUUID().split('-')[0].toUpperCase() + crypto.randomUUID().split('-')[0].toUpperCase();
-        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-        await tx.prepare(
-          `UPDATE users SET role = 'student', admission_code = ?, admission_code_expires_at = ?, updated_at = datetime('now') WHERE id = ?`
-        ).bind(admissionCode, expiresAt, app.user_id).run();
-      }
+      // NOTE: no role change, no admission_code, no provisioning here.
+      // Offers + provisioning flow exclusively via POST /api/admissions/decide
+      // → OFFER_EXTENDED → applicant POST /api/admissions/accept → provisioning.
     });
   } catch (e) {
     console.error(`[apply:update:${traceId}] Status update transaction FAILED (rolled back):`, e);
@@ -537,54 +545,17 @@ export async function handleUpdateStatus(
   console.info(`[apply:update:${traceId}] Application ${appId.substring(0, 8)} status ${oldStatus} → ${status} by ${trimmedAdminId.substring(0, 8)} (${adminRecord.role})`);
   await logAdminAction(env, trimmedAdminId, 'update_application_status', 'application', appId, { old_status: oldStatus, new_status: status, notes: sanitizedNotes }, request);
 
-  // RC-7: Use a shared mutable result ref so runAdmissionPostAccept can populate it
-  // before runNotifications reads it — avoids a sequential await that would add latency,
-  // while still guaranteeing the reg_no is available when instructor emails are dispatched.
-  const sharedResult: { uid: string | null; registration_number: string | null } = { uid: null, registration_number: null };
-
-  const runAdmissionPostAccept = async () => {
-    try {
-      if (status === 'accepted') {
-        const result = await executeAdmissionPipelineOptimized(db, {
-          applicationId: appId,
-          userId: app.user_id,
-          actorId: trimmedAdminId,
-          program: app.program,
-        }, env.PLATFORM_CONTEXT!.document);
-        // Populate shared ref so runNotifications can access the data
-        sharedResult.uid = result.uid;
-        sharedResult.registration_number = result.regNo;
-        pipelineResult = sharedResult;
-        await dispatchPendingJobs(env).catch(e => console.error(`[apply:update:${traceId}] Provisioning dispatch failed:`, e));
-      }
-    } catch (e) {
-      console.error(`[apply:update:${traceId}] Admission post-accept pipeline error:`, e);
-    }
-  };
-
   const runNotifications = async () => {
     const dispatchPromises: Promise<unknown>[] = [];
 
     if (isValidEmail(app.email)) {
       const studentTraceContext = { traceId, action: 'status_update', role: 'student', application_id: appId };
-      if (status === 'accepted' && admissionCode) {
-        dispatchPromises.push(
-          safeDispatchEmail(env, ctx, {
-            to: app.email,
-            subject: '🎉 BMI University — You\'ve Been Accepted! Complete Your Account Setup',
-            html: accountSetupPromptEmail(app.first_name, app.program, admissionCode),
-            templateName: 'account_setup_prompt',
-            traceId,
-            context: studentTraceContext,
-          })
-        );
-      }
 
       dispatchPromises.push(
         safeDispatchEmail(env, ctx, {
           to: app.email,
           subject: `BMI University — Application Update: ${status.replace('_', ' ').toUpperCase()}`,
-          html: statusUpdateEmail(app.first_name, status, app.program, sanitizedNotes || undefined, admissionCode),
+          html: statusUpdateEmail(app.first_name, status, app.program, sanitizedNotes || undefined, undefined),
           templateName: 'status_update',
           traceId,
           context: studentTraceContext,
@@ -606,7 +577,7 @@ export async function handleUpdateStatus(
               <p style="margin: 8px 0;"><strong>Applicant:</strong> ${app.first_name} (${app.email})</p>
               <p style="margin: 8px 0;"><strong>Program:</strong> ${app.program}</p>
               <p style="margin: 8px 0;"><strong>Previous Status:</strong> ${oldStatus.replace('_', ' ')}</p>
-              <p style="margin: 8px 0;"><strong>New Status:</strong> <span style="font-weight: bold; color: ${status === 'accepted' ? '#22c55e' : status === 'rejected' ? '#ef4444' : '#0f172a'};">${status.replace('_', ' ')}</span></p>
+              <p style="margin: 8px 0;"><strong>New Status:</strong> <span style="font-weight: bold; color: ${status === 'rejected' ? '#ef4444' : '#0f172a'};">${status.replace('_', ' ')}</span></p>
               <p style="margin: 8px 0;"><strong>Application ID:</strong> ${appId.substring(0, 8).toUpperCase()}...</p>
               ${sanitizedNotes ? `<p style="margin: 8px 0;"><strong>Reviewer Notes:</strong> ${sanitizedNotes}</p>` : ''}
             </div>
@@ -617,52 +588,6 @@ export async function handleUpdateStatus(
           context: { traceId, action: 'status_update_copy', role: 'admin', application_id: appId, changed_by: trimmedAdminId },
         })
       );
-    }
-
-    if (status === 'accepted') {
-      const instructorMatches = await db.prepare(
-        `SELECT DISTINCT u.email, u.first_name, u.last_name
-         FROM courses c
-         JOIN instructors i ON c.instructor_id = i.id
-         JOIN users u ON i.user_id = u.id
-         WHERE c.program_id = (SELECT id FROM programs WHERE name = ? LIMIT 1)
-         AND u.email IS NOT NULL AND u.email != ''`
-      ).bind(app.program).all<{ email: string; first_name: string | null; last_name: string | null }>();
-
-      if (instructorMatches?.results?.length) {
-        for (const instructor of instructorMatches.results) {
-          if (instructor.email && isValidEmail(instructor.email)) {
-            const instructorName = [instructor.first_name, instructor.last_name].filter(Boolean).join(' ') || 'Instructor';
-            dispatchPromises.push(
-              safeDispatchEmail(env, ctx, {
-                to: instructor.email,
-                subject: `[Faculty] New Student Admitted to ${app.program}`,
-                html: buildEmailLayout('New Student Admission Notice', `
-                  <h2 style="color: #0f172a;">Dear ${instructorName},</h2>
-                  <p style="color: #475569; line-height: 1.6;">
-                    A new student has been admitted to the <strong>${app.program}</strong> program and will be joining your upcoming courses.
-                  </p>
-                  <div style="background: #f0fdf4; border-left: 4px solid #22c55e; padding: 16px; margin: 20px 0; border-radius: 4px;">
-                    <p style="margin: 8px 0; color: #166534;"><strong>Student Name:</strong> ${app.first_name}</p>
-                    <p style="margin: 8px 0; color: #166534;"><strong>Contact:</strong> ${app.email}</p>
-                    <p style="margin: 8px 0; color: #166534;"><strong>Program:</strong> ${app.program}</p>
-                    ${sharedResult.registration_number ? `<p style="margin: 8px 0; color: #166534;"><strong>Student Reg No:</strong> ${sharedResult.registration_number}</p>` : ''}
-                  </div>
-                  <p style="color: #475569; line-height: 1.6;">
-                    Student LMS enrollment, email provisioning, and course registration are being processed. You will see the student appear in your class rosters within 24 hours. Please update your syllabi and prepare welcome materials.
-                  </p>
-                  <p style="color: #64748b; font-size: 13px;">
-                    If you have questions about this student's placement, contact the Registrar's Office at <a href="mailto:${REGISTRAR_EMAIL}" style="color: #d4af37;">${REGISTRAR_EMAIL}</a>.
-                  </p>
-                `),
-                templateName: 'instructor_new_student_notice',
-                traceId,
-                context: { traceId, action: 'accepted_faculty_notice', role: 'instructor', application_id: appId, program: app.program },
-              })
-            );
-          }
-        }
-      }
     }
 
     try {
@@ -683,10 +608,7 @@ export async function handleUpdateStatus(
     await Promise.allSettled(dispatchPromises);
   };
 
-  // RC-7: Run pipeline first (populates sharedResult.registration_number), then notifications.
-  // Both are async but notifications wait for pipeline to resolve via sequential await inside waitUntil.
   const runAll = async () => {
-    await runAdmissionPostAccept();
     await runNotifications();
   };
 
@@ -701,7 +623,6 @@ export async function handleUpdateStatus(
     old_status: oldStatus,
     new_status: status,
     trace_id: traceId,
-    ...(pipelineResult ? { admission: pipelineResult } : {}),
   });
 }
 
@@ -762,15 +683,19 @@ export async function handleAdminCreateApplication(
     return error('Invalid JSON body', 400);
   }
 
-  const { email, first_name, last_name, phone, program, degree_level, high_school, gpa, address, nationality } = body as Record<string, any>;
+  const { email, first_name, last_name, phone, program, program_id, degree_level, high_school, gpa, address, nationality } = body as Record<string, any>;
 
-  if (!email || !first_name || !last_name || !program || !degree_level) {
-    return error('email, first_name, last_name, program, and degree_level are required', 400);
+  if (!email || !first_name || !last_name || (!program && !program_id) || !degree_level) {
+    return error('email, first_name, last_name, program (or program_id), and degree_level are required', 400);
   }
 
   const normalizedEmail = String(email).toLowerCase().trim();
 
-  if (!(await isValidProgramName(env, program))) {
+  const resolved = await resolveProgram(env, {
+    program: program ? String(program) : undefined,
+    program_id: program_id ? String(program_id) : undefined,
+  });
+  if (!resolved) {
     return error('Invalid program selected', 400);
   }
 
@@ -820,7 +745,8 @@ export async function handleAdminCreateApplication(
   await createApplicationWithDependenciesOptimized(db, {
     appId,
     userId,
-    program: String(program),
+    program: resolved.name,
+    programId: resolved.id,
     degreeLevel: String(degree_level),
     highSchool: high_school ? String(high_school) : undefined,
     gpa: gpaValue ?? undefined,
@@ -830,7 +756,8 @@ export async function handleAdminCreateApplication(
 
   await logAdminAction(env, adminId, 'admin_create_application', 'application', appId, {
     applicant_email: normalizedEmail,
-    program,
+    program: resolved.name,
+    program_id: resolved.id,
     degree_level,
   }, request);
 
@@ -841,7 +768,7 @@ export async function handleAdminCreateApplication(
       subject: 'BMI University — Application Submitted on Your Behalf',
       html: applicationSubmittedEmail(
         String(first_name),
-        String(program),
+        resolved.name,
         appId
       ),
       templateName: 'admin_created_application_applicant',
@@ -916,6 +843,62 @@ export async function handleDeleteApplication(
   });
 
   return ok({ message: 'Application deleted successfully', application_id: applicationId });
+}
+
+// ─── Duplicate applicant detection ─────────────────────────────────────────
+// POST /api/applications/check-duplicate { email, date_of_birth?, national_id? }
+// Never auto-merges — flags possible matches for staff review.
+export async function handleCheckDuplicate(request: Request, env: Env): Promise<Response> {
+  let body: { email?: string; date_of_birth?: string; national_id?: string; first_name?: string; last_name?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return error('Invalid JSON body', 400);
+  }
+  const email = (body.email || '').toLowerCase().trim();
+  if (!email || !isValidEmail(email)) return error('A valid email is required', 400);
+
+  const db = env.PLATFORM_CONTEXT!.db;
+  const matches: Array<{ type: string; user_id: string; application_id?: string; status?: string }> = [];
+
+  try {
+    const userMatch = await db.prepare(
+      `SELECT id FROM users WHERE LOWER(email) = ? LIMIT 1`
+    ).bind(email).first<{ id: string }>();
+    if (userMatch) {
+      const apps = await db.prepare(
+        `SELECT id, status FROM applications WHERE user_id = ? ORDER BY created_at DESC LIMIT 5`
+      ).bind(userMatch.id).all<{ id: string; status: string }>();
+      for (const a of (apps.results || [])) {
+        matches.push({ type: 'email', user_id: userMatch.id, application_id: a.id, status: a.status });
+      }
+      if (matches.length === 0) matches.push({ type: 'email', user_id: userMatch.id });
+    }
+  } catch (e) {
+    console.warn('[duplicate] email lookup failed:', e);
+  }
+
+  if (body.date_of_birth) {
+    try {
+      const dobMatch = await db.prepare(
+        `SELECT id FROM users WHERE LOWER(email) != ? AND date_of_birth = ? LIMIT 5`
+      ).bind(email, body.date_of_birth).all<{ id: string }>();
+      for (const r of (dobMatch.results || [])) {
+        if (!matches.some(m => m.user_id === r.id)) {
+          matches.push({ type: 'dob', user_id: r.id });
+        }
+      }
+    } catch { /* column may not exist — ignore */ }
+  }
+
+  if (matches.length > 0) {
+    return ok({
+      is_duplicate: true,
+      message: 'A possible existing record was found. Our admissions team will review and link your application if appropriate.',
+      matches: matches.slice(0, 5),
+    });
+  }
+  return ok({ is_duplicate: false });
 }
 
 export async function checkAdmissionCodeExpiries(env: Env, ctx?: ExecutionContext): Promise<void> {

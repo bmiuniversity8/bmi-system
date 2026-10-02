@@ -148,7 +148,8 @@ export const VALID_DEGREE_LEVELS = ['undergraduate', 'graduate', 'doctorate', 'c
 export const VALID_APP_STATUSES = ['submitted', 'under_review', 'accepted', 'rejected', 'waitlisted'] as const;
 
 export const SubmitApplicationSchema = z.object({
-  program: z.string({ required_error: 'Program is required' }).min(1).max(LIMITS.MEDIUM),
+  program: z.string({ required_error: 'Program is required' }).min(1).max(LIMITS.MEDIUM).optional(),
+  program_id: z.string().max(LIMITS.UUID).optional(),
   degree_level: z.enum(VALID_DEGREE_LEVELS, {
     errorMap: () => ({ message: `Degree level must be one of: ${VALID_DEGREE_LEVELS.join(', ')}` }),
   }),
@@ -167,6 +168,9 @@ export const SubmitApplicationSchema = z.object({
   high_school: z.string().max(200).optional(),
   graduation_year: z.number().int().min(1900).max(2100).optional(),
   gpa: z.number().min(0).max(5).optional(),
+}).refine((d) => d.program || d.program_id, {
+  message: 'Program selection is required (program_id preferred)',
+  path: ['program_id'],
 });
 
 export const ApplicationDraftSchema = z.object({

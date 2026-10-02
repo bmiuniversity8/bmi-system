@@ -279,10 +279,30 @@ export async function handleUpdateDocumentVerification(request: Request, env: En
   if (!status) return error('verification_status is required', 400);
   if (!['verified', 'pending', 'flagged'].includes(status)) return error("verification_status must be 'verified', 'pending' or 'flagged'", 400);
 
-  const doc = await env.PLATFORM_CONTEXT!.db.prepare('SELECT id FROM documents WHERE id = ?').bind(docId).first();
+  const doc = await env.PLATFORM_CONTEXT!.db.prepare('SELECT id, user_id, doc_type FROM documents WHERE id = ?').bind(docId).first<{ id: string; user_id: string; doc_type: string }>();
   if (!doc) return error('Document not found', 404);
 
   await env.PLATFORM_CONTEXT!.db.prepare(`UPDATE documents SET verification_status = ? WHERE id = ?`).bind(status, docId).run();
+
+  // Only staff verification clears the document hold — uploads never clear it.
+  if (status === 'verified' && (doc.doc_type === 'id_document' || doc.doc_type === 'id_copy')) {
+    // Clear hold only if at least one verified ID document now exists for the student.
+    const verified = await env.PLATFORM_CONTEXT!.db.prepare(
+      `SELECT 1 FROM documents WHERE user_id = ? AND doc_type IN ('id_document','id_copy') AND verification_status = 'verified' LIMIT 1`
+    ).bind(doc.user_id).first();
+    if (verified) {
+      await env.PLATFORM_CONTEXT!.db.prepare(
+        `UPDATE student_holds SET is_active = 0, resolved_at = datetime('now') WHERE student_id = ? AND hold_type = 'document' AND is_active = 1`
+      ).bind(doc.user_id).run().catch(() => {});
+    }
+  } else if (status === 'flagged') {
+    // Flagging re-activates / ensures a document hold so the student must resubmit.
+    await env.PLATFORM_CONTEXT!.db.prepare(
+      `INSERT INTO student_holds (id, student_id, hold_type, reason, blocks, placed_by, is_active, created_at)
+       VALUES (?, ?, 'document', 'Identity document requires resubmission — see reviewer notes', 'registration', 'registrar', 1, datetime('now'))
+       ON CONFLICT(id) DO NOTHING`
+    ).bind(`hold-doc-${doc.user_id}`, doc.user_id).run().catch(() => {});
+  }
   return ok({ document_id: docId, verification_status: status });
 }
 

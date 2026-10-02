@@ -62,7 +62,7 @@ function makeEnv(overrides: Record<string, unknown> = {}) {
       if (sql.includes('programs') || sql.includes('FROM programs')) {
         return {
           bind: vi.fn().mockReturnThis(),
-          first: vi.fn().mockResolvedValue({ found: 1 }),
+          first: vi.fn().mockResolvedValue({ id: 'prog-bib', name: 'BA in Biblical Studies', found: 1 }),
         };
       }
       return db;

@@ -71,15 +71,34 @@ describe('handleCreateStudent', () => {
   });
 
   it('returns 201 on success (new user)', async () => {
-    let callCount = 0;
-    env.PLATFORM_CONTEXT.db.first = vi.fn().mockImplementation(() => {
-      callCount++;
-      if (callCount <= 2) return null;        // user + person checks
-      if (callCount === 3) return null;        // person LEFT JOIN
-      if (callCount === 4) return { last_serial: 1 }; // uid_counters
-      if (callCount <= 9) return null;         // student, enrollment, lifecycle checks
-      return { id: 'new-user', first_name: 'John' }; // final fetch
+    // SQL-aware mock: orchestrator queries enrollment_status_logs (empty → first
+    // status), then the canonical user row, then UID/reg helpers.
+    const userRow = { id: 'new-user', first_name: 'John', last_name: 'Doe', email: 'john@example.com', student_email: null, person_id: null, uid: null, national_id: null, reg_no: null, catalog_year_id: null, official_student_id: null };
+    const stmtFor = (firstVal: unknown) => ({
+      bind: vi.fn().mockReturnValue({ first: vi.fn().mockResolvedValue(firstVal), all: vi.fn().mockResolvedValue({ results: [] }), run: vi.fn().mockResolvedValue({}) }),
+      first: vi.fn().mockResolvedValue(firstVal),
+      all: vi.fn().mockResolvedValue({ results: [] }),
+      run: vi.fn().mockResolvedValue({}),
     });
+    env.PLATFORM_CONTEXT.db.prepare = vi.fn().mockImplementation((sql: string) => {
+      if (sql.includes('uid_counters')) {
+        return stmtFor({ last_serial: 42 });
+      }
+      if (sql.includes('enrollment_status_logs')) {
+        return stmtFor(null);
+      }
+      if (sql.includes('FROM users u') && sql.includes('LEFT JOIN persons')) {
+        return stmtFor(userRow);
+      }
+      if (sql.includes('SELECT person_id FROM users')) {
+        return stmtFor({ person_id: 'person-1' });
+      }
+      if (sql.includes('SELECT s.user_id as id')) {
+        return stmtFor({ id: 'new-user', first_name: 'John' });
+      }
+      return stmtFor(null);
+    });
+    env.PLATFORM_CONTEXT.db.first = vi.fn().mockResolvedValue(null);
     env.PLATFORM_CONTEXT.db.run = vi.fn().mockResolvedValue({});
 
     const req = makeRequest('POST', {
@@ -98,13 +117,28 @@ describe('handleCreateStudent', () => {
   });
 
   it('returns 201 on success (existing user, with uid)', async () => {
-    let callCount = 0;
-    env.PLATFORM_CONTEXT.db.first = vi.fn().mockImplementation(() => {
-      callCount++;
-      if (callCount === 1) return { id: 'existing-user' }; // user exists
-      if (callCount === 2) return { uid: 'BMI000000042', id: 'person-1' }; // person exists
-      if (callCount <= 7) return null;
-      return { id: 'existing-user', first_name: 'Jane' };
+    const userRow = { id: 'existing-user', first_name: 'Jane', last_name: 'Smith', email: 'jane@example.com', student_email: null, person_id: 'person-1', uid: 'BMI000000042', national_id: null, reg_no: null, catalog_year_id: null, official_student_id: 'BMI000000042' };
+    env.PLATFORM_CONTEXT.db.prepare = vi.fn().mockImplementation((sql: string) => {
+      if (sql.includes('SELECT id FROM users WHERE email')) {
+        return { bind: vi.fn().mockReturnValue({ first: vi.fn().mockResolvedValue({ id: 'existing-user' }), all: vi.fn().mockResolvedValue({ results: [] }), run: vi.fn().mockResolvedValue({}) }) };
+      }
+      if (sql.includes('enrollment_status_logs')) {
+        return { bind: vi.fn().mockReturnValue({ first: vi.fn().mockResolvedValue(null), all: vi.fn().mockResolvedValue({ results: [] }), run: vi.fn().mockResolvedValue({}) }) };
+      }
+      if (sql.includes('FROM users u') && sql.includes('LEFT JOIN persons')) {
+        return { bind: vi.fn().mockReturnValue({ first: vi.fn().mockResolvedValue(userRow), all: vi.fn().mockResolvedValue({ results: [] }), run: vi.fn().mockResolvedValue({}) }) };
+      }
+      if (sql.includes('SELECT person_id FROM users')) {
+        return { bind: vi.fn().mockReturnValue({ first: vi.fn().mockResolvedValue({ person_id: 'person-1' }), all: vi.fn().mockResolvedValue({ results: [] }), run: vi.fn().mockResolvedValue({}) }) };
+      }
+      if (sql.includes('SELECT s.user_id as id')) {
+        return { bind: vi.fn().mockReturnValue({ first: vi.fn().mockResolvedValue({ id: 'existing-user', first_name: 'Jane' }), all: vi.fn().mockResolvedValue({ results: [] }), run: vi.fn().mockResolvedValue({}) }) };
+      }
+      return { bind: vi.fn().mockReturnValue({ first: vi.fn().mockResolvedValue(null), all: vi.fn().mockResolvedValue({ results: [] }), run: vi.fn().mockResolvedValue({}) }) };
+    });
+    env.PLATFORM_CONTEXT.db.first = vi.fn().mockImplementation((..._args: unknown[]) => {
+      // Fallback for direct .first() chains (prepare().bind() covers most paths)
+      return Promise.resolve(null);
     });
     env.PLATFORM_CONTEXT.db.run = vi.fn().mockResolvedValue({});
 
