@@ -518,6 +518,7 @@ export default function Apply() {
                     { key: 'undergraduate', label: 'Undergraduate' },
                     { key: 'graduate', label: 'Graduate' },
                     { key: 'doctorate', label: 'Doctorate' },
+                    { key: 'diploma', label: 'Diploma' },
                     { key: 'certificate', label: 'Certificate' },
                   ].map(tab => (
                     <button

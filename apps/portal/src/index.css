@@ -153,6 +153,11 @@ input, select, textarea, button { font-family: inherit; }
 .badge-accepted { background: #d1fae5; color: #065f46; }
 .badge-rejected { background: #fee2e2; color: #991b1b; }
 .badge-waitlisted { background: #ede9fe; color: #4c1d95; }
+.badge-undergraduate { background: #ede9fe; color: #6d28d9; }
+.badge-graduate { background: #fef3c7; color: #92400e; }
+.badge-doctorate { background: #ecfdf5; color: #065f46; }
+.badge-certificate { background: #e0f2fe; color: #0369a1; }
+.badge-diploma { background: #fdf2f8; color: #9d174d; }
 
 /* ─── Alert ─── */
 .alert { padding: 1rem 1.25rem; border-radius: var(--radius-sm); font-size: 0.9rem; }

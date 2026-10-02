@@ -538,8 +538,10 @@ export default function Admissions() {
             >
               <option value="all">All Degree Levels</option>
               <option value="undergraduate">Undergraduate</option>
-              <option value="postgraduate">Postgraduate</option>
+              <option value="graduate">Graduate</option>
               <option value="doctorate">Doctorate</option>
+              <option value="diploma">Diploma</option>
+              <option value="certificate">Certificate</option>
             </select>
           </div>
         </div>
@@ -1049,12 +1051,14 @@ export default function Admissions() {
                   <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">Degree Level</label>
                   <select
                     value={newFormData.degree_level}
-                    onChange={(e) => setNewFormData({ ...newFormData, degree_level: e.target.value as 'undergraduate' | 'graduate' | 'doctorate' | 'certificate' })}
+                    onChange={(e) => setNewFormData({ ...newFormData, degree_level: e.target.value as 'undergraduate' | 'graduate' | 'doctorate' | 'certificate' | 'diploma' })}
                     className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg p-2 font-medium focus:ring-2 focus:ring-[#FFD700] outline-none"
                   >
                     <option value="undergraduate">Undergraduate</option>
-                    <option value="postgraduate">Postgraduate</option>
+                    <option value="graduate">Graduate</option>
                     <option value="doctorate">Doctorate</option>
+                    <option value="diploma">Diploma</option>
+                    <option value="certificate">Certificate</option>
                   </select>
                 </div>
               </div>

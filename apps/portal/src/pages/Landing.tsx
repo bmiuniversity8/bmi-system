@@ -48,6 +48,7 @@ export default function Landing() {
     { level: 'Bachelor\'s', programs: programCatalog.filter(p => p.level === 'undergraduate').map(p => p.label).slice(0, 3) },
     { level: 'Master\'s', programs: programCatalog.filter(p => p.level === 'graduate').map(p => p.label).slice(0, 3) },
     { level: 'Doctorate', programs: programCatalog.filter(p => p.level === 'doctorate').map(p => p.label).slice(0, 2) },
+    { level: 'Diploma & Certificate', programs: programCatalog.filter(p => p.level === 'diploma' || p.level === 'certificate').map(p => p.label).slice(0, 2) },
   ], [programCatalog]);
 
   return (

@@ -250,6 +250,11 @@
   color: #0369a1;
 }
 
+.levelBadge.diploma {
+  background: #fdf2f8;
+  color: #9d174d;
+}
+
 .checkIndicator {
   width: 20px;
   height: 20px;

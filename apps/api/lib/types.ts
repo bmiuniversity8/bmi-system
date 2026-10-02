@@ -102,7 +102,7 @@ export interface Application {
   id: string;
   user_id: string;
   program: string;
-  degree_level: 'undergraduate' | 'graduate' | 'doctorate' | 'certificate';
+  degree_level: 'undergraduate' | 'graduate' | 'doctorate' | 'certificate' | 'diploma';
   status: 'draft' | 'submitted' | 'under_review' | 'accepted' | 'rejected' | 'waitlisted';
   personal_statement: string | null;
   prior_education: string | null;

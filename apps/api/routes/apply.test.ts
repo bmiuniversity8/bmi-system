@@ -53,6 +53,7 @@ vi.mock('../lib/provisioning', () => ({
 }));
 
 import { handleSubmitApplication } from './apply';
+import { SubmitApplicationSchema } from '../lib/schemas';
 
 // ─── Test Env Helpers ──────────────────────────────────────────────────────────
 
@@ -134,6 +135,17 @@ describe('handleSubmitApplication', () => {
     expect(res.status).toBe(400);
     const body = await res.json() as any;
     expect(body.fields?.some((f: any) => f.field === 'degree_level')).toBe(true);
+  });
+
+  it('accepts diploma degree_level in schema', () => {
+    const parsed = SubmitApplicationSchema.safeParse({
+      program: 'Diploma in Christian Ministry and Theology',
+      degree_level: 'diploma',
+      date_of_birth: '2000-01-01',
+      nationality: 'Kenyan',
+      gender: 'male',
+    });
+    expect(parsed.success).toBe(true);
   });
 
   it('returns 400 for invalid program (business rule check)', async () => {

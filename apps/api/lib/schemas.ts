@@ -144,7 +144,7 @@ export const ChangePasswordSchema = z.object({
 
 // ─── Application Schemas ──────────────────────────────────────────────────────
 
-export const VALID_DEGREE_LEVELS = ['undergraduate', 'graduate', 'doctorate', 'certificate'] as const;
+export const VALID_DEGREE_LEVELS = ['undergraduate', 'graduate', 'doctorate', 'certificate', 'diploma'] as const;
 export const VALID_APP_STATUSES = ['submitted', 'under_review', 'accepted', 'rejected', 'waitlisted'] as const;
 
 export const SubmitApplicationSchema = z.object({
