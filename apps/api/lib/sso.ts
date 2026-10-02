@@ -21,20 +21,35 @@ export interface UserInfo {
 }
 
 export function getOAuthConfig(provider: OAuthProvider, env: Env, request?: Request): OAuthConfig {
-  let baseUrl = 'http://localhost:5173';
-  if (request) {
-    const url = new URL(request.url);
-    if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
-      // In local dev, the callback must go through the Vite proxy (port 5173)
-      // so that cookies are set on the same origin as the portal frontend.
-      baseUrl = 'http://localhost:5173';
-    } else {
-      baseUrl = `${url.protocol}//${url.host}`;
+  // Explicit override wins — makes redirect_uri deterministic across
+  // custom-domain vs workers.dev routing. Set via wrangler secret, e.g.:
+  // OAUTH_REDIRECT_URI=https://api.bmiuniversities.org/api/auth/oauth/google/callback
+  // (per-provider GOOGLE_REDIRECT_URI also supported)
+  const envOverride =
+    (env as unknown as Record<string, string | undefined>)[`${provider.toUpperCase()}_REDIRECT_URI`] ??
+    (env as unknown as Record<string, string | undefined>).OAUTH_REDIRECT_URI;
+  let redirectUri: string;
+  if (envOverride) {
+    redirectUri = envOverride;
+  } else {
+    let baseUrl = 'http://localhost:5173';
+    if (request) {
+      const url = new URL(request.url);
+      if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
+        // In local dev, the callback must go through the Vite proxy (port 5173)
+        // so that cookies are set on the same origin as the portal frontend.
+        baseUrl = 'http://localhost:5173';
+      } else {
+        baseUrl = `${url.protocol}//${url.host}`;
+      }
+    } else if (env.ENVIRONMENT === 'production') {
+      // Canonical API domain (see packages/shared/src/domains.ts API_WORKER_URL).
+      // Previously pointed at a stale *.pages.dev fallback, which guaranteed
+      // a redirect_uri_mismatch against the Google Console allowlist.
+      baseUrl = 'https://api.bmiuniversities.org';
     }
-  } else if (env.ENVIRONMENT === 'production') {
-    baseUrl = 'https://api.bmi-portal.pages.dev';
+    redirectUri = `${baseUrl}/api/auth/oauth/${provider}/callback`;
   }
-  const redirectUri = `${baseUrl}/api/auth/oauth/${provider}/callback`;
   
   const configs: Record<OAuthProvider, Partial<OAuthConfig>> = {
     google: {
