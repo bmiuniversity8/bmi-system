@@ -5,7 +5,7 @@
  *
  * Canonical contracts pinned here:
  *  POST /api/applications                       { program_id?, program?, ... } → { application_id, application_number }
- *  POST /api/applications/check-duplicate        { email, ... } → { is_duplicate }
+ *  POST /api/applications/check-duplicate        { email, ... } → { received } (generic, no oracle)
  *  POST /api/admissions/decide                   formal decision (sole offer authority)
  *  POST /api/admissions/accept                   applicant accepts → provisioning
  *  GET  /api/student/sections?course_id=         → { sections, my_section_ids }

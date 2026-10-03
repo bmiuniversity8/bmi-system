@@ -129,11 +129,11 @@ export async function handleClaimAccount(req: Request, env: Env, ctx?: Execution
     }
 
     try {
-      await env.PLATFORM_CONTEXT?.db.prepare(
-        `INSERT INTO admin_audit_logs (id, admin_id, action, target_type, target_id, details, created_at)
-         VALUES (?, 'system', 'LEGACY_CLAIM_USED', 'user', ?, ?, datetime('now'))`
-      ).bind(crypto.randomUUID(), user.id, JSON.stringify({ via: 'admission_code' })).run();
-    } catch { /* audit best-effort */ }
+      const { logAdminAction } = await import('../lib/types');
+      await logAdminAction(env, user.id, 'LEGACY_CLAIM_USED', 'user', user.id, { via: 'admission_code' });
+    } catch (e: unknown) {
+      console.error('[claim] failed to record LEGACY_CLAIM_USED audit:', e instanceof Error ? e.message : String(e));
+    }
 
     const res = ok({ message: 'Account claimed successfully.' });
     res.headers.set('Deprecation', 'true');

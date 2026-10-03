@@ -22,6 +22,9 @@ export interface RegistrationEligibilityResult {
     name: string;
     academic_year: string;
     status: string;
+    registration_opens_at?: string | null;
+    registration_closes_at?: string | null;
+    census_date?: string | null;
   } | null;
 }
 
@@ -90,20 +93,42 @@ export async function checkRegistrationEligibility(
     reasons.push('Unable to verify active student holds. Registration blocked until clearance check succeeds.');
   }
 
-  // 4. Determine Active Term
-  let term: { id: string; name: string; academic_year: string; status: string } | null = null;
+  // 4. Determine Active Term (with registration window columns when present)
+  let term: { id: string; name: string; academic_year: string; status: string; registration_opens_at?: string | null; registration_closes_at?: string | null; census_date?: string | null } | null = null;
   try {
     if (targetTermId) {
       term = await db.prepare(
-        `SELECT id, name, academic_year, status FROM academic_terms WHERE id = ? LIMIT 1`
-      ).bind(targetTermId).first<{ id: string; name: string; academic_year: string; status: string }>();
+        `SELECT id, name, academic_year, status, registration_opens_at, registration_closes_at, census_date FROM academic_terms WHERE id = ? LIMIT 1`
+      ).bind(targetTermId).first<{ id: string; name: string; academic_year: string; status: string; registration_opens_at?: string | null; registration_closes_at?: string | null; census_date?: string | null }>().catch(async () => {
+        // Fallback for DBs without the window columns (pre-migration).
+        return await db.prepare(
+          `SELECT id, name, academic_year, status FROM academic_terms WHERE id = ? LIMIT 1`
+        ).bind(targetTermId).first<{ id: string; name: string; academic_year: string; status: string }>();
+      });
     } else {
       term = await db.prepare(
-        `SELECT id, name, academic_year, status FROM academic_terms WHERE status IN ('active', 'registration') ORDER BY start_date DESC LIMIT 1`
-      ).first<{ id: string; name: string; academic_year: string; status: string }>();
+        `SELECT id, name, academic_year, status, registration_opens_at, registration_closes_at, census_date FROM academic_terms WHERE status IN ('active', 'registration') ORDER BY start_date DESC LIMIT 1`
+      ).first<{ id: string; name: string; academic_year: string; status: string; registration_opens_at?: string | null; registration_closes_at?: string | null; census_date?: string | null }>().catch(async () => {
+        return await db.prepare(
+          `SELECT id, name, academic_year, status FROM academic_terms WHERE status IN ('active', 'registration') ORDER BY start_date DESC LIMIT 1`
+        ).first<{ id: string; name: string; academic_year: string; status: string }>();
+      });
     }
   } catch (e) {
     console.warn('[eligibility] Error querying term:', e);
+  }
+
+  // 4b. Enforce the registration window with a clear reason.
+  if (term) {
+    const nowMs = Date.now();
+    const opens = term.registration_opens_at ? new Date(term.registration_opens_at).getTime() : NaN;
+    const closes = term.registration_closes_at ? new Date(term.registration_closes_at).getTime() : NaN;
+    if (Number.isFinite(opens) && nowMs < opens) {
+      reasons.push(`Registration has not opened for term ${term.name}: opens ${term.registration_opens_at}.`);
+    }
+    if (Number.isFinite(closes) && nowMs > closes) {
+      reasons.push(`Registration window closed for term ${term.name}: closed ${term.registration_closes_at}.`);
+    }
   }
 
   // 5. Query Advising Release

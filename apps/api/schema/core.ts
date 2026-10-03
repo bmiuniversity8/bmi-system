@@ -132,6 +132,9 @@ export const academicTerms = pgTable('academic_terms', {
   start_date: timestamp('start_date').notNull(),
   end_date: timestamp('end_date').notNull(),
   status: text('status').notNull().default('upcoming'),
+  registration_opens_at: timestamp('registration_opens_at'),
+  registration_closes_at: timestamp('registration_closes_at'),
+  census_date: timestamp('census_date'),
   created_at: timestamp('created_at').notNull().defaultNow(),
 }, (t) => [
   uniqueIndex('academic_terms_code_unique').on(t.code),
@@ -219,6 +222,7 @@ export const enrollmentDeposits = pgTable('enrollment_deposits', {
 }, (t) => [
   index('idx_enrollment_deposits_app_id').on(t.application_id),
   index('idx_enrollment_deposits_user_id').on(t.user_id),
+  uniqueIndex('idx_enrollment_deposits_payment_ref_unique').on(t.payment_reference),
 ]);
 
 export const enrollmentStatusLogs = pgTable('enrollment_status_logs', {
@@ -245,10 +249,12 @@ export const esignatures = pgTable('esignatures', {
   ip_address: text('ip_address'),
   user_agent: text('user_agent'),
   document_version_hash: text('document_version_hash').notNull(),
+  term_id: text('term_id'),
   created_at: timestamp('created_at').notNull().defaultNow(),
 }, (t) => [
   index('idx_esignatures_user_id').on(t.user_id),
   index('idx_esignatures_doc_id').on(t.document_id),
+  index('idx_esignatures_term').on(t.term_id),
 ]);
 
 export const financialAidAwards = pgTable('financial_aid_awards', {
@@ -457,10 +463,12 @@ export const invoices = pgTable('invoices', {
   amount: integer('amount').notNull(),
   status: text('status').notNull().default('unpaid'),
   due_date: timestamp('due_date').notNull(),
+  term_id: text('term_id'),
   created_at: timestamp('created_at').notNull().defaultNow(),
 }, (t) => [
   index('idx_invoices_student').on(t.student_id),
   index('idx_invoices_uid').on(t.uid),
+  index('idx_invoices_term').on(t.term_id),
 ]);
 
 export const ledgerAccounts = pgTable('ledger_accounts', {

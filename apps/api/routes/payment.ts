@@ -18,6 +18,8 @@ interface PaymentBody {
   currency?: string;
   invoiceId?: string;
   callbackUrl?: string;
+  purpose?: string;
+  applicationId?: string;
 }
 
 /**
@@ -32,8 +34,32 @@ interface PaymentBody {
 export async function handleCreatePaymentIntent(req: Request, env: Env, userId: string): Promise<Response> {
   try {
     const body = await typedJson<PaymentBody>(req);
-    const { reason, invoiceId } = body;
+    const { reason, invoiceId, purpose, applicationId } = body;
     let { amount } = body;
+
+    // Deposit intent: the server is authoritative for amount, ownership and
+    // expiry. Client amount is ignored.
+    let depositApplicationId: string | undefined;
+    if (purpose === 'deposit') {
+      if (!applicationId) return error('applicationId is required for deposit payments', 400);
+      const db = env.PLATFORM_CONTEXT!.db;
+      const app = await db.prepare(
+        `SELECT id, user_id, status FROM applications WHERE id = ? LIMIT 1`
+      ).bind(applicationId).first<{ id: string; user_id: string; status: string }>().catch(() => null);
+      if (!app || app.user_id !== userId) return error('Application not found', 404);
+      const decision = await db.prepare(
+        `SELECT deposit_required, deposit_amount, offer_expires_at FROM admissions_decisions WHERE application_id = ? LIMIT 1`
+      ).bind(applicationId).first<{ deposit_required: number; deposit_amount: number; offer_expires_at: string | null }>().catch(() => null);
+      if (!decision || Number(decision.deposit_required) !== 1) {
+        return error('No deposit is required for this application', 400);
+      }
+      if (decision.offer_expires_at && new Date() > new Date(decision.offer_expires_at)) {
+        return error('Offer has expired; deposit cannot be taken', 409);
+      }
+      amount = Number(decision.deposit_amount);
+      if (!amount || amount <= 0) return error('Deposit amount is not configured', 400);
+      depositApplicationId = applicationId;
+    }
 
     // Server is authoritative for the amount: when an invoice is referenced,
     // resolve the charge from the invoice row and ignore any client-supplied amount.
@@ -80,12 +106,13 @@ export async function handleCreatePaymentIntent(req: Request, env: Env, userId: 
       currency,
       email,
       description: buildPaymentDescription(
-        reason || (invoiceId ? `Tuition Invoice ${invoiceId.slice(0, 8)}` : 'Tuition payment'),
+        reason || (depositApplicationId ? `Enrollment deposit ${depositApplicationId.slice(0, 8)}` : invoiceId ? `Tuition Invoice ${invoiceId.slice(0, 8)}` : 'Tuition payment'),
       ),
       callbackUrl,
       metadata: {
         userId,
         ...(invoiceId ? { invoiceId } : {}),
+        ...(depositApplicationId ? { purpose: 'deposit', applicationId: depositApplicationId } : {}),
         merchant: INSTITUTION_LEGAL_NAME,
         trading_as: INSTITUTION_TRADING_AS_LINE,
       },
@@ -195,11 +222,47 @@ export async function fulfillSuccessfulPayment(
   env: Env,
   intent: PaymentIntent,
   ctx?: ExecutionContext,
-): Promise<{ invoiceId?: string; amountMatched?: boolean }> {
+): Promise<{ invoiceId?: string; amountMatched?: boolean; depositId?: string }> {
   const metadata = intent.metadata || {};
   const userId = metadata.userId as string | undefined;
   const invoiceId = (metadata.invoiceId || metadata.invoice_id) as string | undefined;
+  const depositPurpose = metadata.purpose === 'deposit';
+  const depositApplicationId = (metadata.applicationId || metadata.application_id) as string | undefined;
   const db = env.PLATFORM_CONTEXT!.db;
+
+  // Deposit fulfillment: verified gateway amount → confirmed enrollment_deposits row.
+  // Idempotent via UNIQUE(payment_reference) + ON CONFLICT DO NOTHING.
+  if (depositPurpose && depositApplicationId && userId) {
+    const { recordEnrollmentDeposit } = await import('../lib/admissions-decision-service');
+    const decision = await db.prepare(
+      `SELECT deposit_amount, offer_expires_at FROM admissions_decisions WHERE application_id = ? LIMIT 1`
+    ).bind(depositApplicationId).first<{ deposit_amount: number; offer_expires_at: string | null }>().catch(() => null);
+    if (decision) {
+      if (!decision.offer_expires_at || new Date() <= new Date(decision.offer_expires_at)) {
+        const expected = Number(decision.deposit_amount || 0);
+        const receivedRaw = Number(intent.amount);
+        // Normalize subunit (kobo/cents) the same way invoice receipts do.
+        const candidates = [receivedRaw, receivedRaw / 100];
+        const matched = candidates.some(
+          (v) => Number.isFinite(v) && Number.isFinite(expected) && Math.abs(v - expected) < 0.01
+        );
+        if (matched) {
+          const settledAmount = Math.abs(receivedRaw - expected) < 0.01 ? receivedRaw : expected;
+          const res = await recordEnrollmentDeposit(db, {
+            applicationId: depositApplicationId,
+            userId,
+            amount: settledAmount,
+            paymentReference: intent.reference || intent.id,
+          });
+          return { amountMatched: true, depositId: res.depositId };
+        }
+        console.warn(
+          `[payment] deposit amount mismatch: application ${depositApplicationId} expects ${expected}, gateway verified ${receivedRaw} (${intent.reference || intent.id}) — holding for review`
+        );
+        return { amountMatched: false };
+      }
+    }
+  }
 
   if (invoiceId) {
     const invoice = await db

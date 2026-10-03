@@ -38,6 +38,7 @@ export default function Status() {
     steps: Array<{ step: string; label: string; status: string; completedAt?: string; error?: string }>;
   } | null>(null);
   const [acceptingOffer, setAcceptingOffer] = useState(false);
+  const [depositBusy, setDepositBusy] = useState(false);
 
   // Document upload state
   const [uploadStatus, setUploadStatus] = useState<Record<string, string>>({});
@@ -119,6 +120,51 @@ export default function Status() {
       setError(err instanceof Error ? err.message : 'Failed to decline offer.');
     }
   };
+
+  const handlePayDeposit = async () => {
+    if (!app) return;
+    setDepositBusy(true);
+    setError('');
+    try {
+      // Gateway flow: create a deposit intent (server-priced), redirect to the
+      // gateway, and confirm on return via ?reference= (see effect below).
+      const intent = await api.admissions.createDepositIntent(app.id);
+      if (intent.authorizationUrl) {
+        window.location.href = intent.authorizationUrl;
+        return;
+      }
+      // No redirect (e.g. test gateway): confirm directly.
+      if (intent.reference) {
+        await api.admissions.payDeposit(app.id, intent.reference);
+        setActionSuccess('Deposit confirmed. You may now accept your offer.');
+        loadData();
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to start deposit payment.');
+    } finally {
+      setDepositBusy(false);
+    }
+  };
+
+  // Gateway return: ?reference= / ?trxref= → confirm the deposit server-side
+  // (the server re-verifies via the gateway; the reference alone confers nothing).
+  useEffect(() => {
+    const ref = params.get('reference') || params.get('trxref');
+    if (!ref || !app) return;
+    (async () => {
+      setDepositBusy(true);
+      try {
+        await api.admissions.payDeposit(app.id, ref);
+        setActionSuccess('Deposit confirmed. You may now accept your offer.');
+        loadData();
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Deposit confirmation failed.');
+      } finally {
+        setDepositBusy(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [app?.id]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -291,6 +337,23 @@ export default function Status() {
                     <strong>Admission Conditions:</strong>
                     <div style={{ marginTop: '0.25rem', fontSize: '0.875rem' }}>
                       {typeof decision.conditions === 'string' ? decision.conditions : JSON.stringify(decision.conditions)}
+                    </div>
+                  </div>
+                )}
+
+                {Number(decision?.deposit_required) === 1 && (
+                  <div className="alert alert-info" style={{ marginBottom: '1rem' }}>
+                    <strong>Enrollment deposit required:</strong>{' '}
+                    {decision?.deposit_amount ?? ''} — pay securely via the gateway before accepting.
+                    <div style={{ marginTop: '0.75rem' }}>
+                      <button
+                        className="btn btn-navy"
+                        onClick={handlePayDeposit}
+                        disabled={depositBusy}
+                        style={{ padding: '0.6rem 1.25rem', fontWeight: 700 }}
+                      >
+                        {depositBusy ? '⏳ Processing…' : 'Pay Deposit via Gateway'}
+                      </button>
                     </div>
                   </div>
                 )}

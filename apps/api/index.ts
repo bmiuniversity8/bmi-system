@@ -464,7 +464,15 @@ export default withSentry(
       }
 
       try {
-        const rateLimitResult = await rateLimit(request, context.rateLimiter);
+        // Stricter throttle for the duplicate-check endpoint (account-oracle
+        // hardening): 5 req/min vs the default 30 req/min.
+        const isDuplicateCheck =
+          method === 'POST' && path === '/api/applications/check-duplicate';
+        const rateLimitResult = await rateLimit(
+          request,
+          context.rateLimiter,
+          isDuplicateCheck ? 5 : undefined
+        );
         if (rateLimitResult) {
           const duration = performance.now() - startTime;
           trackResponseTime(path, method, duration, rateLimitResult.status, request);

@@ -16,17 +16,53 @@ export interface ValidationResult {
 }
 
 function timeToMinutes(t: string): number {
-  const parts = t.split(':').map(Number);
+  const parts = String(t || '').split(':').map(Number);
+  if (parts.length < 2 || !Number.isFinite(parts[0]) || !Number.isFinite(parts[1])) return NaN;
   return (parts[0] || 0) * 60 + (parts[1] || 0);
 }
 
 function hasOverlap(slotA: ScheduleSlot, slotB: ScheduleSlot): boolean {
-  if (slotA.day.toLowerCase() !== slotB.day.toLowerCase()) return false;
+  if (!slotA || !slotB || !slotA.day || !slotB.day) return false;
+  if (String(slotA.day).toLowerCase() !== String(slotB.day).toLowerCase()) return false;
   const startA = timeToMinutes(slotA.start);
   const endA = timeToMinutes(slotA.end);
   const startB = timeToMinutes(slotB.start);
   const endB = timeToMinutes(slotB.end);
+  if (!Number.isFinite(startA) || !Number.isFinite(endA) || !Number.isFinite(startB) || !Number.isFinite(endB)) return false;
   return startA < endB && startB < endA;
+}
+
+async function getCreditLimit(db: IDatabase): Promise<number> {
+  try {
+    const row = await db.prepare(
+      `SELECT value FROM app_config WHERE key = 'max_credits_per_term' LIMIT 1`
+    ).bind().first<{ value: string }>().catch(() => null);
+    const n = Number(row?.value);
+    if (Number.isFinite(n) && n > 0) return Math.floor(n);
+  } catch {
+    // fall through to default
+  }
+  return 18;
+}
+
+/**
+ * Source of truth for "passed": `student_course_registrations.status = 'completed'`.
+ * (`enrollments.status` is limited to enrolled/dropped/waitlisted and never
+ * holds completed/passed, and `grades` has no student/course columns — so both
+ * are unsuitable. Completed registrations are the canonical pass record.)
+ *
+ * Timetable source: `course_sections.schedule` is authoritative for student
+ * clash detection. It stores a JSON array like
+ *   [{"day":"Mon","start":"09:00","end":"10:00"}].
+ * The `timetabling` table tracks room/instructor scheduling and is not
+ * consulted here. Schedule JSON is parsed defensively; invalid entries are
+ * skipped.
+ */
+export async function getPassedCourseIds(db: IDatabase, userId: string): Promise<Set<string>> {
+  const q = await db.prepare(
+    `SELECT course_id FROM student_course_registrations WHERE student_id = ? AND status = 'completed'`
+  ).bind(userId).all<{ course_id: string }>().catch(() => null);
+  return new Set((q?.results || []).map(r => r.course_id));
 }
 
 /**
@@ -42,7 +78,7 @@ export async function validateCourseRegistration(
   const errors: string[] = [];
   const unmetPrerequisites: Array<{ courseCode: string; requiredPrereqs: string[] }> = [];
   const conflicts: Array<{ courseA: string; courseB: string; day: string; time: string }> = [];
-  const creditLimit = 18;
+  const creditLimit = await getCreditLimit(db);
 
   if (!courseIds || courseIds.length === 0) {
     return {
@@ -71,30 +107,17 @@ export async function validateCourseRegistration(
     );
   }
 
-  // 2. Check if already passed
-  const passedCoursesQuery = await db.prepare(
-    `SELECT course_id FROM enrollments 
-     WHERE student_id = ? AND status IN ('completed', 'passed') AND course_id IN (${placeholders})`
-  ).bind(userId, ...courseIds).all<{ course_id: string }>();
-
-  const passedCourseIds = new Set((passedCoursesQuery?.results || []).map(r => r.course_id));
+  // 2. Check if already passed (canonical: completed registrations).
+  const studentPassedSet = await getPassedCourseIds(db, userId);
 
   for (const cid of courseIds) {
-    if (passedCourseIds.has(cid)) {
+    if (studentPassedSet.has(cid)) {
       const c = courseMap.get(cid);
       errors.push(`Course ${c?.code || cid} has already been completed and passed.`);
     }
   }
 
   // 3. Prerequisite Check
-  const allPassedForPrereqsQuery = await db.prepare(
-    `SELECT course_id FROM enrollments WHERE student_id = ? AND status IN ('completed', 'passed')
-     UNION
-     SELECT course_id FROM grades WHERE student_id = ? AND is_passing = 1`
-  ).bind(userId, userId).all<{ course_id: string }>();
-
-  const studentPassedSet = new Set((allPassedForPrereqsQuery?.results || []).map(r => r.course_id));
-
   const programCoursesQuery = await db.prepare(
     `SELECT pc.course_id, pc.prerequisite_ids, c.code
      FROM program_courses pc
@@ -106,7 +129,10 @@ export async function validateCourseRegistration(
     if (pc.prerequisite_ids) {
       let reqIds: string[] = [];
       try {
-        reqIds = JSON.parse(pc.prerequisite_ids);
+        const parsed: unknown = JSON.parse(pc.prerequisite_ids);
+        if (Array.isArray(parsed)) reqIds = parsed.map(String);
+        else if (typeof parsed === 'string' && parsed) reqIds = [parsed];
+        else reqIds = pc.prerequisite_ids.split(',').map(s => s.trim()).filter(Boolean);
       } catch {
         reqIds = pc.prerequisite_ids.split(',').map(s => s.trim()).filter(Boolean);
       }
@@ -121,7 +147,7 @@ export async function validateCourseRegistration(
     }
   }
 
-  // 4. Timetable / Schedule Clash Check
+  // 4. Timetable / Schedule Clash Check (authoritative: course_sections.schedule).
   const sectionPlaceholders = sectionIds.length > 0 ? sectionIds.map(() => '?').join(',') : null;
   let sections: Array<{ id: string; course_id: string; section_code: string; schedule: string | null }> = [];
 
@@ -146,14 +172,19 @@ export async function validateCourseRegistration(
   for (const s of sections) {
     if (!s.schedule) continue;
     try {
-      const slots: ScheduleSlot[] = JSON.parse(s.schedule);
+      const slots: unknown = JSON.parse(s.schedule);
       if (Array.isArray(slots)) {
-        const c = courseMap.get(s.course_id);
-        parsedSchedules.push({
-          courseCode: c?.code || s.course_id,
-          sectionCode: s.section_code,
-          slots,
-        });
+        const valid = (slots as any[]).filter(
+          (sl) => sl && typeof sl.day === 'string' && typeof sl.start === 'string' && typeof sl.end === 'string'
+        ) as ScheduleSlot[];
+        if (valid.length > 0) {
+          const c = courseMap.get(s.course_id);
+          parsedSchedules.push({
+            courseCode: c?.code || s.course_id,
+            sectionCode: s.section_code,
+            slots: valid,
+          });
+        }
       }
     } catch {
       // Ignore invalid JSON in schedule

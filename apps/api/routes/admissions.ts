@@ -6,7 +6,12 @@ import {
   acceptOfferAndProvision,
   recordEnrollmentDeposit,
 } from '../lib/admissions-decision-service';
-import { setEnrollmentStatus, ENROLLMENT_STATUS } from '../lib/state-machine';
+import {
+  setEnrollmentStatus,
+  getEnrollmentStatus,
+  ENROLLMENT_STATUS,
+  ALLOWED_TRANSITIONS,
+} from '../lib/state-machine';
 
 export async function handleRecordDecision(
   req: Request,
@@ -43,6 +48,7 @@ export async function handleRecordDecision(
     return ok(result);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Failed to record admissions decision';
+    if (/Invalid enrollment transition/i.test(message)) return error(message, 409);
     return error(message, 400);
   }
 }
@@ -122,19 +128,80 @@ export async function handlePayDeposit(
   try {
     const body = await typedJson<{
       application_id: string;
-      amount: number;
       payment_reference: string;
+      amount?: number;
     }>(req);
 
-    if (!body.application_id || !body.amount || !body.payment_reference) {
-      return error('application_id, amount, and payment_reference are required', 400);
+    // Self-confirmation removed: only a gateway reference is accepted and it
+    // is re-verified server-side. Client amount is never trusted.
+    if (!body.application_id || !body.payment_reference) {
+      return error('application_id and payment_reference are required', 400);
     }
 
-    const result = await recordEnrollmentDeposit(env.PLATFORM_CONTEXT!.db, {
+    const db = env.PLATFORM_CONTEXT!.db;
+
+    const app = await db.prepare(
+      `SELECT id, user_id, status FROM applications WHERE id = ? LIMIT 1`
+    ).bind(body.application_id).first<{ id: string; user_id: string; status: string }>().catch(() => null);
+    if (!app || app.user_id !== userId) {
+      return error('Application not found', 404);
+    }
+
+    const decision = await db.prepare(
+      `SELECT deposit_required, deposit_amount, offer_expires_at FROM admissions_decisions WHERE application_id = ? LIMIT 1`
+    ).bind(body.application_id).first<{ deposit_required: number; deposit_amount: number; offer_expires_at: string | null }>().catch(() => null);
+    if (!decision || Number(decision.deposit_required) !== 1) {
+      return error('No deposit is required for this application', 400);
+    }
+    if (decision.offer_expires_at && new Date() > new Date(decision.offer_expires_at)) {
+      return error('Offer has expired; deposit cannot be accepted', 409);
+    }
+
+    const payment = env.PLATFORM_CONTEXT!.payment;
+    if (typeof payment?.verifyPaymentIntent !== 'function') {
+      return error('Payment verification is not available', 501);
+    }
+    let intent: any;
+    try {
+      intent = await payment.verifyPaymentIntent(body.payment_reference);
+    } catch (e: unknown) {
+      return error(e instanceof Error ? e.message : 'Payment verification failed', 402);
+    }
+    if (!intent || intent.status !== 'succeeded') {
+      return error('Payment has not succeeded according to the gateway', 402);
+    }
+    const ownerId = intent.metadata?.userId as string | undefined;
+    if (ownerId && ownerId !== userId) {
+      return error('Payment reference does not belong to this student', 403);
+    }
+    if (intent.metadata?.purpose && intent.metadata.purpose !== 'deposit') {
+      return error('Payment reference is not a deposit payment', 400);
+    }
+    const intentAppId = (intent.metadata?.applicationId || intent.metadata?.application_id) as string | undefined;
+    if (intentAppId && intentAppId !== body.application_id) {
+      return error('Payment reference does not match this application', 400);
+    }
+
+    // Amount guard: verified gateway amount must match the DB deposit amount.
+    // Accept main-unit or subunit (kobo/cents) representations.
+    const expected = Number(decision.deposit_amount || 0);
+    const receivedRaw = Number(intent.amount);
+    const receivedUnits = [receivedRaw, receivedRaw / 100];
+    const matched = receivedUnits.some(
+      (v) => Number.isFinite(v) && Number.isFinite(expected) && Math.abs(v - expected) < 0.01
+    );
+    if (!matched) {
+      return error(`Deposit amount mismatch: expected ${expected}, gateway verified ${receivedRaw}`, 402);
+    }
+    if (body.amount !== undefined && Math.abs(Number(body.amount) - expected) >= 0.01) {
+      return error('Deposit amount does not match the required amount', 402);
+    }
+
+    const result = await recordEnrollmentDeposit(db, {
       applicationId: body.application_id,
       userId,
-      amount: body.amount,
-      paymentReference: body.payment_reference,
+      amount: expected,
+      paymentReference: intent.reference || intent.id || body.payment_reference,
     });
 
     return ok(result);
@@ -153,21 +220,91 @@ export async function handleDeclineOffer(
   try {
     const body = await typedJson<{ application_id: string; reason?: string }>(req);
 
-    await setEnrollmentStatus(env.PLATFORM_CONTEXT!.db, {
-      userId,
-      status: ENROLLMENT_STATUS.APPLICANT_WITHDRAWN,
-      changedBy: userId,
-      reason: body.reason || 'Applicant declined admission offer',
+    if (!body.application_id) {
+      return error('application_id is required', 400);
+    }
+
+    const db = env.PLATFORM_CONTEXT!.db;
+    const app = await db.prepare(
+      `SELECT id, user_id, status FROM applications WHERE id = ? AND user_id = ? LIMIT 1`
+    ).bind(body.application_id, userId).first<{ id: string; user_id: string; status: string }>().catch(() => null);
+    if (!app) {
+      return error('Application not found', 404);
+    }
+    if (app.status !== 'accepted') {
+      return error(`Cannot decline offer for application in status "${app.status}"`, 409);
+    }
+
+    // Declining is only allowed while the offer is still pending. Once the
+    // applicant accepted and provisioning started, withdrawal needs staff help.
+    const current = await getEnrollmentStatus(db, userId).catch(() => null);
+    const currentStatus = current?.status as string | undefined;
+    const DECLINABLE = new Set([
+      ENROLLMENT_STATUS.OFFER_EXTENDED,
+      ENROLLMENT_STATUS.CONDITIONAL,
+      ENROLLMENT_STATUS.ADMITTED,
+    ]);
+    if (!currentStatus || !DECLINABLE.has(currentStatus as any)) {
+      return error(
+        currentStatus === ENROLLMENT_STATUS.OFFER_ACCEPTED ||
+        currentStatus === ENROLLMENT_STATUS.PROVISIONING_IN_PROGRESS ||
+        currentStatus === ENROLLMENT_STATUS.PROVISIONED ||
+        currentStatus === ENROLLMENT_STATUS.REGISTRATION_ELIGIBLE ||
+        currentStatus === ENROLLMENT_STATUS.REGISTRATION_IN_PROGRESS ||
+        currentStatus === ENROLLMENT_STATUS.REGISTERED ||
+        currentStatus === ENROLLMENT_STATUS.OFFICIALLY_ENROLLED
+          ? 'Offer has already been accepted and provisioning has started; contact admissions to withdraw.'
+          : `Cannot decline offer from enrollment status ${currentStatus || 'unknown'}`,
+        409
+      );
+    }
+
+    // Validate the transition BEFORE committing so we never split-brain.
+    const allowed = ALLOWED_TRANSITIONS[currentStatus] ?? [];
+    if (!allowed.includes(ENROLLMENT_STATUS.APPLICANT_WITHDRAWN)) {
+      return error(
+        `Invalid enrollment transition: ${currentStatus} → ${ENROLLMENT_STATUS.APPLICANT_WITHDRAWN}.`,
+        409
+      );
+    }
+
+    const nowIso = new Date().toISOString();
+    await db.transaction(async (tx) => {
+      await tx.prepare(
+        `UPDATE applications SET status = 'withdrawn', updated_at = ? WHERE id = ? AND user_id = ?`
+      ).bind(nowIso, body.application_id, userId).run();
+
+      await tx.prepare(
+        `INSERT INTO application_status_logs (id, application_id, changed_by, old_status, new_status, notes, changed_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      ).bind(
+        crypto.randomUUID(),
+        body.application_id,
+        userId,
+        app.status,
+        'withdrawn',
+        body.reason || 'Applicant declined admission offer',
+        nowIso
+      ).run();
     });
 
-    if (body.application_id) {
-      await env.PLATFORM_CONTEXT!.db.prepare(
-        `UPDATE applications SET status = 'withdrawn', updated_at = datetime('now') WHERE id = ? AND user_id = ?`
-      ).bind(body.application_id, userId).run();
+    try {
+      await setEnrollmentStatus(db, {
+        userId,
+        status: ENROLLMENT_STATUS.APPLICANT_WITHDRAWN,
+        changedBy: userId,
+        reason: body.reason || 'Applicant declined admission offer',
+      });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      // Validated above — a failure here is a lifecycle conflict, never a 500.
+      return error(msg, 409);
     }
 
     return ok({ message: 'Offer declined successfully.' });
   } catch (err: unknown) {
-    return error('Failed to decline offer', 500);
+    const message = err instanceof Error ? err.message : 'Failed to decline offer';
+    if (/Invalid enrollment transition/i.test(message)) return error(message, 409);
+    return error(message, 500);
   }
 }

@@ -473,8 +473,48 @@ export async function handleListSections(req: Request, env: Env, userId: string)
 
 import { checkRegistrationEligibility } from '../lib/eligibility-service';
 import { reserveSectionSeat, dropSectionSeat } from '../lib/seat-allocation-service';
-import { setEnrollmentStatus, getEnrollmentStatus, ENROLLMENT_STATUS } from '../lib/state-machine';
+import { validateCourseRegistration } from '../lib/registration-validation';
+import { setEnrollmentStatus, getEnrollmentStatus, ENROLLMENT_STATUS, ALLOWED_TRANSITIONS } from '../lib/state-machine';
 import { runTermCensusJob } from '../lib/census-job';
+import { logAdminAction } from '../lib/types';
+
+/**
+ * Term-scoped financial clearance: the active term's invoice(s) must be paid
+ * or covered by an approved aid award / payment plan. Invoices with NULL
+ * term_id never satisfy clearance (they predate term-scoping and must be
+ * backfilled). Shared by finalize + census-job.
+ */
+export async function hasTermFinancialClearance(
+  db: any,
+  studentId: string,
+  termId: string
+): Promise<{ cleared: boolean; reason: string }> {
+  try {
+    const paid = await (db.prepare(
+      `SELECT id FROM invoices WHERE student_id = ? AND term_id = ? AND status = 'paid' LIMIT 1`
+    ).bind(studentId, termId).first() as Promise<{ id: string } | null>).catch(() => null);
+    if (paid) return { cleared: true, reason: 'paid term invoice' };
+
+    // Approved aid / payment-plan coverage for the term also clears finance.
+    const aid = await (db.prepare(
+      `SELECT id FROM financial_aid_awards WHERE student_id = ? AND term_id = ? AND status IN ('approved','awarded','disbursed') LIMIT 1`
+    ).bind(studentId, termId).first() as Promise<{ id: string } | null>).catch(() => null);
+    if (aid) return { cleared: true, reason: 'approved aid/payment plan covers term' };
+
+    const legacyPaid = await (db.prepare(
+      `SELECT id FROM invoices WHERE student_id = ? AND status = 'paid' AND term_id IS NULL LIMIT 1`
+    ).bind(studentId).first() as Promise<{ id: string } | null>).catch(() => null);
+    if (legacyPaid) {
+      return {
+        cleared: false,
+        reason: 'Financial clearance required: paid invoice has NULL term_id and does not satisfy current-term clearance; backfill term_id or pay the current-term invoice.',
+      };
+    }
+  } catch (e: unknown) {
+    return { cleared: false, reason: `Financial clearance check failed: ${e instanceof Error ? e.message : String(e)}` };
+  }
+  return { cleared: false, reason: 'Financial clearance required: no paid tuition invoice for the current term.' };
+}
 
 export async function handleGetRegistrationEligibility(
   req: Request,
@@ -500,18 +540,45 @@ export async function handleReserveSeat(
 ): Promise<Response> {
   if (req.method !== 'POST') return error('Method not allowed', 405);
   try {
-    // 1. Verify eligibility first
-    const eligibility = await checkRegistrationEligibility(env.PLATFORM_CONTEXT!.db, userId);
-    if (!eligibility.eligible) {
-      return error(`Ineligible to register: ${eligibility.reasons.join(', ')}`, 403);
-    }
-
+    const db = env.PLATFORM_CONTEXT!.db;
     const body = await typedJson<{ section_id: string; term_id?: string }>(req);
     if (!body.section_id) {
       return error('section_id is required', 400);
     }
 
-    const result = await reserveSectionSeat(env.PLATFORM_CONTEXT!.db, {
+    // 1. Verify eligibility first (holds, advising, state, registration window).
+    const eligibility = await checkRegistrationEligibility(db, userId, body.term_id);
+    if (!eligibility.eligible) {
+      return error(`Ineligible to register: ${eligibility.reasons.join(', ')}`, 403);
+    }
+
+    // 2. Validate the full term load (already-registered + new section) for
+    //    prerequisites, credit cap and timetable clashes BEFORE claiming a seat.
+    try {
+      const sectionRow = await db.prepare(
+        `SELECT course_id, term_id FROM course_sections WHERE id = ? LIMIT 1`
+      ).bind(body.section_id).first<{ course_id: string; term_id: string }>().catch(() => null);
+      if (sectionRow) {
+        const termId = body.term_id || eligibility.term?.id || sectionRow.term_id;
+        const existing = await db.prepare(
+          `SELECT course_id, section_id FROM student_course_registrations WHERE student_id = ? AND term_id = ? AND status = 'registered'`
+        ).bind(userId, termId).all<{ course_id: string; section_id: string | null }>().catch(() => null);
+        const existingRows = existing?.results || [];
+        const courseIds = [...new Set([...existingRows.map(r => r.course_id), sectionRow.course_id])];
+        const sectionIds = [...new Set([...existingRows.map(r => r.section_id).filter(Boolean) as string[], body.section_id])];
+        const validation = await validateCourseRegistration(db, userId, courseIds, sectionIds);
+        if (!validation.valid) {
+          return error(`Course validation failed: ${validation.errors.join('; ')}`, 422);
+        }
+      }
+    } catch (e: unknown) {
+      // Validation-path failures surface as 422, never 500 — unless the
+      // section lookup itself failed, in which case fall through to reserve
+      // (which returns a clean failed/inactive message).
+      if (e instanceof Error && /Course validation failed/i.test(e.message)) throw e;
+    }
+
+    const result = await reserveSectionSeat(db, {
       sectionId: body.section_id,
       studentId: userId,
       termId: body.term_id,
@@ -520,6 +587,7 @@ export async function handleReserveSeat(
     return ok(result);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Failed to reserve seat';
+    if (/Course validation failed/i.test(message)) return error(message, 422);
     return error(message, 500);
   }
 }
@@ -531,22 +599,49 @@ export async function handleWaitlistSeat(
 ): Promise<Response> {
   if (req.method !== 'POST') return error('Method not allowed', 405);
   try {
-    // Same gate as seat reservation — waitlisting is still a registration action.
-    const eligibility = await checkRegistrationEligibility(env.PLATFORM_CONTEXT!.db, userId);
+    const db = env.PLATFORM_CONTEXT!.db;
+    const body = await typedJson<{ section_id: string }>(req);
+    if (!body.section_id) return error('section_id is required', 400);
+
+    // Same gate as seat reservation — waitlisting is still a registration action
+    // (prerequisites + window enforced; section capacity intentionally ignored).
+    const eligibility = await checkRegistrationEligibility(db, userId);
     if (!eligibility.eligible) {
       return error(`Ineligible to register: ${eligibility.reasons.join(', ')}`, 403);
     }
 
-    const body = await typedJson<{ section_id: string }>(req);
-    if (!body.section_id) return error('section_id is required', 400);
+    const sectionRow = await db.prepare(
+      `SELECT course_id, term_id FROM course_sections WHERE id = ? LIMIT 1`
+    ).bind(body.section_id).first<{ course_id: string; term_id: string }>().catch(() => null);
+    if (sectionRow) {
+      const termId = eligibility.term?.id || sectionRow.term_id;
+      const existing = await db.prepare(
+        `SELECT course_id, section_id FROM student_course_registrations WHERE student_id = ? AND term_id = ? AND status = 'registered'`
+      ).bind(userId, termId).all<{ course_id: string; section_id: string | null }>().catch(() => null);
+      const existingRows = existing?.results || [];
+      const courseIds = [...new Set([...existingRows.map(r => r.course_id), sectionRow.course_id])];
+      const sectionIds = [...new Set([...existingRows.map(r => r.section_id).filter(Boolean) as string[], body.section_id])];
+      const validation = await validateCourseRegistration(db, userId, courseIds, sectionIds);
+      // Waitlist path respects prerequisites but not section capacity (the
+      // validator never checks section capacity; reserve falls back to waitlist).
+      // Prerequisite failures still block with 422.
+      const prereqErrors = [...validation.unmetPrerequisites.flatMap(u => u.requiredPrereqs), ...validation.errors.filter(e => /Prerequisite|already been completed/i.test(e))];
+      if (prereqErrors.length > 0) {
+        return error(`Course validation failed: ${prereqErrors.join('; ')}`, 422);
+      }
+      // Credit/timetable warnings do not block waitlisting on their own, but a
+      // hard prerequisite failure above does.
+    }
 
-    const result = await reserveSectionSeat(env.PLATFORM_CONTEXT!.db, {
+    const result = await reserveSectionSeat(db, {
       sectionId: body.section_id,
       studentId: userId,
     });
 
     return ok(result);
   } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to join waitlist';
+    if (/Course validation failed/i.test(message)) return error(message, 422);
     return error('Failed to join waitlist', 500);
   }
 }
@@ -665,10 +760,22 @@ export async function handleSignEnrollmentAgreement(
       document_id: string;
       signed_name: string;
       document_version_hash: string;
+      term_id?: string;
     }>(req);
 
     if (!body.document_id || !body.signed_name || !body.document_version_hash) {
       return error('document_id, signed_name, and document_version_hash are required', 400);
+    }
+
+    const { getEnrollmentAgreementMeta } = await import('../lib/agreement');
+    const currentMeta = await getEnrollmentAgreementMeta().catch(() => null);
+    if (currentMeta) {
+      if (body.document_id !== currentMeta.document_id || body.document_version_hash !== currentMeta.version_hash) {
+        return error(
+          `Stale agreement version: expected ${currentMeta.document_id} ${currentMeta.version_hash}. Fetch GET /api/registration/agreement first.`,
+          400
+        );
+      }
     }
 
     const ipAddress = req.headers.get('CF-Connecting-IP') || req.headers.get('X-Forwarded-For') || '127.0.0.1';
@@ -678,7 +785,20 @@ export async function handleSignEnrollmentAgreement(
 
     const db = env.PLATFORM_CONTEXT!.db;
 
-    // Idempotency: one signature per user+document+version.
+    // Resolve the term this signature binds to (explicit or active registration term).
+    let signatureTermId: string | null = body.term_id || null;
+    if (!signatureTermId) {
+      try {
+        const t = await db.prepare(
+          `SELECT id FROM academic_terms WHERE status IN ('active','registration') ORDER BY start_date DESC LIMIT 1`
+        ).bind().first<{ id: string }>().catch(() => null);
+        signatureTermId = t?.id || null;
+      } catch {
+        signatureTermId = null;
+      }
+    }
+
+    // Idempotency: one signature per user+document+version+term.
     const existing = await db.prepare(
       `SELECT id FROM esignatures WHERE user_id = ? AND document_id = ? AND document_version_hash = ? LIMIT 1`
     ).bind(userId, body.document_id, body.document_version_hash).first<{ id: string }>().catch(() => null);
@@ -694,21 +814,41 @@ export async function handleSignEnrollmentAgreement(
     // Record legally binding e-signature. This alone does NOT confer REGISTERED —
     // the canonical POST /api/registration/finalize transaction owns that transition
     // after validating courses, capacity, holds, payment and this signature together.
-    await db.prepare(
-      `INSERT INTO esignatures (
-         id, document_id, user_id, signed_name, signed_at, ip_address, user_agent, document_version_hash, created_at
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(
-      sigId,
-      body.document_id,
-      userId,
-      body.signed_name,
-      now,
-      ipAddress,
-      userAgent,
-      body.document_version_hash,
-      now
-    ).run();
+    try {
+      await db.prepare(
+        `INSERT INTO esignatures (
+           id, document_id, user_id, signed_name, signed_at, ip_address, user_agent, document_version_hash, term_id, created_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(
+        sigId,
+        body.document_id,
+        userId,
+        body.signed_name,
+        now,
+        ipAddress,
+        userAgent,
+        body.document_version_hash,
+        signatureTermId,
+        now
+      ).run();
+    } catch {
+      // Fallback for DBs without the term_id column (pre-migration).
+      await db.prepare(
+        `INSERT INTO esignatures (
+           id, document_id, user_id, signed_name, signed_at, ip_address, user_agent, document_version_hash, created_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(
+        sigId,
+        body.document_id,
+        userId,
+        body.signed_name,
+        now,
+        ipAddress,
+        userAgent,
+        body.document_version_hash,
+        now
+      ).run();
+    }
 
     // Nudge state machine forward (ELIGIBLE → IN_PROGRESS) so the portal can
     // reflect "agreement signed, awaiting final validation" without prematurely
@@ -756,14 +896,18 @@ export async function handleFinalizeRegistration(
   try {
     const db = env.PLATFORM_CONTEXT!.db;
 
-    // 1. Canonical state must allow finalization
+    // 1. Canonical state must allow finalization (duplicate guard first so a
+    //    second call returns 409, not 403).
     const current = await getEnrollmentStatus(db, userId);
+    if (current.status === ENROLLMENT_STATUS.REGISTERED) {
+      return error('Already registered for this lifecycle stage.', 409);
+    }
     const allowedFrom = [ENROLLMENT_STATUS.REGISTRATION_ELIGIBLE, ENROLLMENT_STATUS.REGISTRATION_IN_PROGRESS];
     if (!allowedFrom.includes(current.status as any)) {
       return error(`Cannot finalize registration from status ${current.status}. Complete onboarding steps first.`, 403);
     }
 
-    // 2. Full eligibility gate (holds, advising, term, student record)
+    // 2. Full eligibility gate (holds, advising, term, student record, window)
     const eligibility = await checkRegistrationEligibility(db, userId);
     if (!eligibility.eligible) {
       return error(`Registration blocked: ${eligibility.reasons.join('; ')}`, 403);
@@ -772,7 +916,10 @@ export async function handleFinalizeRegistration(
     const termId = eligibility.term?.id;
     if (!termId) return error('No active registration term found.', 400);
 
-    // 3. Course selection: at least one registered section for the term
+    // 3. Course selection: at least one registered section for the term.
+    //    (reserveSectionSeat already writes the canonical enrollment rows, so
+    //    no mirror insert is needed here — the old loop wrote registration ids
+    //    into enrollments.course_id and is removed.)
     const regs = await db.prepare(
       `SELECT id, status FROM student_course_registrations WHERE student_id = ? AND term_id = ?`
     ).bind(userId, termId).all<{ id: string; status: string }>().catch(() => null);
@@ -782,36 +929,51 @@ export async function handleFinalizeRegistration(
       return error('No registered courses for this term. Select sections before finalizing.', 400);
     }
 
-    // 4. Financial clearance: paid invoice required (any paid invoice for the student;
-    //    term-scoped when invoice carries term metadata).
-    const paidInvoice = await db.prepare(
-      `SELECT id FROM invoices WHERE student_id = ? AND status = 'paid' LIMIT 1`
-    ).bind(userId).first<{ id: string }>().catch(() => null);
-    if (!paidInvoice) {
-      return error('Financial clearance required: no paid tuition invoice found.', 402);
+    // 4. Financial clearance: term-scoped paid invoice (or approved aid/plan).
+    //    Invoices with NULL term_id do not satisfy clearance.
+    const finance = await hasTermFinancialClearance(db, userId, termId);
+    if (!finance.cleared) {
+      return error(finance.reason, 402);
     }
 
-    // 5. Agreement signature required
-    const sig = await db.prepare(
-      `SELECT id FROM esignatures WHERE user_id = ? LIMIT 1`
-    ).bind(userId).first<{ id: string }>().catch(() => null);
-    if (!sig) {
-      return error('Enrollment agreement signature required before finalizing.', 400);
-    }
-
-    // 6. Duplicate registration guard
-    if (current.status === ENROLLMENT_STATUS.REGISTERED) {
-      return error('Already registered for this lifecycle stage.', 409);
-    }
-
-    // 7. Commit: mirror section registrations into enrollments + REGISTERED
-    await db.transaction(async (tx) => {
-      for (const r of activeRegs) {
-        await tx.prepare(
-          `INSERT INTO enrollments (id, student_id, course_id, status) VALUES (?, ?, ?, 'enrolled') ON CONFLICT DO NOTHING`
-        ).bind(crypto.randomUUID(), userId, r.id).run().catch(() => {});
+    // 5. Agreement signature: must bind the CURRENT version and term.
+    const { getEnrollmentAgreementMeta } = await import('../lib/agreement');
+    const agreementMeta = await getEnrollmentAgreementMeta().catch(() => null);
+    let sig: { id: string } | null = null;
+    if (agreementMeta) {
+      try {
+        sig = await db.prepare(
+          `SELECT id FROM esignatures WHERE user_id = ? AND document_id = ? AND document_version_hash = ? AND term_id = ? LIMIT 1`
+        ).bind(userId, agreementMeta.document_id, agreementMeta.version_hash, termId).first<{ id: string }>().catch(() => null);
+      } catch {
+        sig = null;
       }
-    });
+      // Fallback for pre-migration rows without term_id is intentionally NOT
+      // accepted: signatures must bind the term being finalized.
+    } else {
+      sig = await db.prepare(
+        `SELECT id FROM esignatures WHERE user_id = ? LIMIT 1`
+      ).bind(userId).first<{ id: string }>().catch(() => null);
+    }
+    if (!sig) {
+      return error(
+        agreementMeta
+          ? `Enrollment agreement signature required: sign ${agreementMeta.document_id} ${agreementMeta.version} for this term before finalizing.`
+          : 'Enrollment agreement signature required before finalizing.',
+        400
+      );
+    }
+
+    // 6. Validate the REGISTERED transition BEFORE committing (atomicity: the
+    //    status write is the commit; a failure rethrows and never leaves
+    //    partial state).
+    const allowedToRegistered = ALLOWED_TRANSITIONS[current.status] ?? [];
+    if (!allowedToRegistered.includes(ENROLLMENT_STATUS.REGISTERED)) {
+      return error(
+        `Invalid enrollment transition: ${current.status} → ${ENROLLMENT_STATUS.REGISTERED}.`,
+        409
+      );
+    }
 
     await setEnrollmentStatus(db, {
       userId,
@@ -856,8 +1018,19 @@ export async function handleRunCensusJob(
 ): Promise<Response> {
   if (req.method !== 'POST') return error('Method not allowed', 405);
   try {
-    const body = await typedJson<{ term_id?: string }>(req).catch(() => ({ term_id: undefined }));
-    const result = await runTermCensusJob(env.PLATFORM_CONTEXT!.db, body.term_id, adminId);
+    const body = await typedJson<{ term_id?: string; force?: boolean }>(req).catch(() => ({ term_id: undefined, force: undefined }));
+    const result = await runTermCensusJob(env.PLATFORM_CONTEXT!.db, body.term_id, adminId, { force: body.force === true });
+    if (body.force === true) {
+      // Admin-only route (roles: ['admin']); audit the override.
+      try {
+        await logAdminAction(env, adminId, 'CENSUS_FORCED_RUN', 'academic_term', result.termId, {
+          term_id: result.termId,
+          enrolledCount: result.enrolledCount,
+        }, req);
+      } catch (e: unknown) {
+        console.error('[census] forced-run audit failed:', e instanceof Error ? e.message : String(e));
+      }
+    }
     return ok(result);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Failed to run census job';

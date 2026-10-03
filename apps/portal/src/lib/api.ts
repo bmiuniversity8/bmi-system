@@ -149,10 +149,10 @@ export const api = {
       request<StatusLogEntry[]>(`/applications/${appId}/logs`),
 
     checkDuplicate: (email: string, dob?: string) =>
-      request<{ is_duplicate: boolean; message?: string }>('/applications/check-duplicate', {
+      request<{ received: boolean; message?: string }>('/applications/check-duplicate', {
         method: 'POST',
         body: JSON.stringify({ email, date_of_birth: dob }),
-      }).catch(() => ({ is_duplicate: false })),
+      }).catch(() => ({ received: true })),
   },
 
   admissions: {
@@ -163,10 +163,20 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ application_id: applicationId }),
       }),
-    payDeposit: (applicationId: string, paymentReference: string, amount = 100) =>
+    payDeposit: (applicationId: string, paymentReference: string) =>
       request<{ success: boolean; depositId: string }>('/admissions/deposit', {
         method: 'POST',
-        body: JSON.stringify({ application_id: applicationId, payment_reference: paymentReference, amount }),
+        body: JSON.stringify({ application_id: applicationId, payment_reference: paymentReference }),
+      }),
+    createDepositIntent: (applicationId: string) =>
+      request<{
+        intentId: string;
+        reference: string;
+        authorizationUrl?: string;
+        accessCode?: string;
+      }>('/payment/create-intent', {
+        method: 'POST',
+        body: JSON.stringify({ purpose: 'deposit', applicationId }),
       }),
     declineOffer: (applicationId: string, reason?: string) =>
       request<{ message: string }>('/admissions/decline', {
@@ -399,7 +409,7 @@ export const api = {
   },
 
   payments: {
-    createIntent: (body: { amount: number; reason?: string; email?: string; currency?: string; invoiceId?: string }) =>
+    createIntent: (body: { amount?: number; reason?: string; email?: string; currency?: string; invoiceId?: string; purpose?: string; applicationId?: string }) =>
       request<{
         intentId: string;
         reference: string;

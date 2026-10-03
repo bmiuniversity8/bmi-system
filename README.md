@@ -56,3 +56,15 @@ npm run db:migrate # Applies tracked migrations to production D1
 ## Environment Config
 Secrets must be set via `wrangler secret put` for each respective worker.
 See [Architecture](./docs/ARCHITECTURE.md) for details on worker boundaries.
+
+## Admin seeding
+No admin credentials are committed to the repo (`apps/api/create-admin.sql`
+contains no `password_hash` literal by policy — enforced by
+`apps/api/create-admin.guard.test.ts`). To create an admin:
+
+```bash
+ADMIN_PASSWORD_HASH='$2b$10$...' node scripts/create-admin.mjs --email admin@bmi.edu --name "Admin User"
+```
+
+The script refuses to run in production without `--allow-production` and never
+prints the hash. See `scripts/create-admin.mjs` for details.

@@ -15,6 +15,13 @@
       "when": 1790907837325,
       "tag": "0001_wide_the_anarchist",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790997169709,
+      "tag": "0003_famous_talisman",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,10 @@
 import type { IDatabase, IDocumentGenerator } from '@bmi/ports';
-import { setEnrollmentStatus, ENROLLMENT_STATUS } from './state-machine';
+import {
+  setEnrollmentStatus,
+  getEnrollmentStatus,
+  ENROLLMENT_STATUS,
+  ALLOWED_TRANSITIONS,
+} from './state-machine';
 import { runProvisioningOrchestration, OrchestratorResult } from './provisioning-orchestrator';
 
 export interface AdmissionDecisionInput {
@@ -71,8 +76,50 @@ export async function recordAdmissionsDecision(
       throw new Error(`Invalid decision type: ${input.decision}`);
   }
 
+  // Idempotency + re-decision guard: a prior decision row distinguishes a
+  // first decision (always allowed into the offer pipeline) from a re-decision
+  // (allowed only along ALLOWED_TRANSITIONS).
+  let priorDecision: { id: string; decision: string } | null = null;
+  try {
+    priorDecision = await db.prepare(
+      `SELECT id, decision FROM admissions_decisions WHERE application_id = ? LIMIT 1`
+    ).bind(input.applicationId).first<{ id: string; decision: string }>().catch(() => null);
+    if (priorDecision && priorDecision.decision === input.decision) {
+      const currentApp = await db.prepare(
+        `SELECT status FROM applications WHERE id = ? LIMIT 1`
+      ).bind(input.applicationId).first<{ status: string }>().catch(() => null);
+      if (currentApp?.status === targetStatus) {
+        return { success: true, decisionId: priorDecision.id, status: targetStatus };
+      }
+    }
+  } catch {
+    // Best-effort idempotency check — fall through to the authoritative path.
+  }
+
+  // Validate the enrollment transition BEFORE any write so an invalid
+  // re-decision (e.g. admit then waitlist) never leaves partial state.
+  // First decisions (no prior row) enter the offer pipeline freely; re-decisions
+  // must follow ALLOWED_TRANSITIONS. Fail closed with a clear 409-mappable error.
+  if (priorDecision && priorDecision.decision !== input.decision) {
+    let currentEnrollment: string | null = null;
+    try {
+      const s = await getEnrollmentStatus(db, app.user_id);
+      currentEnrollment = s.status;
+    } catch {
+      currentEnrollment = null;
+    }
+    if (currentEnrollment && currentEnrollment !== targetEnrollmentStatus) {
+      const allowed = ALLOWED_TRANSITIONS[currentEnrollment] ?? [];
+      if (!allowed.includes(targetEnrollmentStatus)) {
+        throw new Error(
+          `Invalid enrollment transition: ${currentEnrollment} → ${targetEnrollmentStatus}. Allowed: ${allowed.join(', ') || '(terminal)'}.`
+        );
+      }
+    }
+  }
+
   await db.transaction(async (tx) => {
-    // 1. Insert or replace decision record
+    // 1. Insert or replace decision record (fail closed — no swallowed errors).
     await tx.prepare(
       `INSERT INTO admissions_decisions (
          id, application_id, decision, decided_by, decided_at,
@@ -99,7 +146,7 @@ export async function recordAdmissionsDecision(
       input.depositAmount || 0,
       now,
       now
-    ).run().catch(() => {});
+    ).run();
 
     // 2. Update application status
     await tx.prepare(
@@ -134,7 +181,8 @@ export async function recordAdmissionsDecision(
     ).run();
   });
 
-  // 4. Update canonical state machine
+  // 4. Update canonical state machine (validated above; rethrow on failure so
+  //    callers surface 409 instead of a silent split-brain).
   await setEnrollmentStatus(db, {
     userId: app.user_id,
     status: targetEnrollmentStatus as any,
@@ -239,13 +287,23 @@ export async function recordEnrollmentDeposit(
     paymentReference: string;
   }
 ): Promise<{ success: boolean; depositId: string }> {
-  const depositId = crypto.randomUUID();
   const now = new Date().toISOString();
+
+  // Idempotent: a gateway reference fulfills at most one deposit.
+  const existing = await db.prepare(
+    `SELECT id FROM enrollment_deposits WHERE payment_reference = ? LIMIT 1`
+  ).bind(params.paymentReference).first<{ id: string }>().catch(() => null);
+  if (existing) {
+    return { success: true, depositId: existing.id };
+  }
+
+  const depositId = crypto.randomUUID();
 
   await db.prepare(
     `INSERT INTO enrollment_deposits (
        id, application_id, user_id, amount, paid_at, payment_reference, status, created_at
-     ) VALUES (?, ?, ?, ?, ?, ?, 'confirmed', ?)`
+     ) VALUES (?, ?, ?, ?, ?, ?, 'confirmed', ?)
+     ON CONFLICT(payment_reference) DO NOTHING`
   ).bind(
     depositId,
     params.applicationId,
@@ -256,8 +314,12 @@ export async function recordEnrollmentDeposit(
     now
   ).run();
 
+  const row = await db.prepare(
+    `SELECT id FROM enrollment_deposits WHERE payment_reference = ? LIMIT 1`
+  ).bind(params.paymentReference).first<{ id: string }>().catch(() => null);
+
   return {
     success: true,
-    depositId,
+    depositId: row?.id ?? depositId,
   };
 }

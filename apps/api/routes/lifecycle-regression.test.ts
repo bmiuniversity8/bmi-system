@@ -110,12 +110,17 @@ describe('lifecycle regression matrix', () => {
   });
 
   it('6. sign-agreement alone does NOT confer REGISTERED', async () => {
+    const { getEnrollmentAgreementMeta } = await import('../lib/agreement');
+    const meta = await getEnrollmentAgreementMeta();
     const db = makeDb((sql: string) => {
       if (sql.includes('FROM esignatures') || sql.includes('esignatures WHERE')) {
         return stmt(null);
       }
       if (sql.includes('enrollment_status_logs')) {
         return stmt({ status: 'REGISTRATION_IN_PROGRESS', changed_at: new Date().toISOString(), reason: null });
+      }
+      if (sql.includes('FROM academic_terms')) {
+        return stmt({ id: 't-1' });
       }
       return stmt();
     });
@@ -124,7 +129,7 @@ describe('lifecycle regression matrix', () => {
       new Request('http://x/api/enrollment/sign-agreement', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ document_id: 'ENROLL-AGREEMENT-2026', signed_name: 'Test User', document_version_hash: 'v1.0-sha256-test' }),
+        body: JSON.stringify({ document_id: meta.document_id, signed_name: 'Test User', document_version_hash: meta.version_hash }),
       }),
       env,
       'u-1'
@@ -210,7 +215,7 @@ describe('lifecycle regression matrix', () => {
     const db: any = {
       prepare: vi.fn().mockImplementation((sql: string) => {
         if (sql.includes('FROM academic_terms')) {
-          return stmt({ id: 't-1', name: 'Term 1' });
+          return stmt({ id: 't-1', name: 'Term 1', census_date: new Date(Date.now() - 86400000).toISOString() });
         }
         if (sql.includes('enrollment_status_logs') && sql.includes('SELECT')) {
           return stmt({ status: 'REGISTERED', changed_at: new Date().toISOString(), reason: null });
@@ -254,7 +259,7 @@ describe('lifecycle regression matrix', () => {
     expect(transitioned).toContain('s-paid');
   });
 
-  it('10. duplicate applicant flagged, never auto-merged', async () => {
+  it('10. duplicate applicant returns generic response, never auto-merged', async () => {
     const db = makeDb((sql: string) => {
       if (sql.includes('FROM users WHERE LOWER(email)')) {
         return stmt({ id: 'existing-user' });
@@ -274,7 +279,13 @@ describe('lifecycle regression matrix', () => {
       env
     );
     const body = (await res.json()) as any;
-    expect(body.data?.is_duplicate ?? body.is_duplicate).toBe(true);
+    const data = body.data ?? body;
+    // Generic shape: no oracle, no leaked ids.
+    expect(data.received).toBe(true);
+    expect(JSON.stringify(data)).not.toContain('existing-user');
+    expect(JSON.stringify(data)).not.toContain('app-old');
+    expect(data.is_duplicate).toBeUndefined();
+    expect(data.matches).toBeUndefined();
     // Flagging only — no merge endpoint invoked, no user update issued
     const writes = (db.prepare as any).mock.calls.filter((c: unknown[]) =>
       /UPDATE users|UPDATE applications|INSERT INTO students/i.test(String(c[0]))
@@ -291,7 +302,7 @@ describe('canonical happy path: decide → accept → provision → finalize →
     let appStatus = 'submitted';
     const USER = 'u-e2e';
     const APP = 'app-e2e';
-    const TERM = { id: 't-1', name: 'Term 1', academic_year: '2026-2027', status: 'active' };
+    const TERM = { id: 't-1', name: 'Term 1', academic_year: '2026-2027', status: 'active', census_date: new Date(Date.now() - 86400000).toISOString() };
 
     const lastStatus = () =>
       statusLog.length

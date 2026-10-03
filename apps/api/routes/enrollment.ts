@@ -299,10 +299,12 @@ export async function handleGetElectiveGroups(_req: Request, env: Env, userId: s
     .where(and(eq(programCourses.curriculum_id, curriculum.id), eq(programCourses.is_mandatory, 0)))
     .orderBy(programCourses.elective_group, courses.code);
 
-  // Student's completed courses
-  const studentPassed = await db.select({ course_id: enrollments.course_id })
-    .from(enrollments)
-    .where(and(eq(enrollments.student_id, userId), eq(enrollments.status, 'enrolled')))
+  // Student's completed courses — canonical source of truth is
+  // student_course_registrations.status = 'completed' (enrollments.status never
+  // holds completed/passed; it is limited to enrolled/dropped/waitlisted).
+  const studentPassed = await db.select({ course_id: studentCourseRegistrations.course_id })
+    .from(studentCourseRegistrations)
+    .where(and(eq(studentCourseRegistrations.student_id, userId), eq(studentCourseRegistrations.status, 'completed')))
     .execute();
   const passedSet = new Set(studentPassed.map(p => p.course_id));
 
@@ -375,10 +377,10 @@ export async function handleSubmitElectives(req: Request, env: Env, userId: stri
   const currentTerm = await getActiveTerm(db);
   if (!currentTerm) return error('No active academic term found.', 404);
 
-  // Student's passed courses for prerequisite validation
-  const studentPassed = await db.select({ course_id: enrollments.course_id })
-    .from(enrollments)
-    .where(and(eq(enrollments.student_id, userId), eq(enrollments.status, 'enrolled')))
+  // Student's passed courses for prerequisite validation (canonical: completed registrations).
+  const studentPassed = await db.select({ course_id: studentCourseRegistrations.course_id })
+    .from(studentCourseRegistrations)
+    .where(and(eq(studentCourseRegistrations.student_id, userId), eq(studentCourseRegistrations.status, 'completed')))
     .execute();
   const passedSet = new Set(studentPassed.map(p => p.course_id));
 

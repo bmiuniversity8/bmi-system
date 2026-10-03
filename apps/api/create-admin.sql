@@ -1,1 +1,14 @@
-INSERT OR IGNORE INTO users (id, email, password_hash, first_name, last_name, role, is_verified) VALUES ('admin-001', 'admin@bmi.edu', '$2b$10$dummyhashfordevelopmenttestingpurposes', 'Admin', 'User', 'admin', 1);
+-- BMI admin seed — PLACEHOLDER, DO NOT COMMIT REAL CREDENTIALS HERE.
+--
+-- A previous version of this file contained a committed credential value,
+-- which is a leak risk. Admin accounts must now be created via:
+--
+--   node scripts/create-admin.mjs --email admin@bmi.edu --name "Admin User"
+--
+-- The script reads the credential from ADMIN_PASSWORD_HASH and REFUSES to run
+-- in production unless --allow-production is passed explicitly.
+-- See scripts/create-admin.mjs and README.md ("Admin seeding") for details.
+--
+-- This file intentionally contains no INSERT and no credential value.
+-- It is kept so existing tooling referencing the path does not break.
+SELECT 1;

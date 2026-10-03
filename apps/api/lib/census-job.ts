@@ -17,32 +17,80 @@ export interface CensusRunResult {
   enrolledCount: number;
   skippedCount: number;
   enrolledStudentIds: string[];
+  skippedReason?: string;
 }
 
 /**
  * Runs the term census job to officially enroll students who completed course registration
  * with financial clearance and no blocking holds. term_id is mandatory for new
  * records; legacy NULL-term enrollments are ignored (never auto-enrolled).
+ *
+ * Census gating (Task 08): does nothing until `now >= academic_terms.census_date`.
+ * If `census_date` is NULL (or the column is missing pre-migration), skips with a
+ * clear reason and never enrolls. Pass `force=true` (admin-only, audited by the
+ * caller) to override the date gate.
  */
 export async function runTermCensusJob(
   db: IDatabase,
   termId?: string,
-  actorId = 'census_job'
+  actorId = 'census_job',
+  options?: { force?: boolean }
 ): Promise<CensusRunResult> {
-  // Find target term
-  let targetTerm: { id: string; name: string } | null = null;
+  // Find target term: prefer registration/active status.
+  let targetTerm: { id: string; name: string; census_date?: string | null } | null = null;
   if (termId) {
-    targetTerm = await db.prepare(
-      `SELECT id, name FROM academic_terms WHERE id = ? LIMIT 1`
-    ).bind(termId).first<{ id: string; name: string }>();
+    try {
+      targetTerm = await db.prepare(
+        `SELECT id, name, census_date FROM academic_terms WHERE id = ? LIMIT 1`
+      ).bind(termId).first<{ id: string; name: string; census_date?: string | null }>();
+    } catch {
+      targetTerm = await db.prepare(
+        `SELECT id, name FROM academic_terms WHERE id = ? LIMIT 1`
+      ).bind(termId).first<{ id: string; name: string }>();
+    }
   } else {
-    targetTerm = await db.prepare(
-      `SELECT id, name FROM academic_terms WHERE status = 'active' ORDER BY start_date DESC LIMIT 1`
-    ).first<{ id: string; name: string }>();
+    try {
+      targetTerm = await db.prepare(
+        `SELECT id, name, census_date FROM academic_terms WHERE status IN ('registration', 'active') ORDER BY start_date DESC LIMIT 1`
+      ).first<{ id: string; name: string; census_date?: string | null }>().catch(async () => {
+        return await db.prepare(
+          `SELECT id, name FROM academic_terms WHERE status = 'active' ORDER BY start_date DESC LIMIT 1`
+        ).first<{ id: string; name: string }>();
+      });
+    } catch {
+      targetTerm = await db.prepare(
+        `SELECT id, name FROM academic_terms WHERE status = 'active' ORDER BY start_date DESC LIMIT 1`
+      ).first<{ id: string; name: string }>();
+    }
   }
 
   if (!targetTerm) {
     throw new Error('No active term found for census run');
+  }
+
+  // Date gate (unless forced by an audited admin run).
+  if (!options?.force) {
+    const censusDate = (targetTerm as any)?.census_date ?? null;
+    if (!censusDate) {
+      return {
+        termId: targetTerm.id,
+        processedCount: 0,
+        enrolledCount: 0,
+        skippedCount: 0,
+        enrolledStudentIds: [],
+        skippedReason: 'census_date_not_set',
+      };
+    }
+    if (new Date() < new Date(censusDate)) {
+      return {
+        termId: targetTerm.id,
+        processedCount: 0,
+        enrolledCount: 0,
+        skippedCount: 0,
+        enrolledStudentIds: [],
+        skippedReason: 'before_census_date',
+      };
+    }
   }
 
   // Only enrollments explicitly tied to this term. Legacy rows with NULL term_id
@@ -83,11 +131,25 @@ export async function runTermCensusJob(
       continue;
     }
 
-    // 3. Financial clearance: paid invoice required
-    const paidInvoice = await db.prepare(
-      `SELECT id FROM invoices WHERE student_id = ? AND status = 'paid' LIMIT 1`
-    ).bind(student.user_id).first().catch(() => null);
-    if (!paidInvoice) {
+    // 3. Financial clearance: term-scoped paid invoice (or approved aid/plan).
+    //    Invoices with NULL term_id do not satisfy clearance.
+    let cleared = false;
+    try {
+      const paidInvoice = await db.prepare(
+        `SELECT id FROM invoices WHERE student_id = ? AND term_id = ? AND status = 'paid' LIMIT 1`
+      ).bind(student.user_id, targetTerm.id).first().catch(() => null);
+      if (paidInvoice) {
+        cleared = true;
+      } else {
+        const aid = await db.prepare(
+          `SELECT id FROM financial_aid_awards WHERE student_id = ? AND term_id = ? AND status IN ('approved','awarded','disbursed') LIMIT 1`
+        ).bind(student.user_id, targetTerm.id).first().catch(() => null);
+        if (aid) cleared = true;
+      }
+    } catch {
+      cleared = false;
+    }
+    if (!cleared) {
       skippedCount++;
       continue;
     }

@@ -92,7 +92,7 @@ export async function reserveSectionSeat(
       await tx.prepare(
         `INSERT INTO student_course_registrations (
            id, student_id, course_id, term_id, registration_type, status, section_id, registered_at
-         ) VALUES (?, ?, ?, ?, 'standard', 'registered', ?, ?)
+         ) VALUES (?, ?, ?, ?, 'elective', 'registered', ?, ?)
          ON CONFLICT(student_id, course_id, term_id) DO UPDATE SET
            status = 'registered', section_id = excluded.section_id, registered_at = excluded.registered_at`
       ).bind(regId, params.studentId, section.course_id, section.term_id, params.sectionId, now).run();
