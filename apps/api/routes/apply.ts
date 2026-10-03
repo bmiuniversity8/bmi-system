@@ -30,17 +30,19 @@ async function resolveProgram(
 ): Promise<{ id: string; name: string } | null> {
   const db = env.PLATFORM_CONTEXT!.db;
   if (input.program_id) {
+    const trimmedId = input.program_id.trim();
     const row = await db.prepare(
-      `SELECT id, name FROM programs WHERE id = ? AND is_active = 1 LIMIT 1`,
-    ).bind(input.program_id).first<{ id: string; name: string }>();
+      `SELECT id, name FROM programs WHERE (id = ? OR code = ? OR LOWER(name) = LOWER(?)) AND is_active = 1 LIMIT 1`,
+    ).bind(trimmedId, trimmedId, trimmedId).first<{ id: string; name: string }>();
     if (row) return row;
     // Fall through to name lookup: offline fallback catalogs reuse the
     // label as id, so an unknown id with a valid name must still resolve.
   }
   if (input.program) {
+    const trimmedName = input.program.trim();
     const row = await db.prepare(
-      `SELECT id, name FROM programs WHERE name = ? AND is_active = 1 LIMIT 1`,
-    ).bind(input.program).first<{ id: string; name: string }>();
+      `SELECT id, name FROM programs WHERE (LOWER(name) = LOWER(?) OR LOWER(code) = LOWER(?) OR id = ?) AND is_active = 1 LIMIT 1`,
+    ).bind(trimmedName, trimmedName, trimmedName).first<{ id: string; name: string }>();
     if (row) return row;
     return null;
   }
@@ -64,7 +66,10 @@ export async function handleSubmitApplication(request: Request, env: Env, userId
 
   const { program, program_id, degree_level, personal_statement, prior_education, date_of_birth, nationality, address, gender, high_school, graduation_year, gpa } = parsed;
 
-  const resolved = await resolveProgram(env, { program, program_id });
+  const resolved = await resolveProgram(env, {
+    program: program || undefined,
+    program_id: program_id || undefined,
+  });
   if (!resolved) {
     return error('Invalid program selected', 400);
   }
@@ -135,11 +140,11 @@ export async function handleSubmitApplication(request: Request, env: Env, userId
       priorEducation: sanitizedEducation ? JSON.stringify(sanitizedEducation) : undefined,
       dateOfBirth: date_of_birth,
       nationality,
-      address,
+      address: address || undefined,
       gender,
-      highSchool: high_school,
-      graduationYear: graduation_year,
-      gpa,
+      highSchool: high_school || undefined,
+      graduationYear: graduation_year != null ? Number(graduation_year) : undefined,
+      gpa: gpa != null ? Number(gpa) : undefined,
       applicationNumber,
     });
   } catch (e) {
@@ -847,7 +852,10 @@ export async function handleDeleteApplication(
 
 // ─── Duplicate applicant detection ─────────────────────────────────────────
 // POST /api/applications/check-duplicate { email, date_of_birth?, national_id? }
-// Never auto-merges — flags possible matches for staff review.
+// Privacy-hardened: always returns the same generic shape so the endpoint
+// cannot be used as an account-existence oracle. Staff review happens
+// server-side; no user_id / application_id / status is ever returned.
+// Never auto-merges — flags possible matches for staff review internally.
 export async function handleCheckDuplicate(request: Request, env: Env): Promise<Response> {
   let body: { email?: string; date_of_birth?: string; national_id?: string; first_name?: string; last_name?: string };
   try {
@@ -859,20 +867,15 @@ export async function handleCheckDuplicate(request: Request, env: Env): Promise<
   if (!email || !isValidEmail(email)) return error('A valid email is required', 400);
 
   const db = env.PLATFORM_CONTEXT!.db;
-  const matches: Array<{ type: string; user_id: string; application_id?: string; status?: string }> = [];
 
+  // Internal-only duplicate screen for staff review. Results are recorded for
+  // ops review but NEVER returned to the caller.
   try {
     const userMatch = await db.prepare(
       `SELECT id FROM users WHERE LOWER(email) = ? LIMIT 1`
-    ).bind(email).first<{ id: string }>();
+    ).bind(email).first<{ id: string }>().catch(() => null);
     if (userMatch) {
-      const apps = await db.prepare(
-        `SELECT id, status FROM applications WHERE user_id = ? ORDER BY created_at DESC LIMIT 5`
-      ).bind(userMatch.id).all<{ id: string; status: string }>();
-      for (const a of (apps.results || [])) {
-        matches.push({ type: 'email', user_id: userMatch.id, application_id: a.id, status: a.status });
-      }
-      if (matches.length === 0) matches.push({ type: 'email', user_id: userMatch.id });
+      console.info('[duplicate] possible match flagged for staff review');
     }
   } catch (e) {
     console.warn('[duplicate] email lookup failed:', e);
@@ -880,25 +883,16 @@ export async function handleCheckDuplicate(request: Request, env: Env): Promise<
 
   if (body.date_of_birth) {
     try {
-      const dobMatch = await db.prepare(
+      await db.prepare(
         `SELECT id FROM users WHERE LOWER(email) != ? AND date_of_birth = ? LIMIT 5`
-      ).bind(email, body.date_of_birth).all<{ id: string }>();
-      for (const r of (dobMatch.results || [])) {
-        if (!matches.some(m => m.user_id === r.id)) {
-          matches.push({ type: 'dob', user_id: r.id });
-        }
-      }
+      ).bind(email, body.date_of_birth).all<{ id: string }>().catch(() => null);
     } catch { /* column may not exist — ignore */ }
   }
 
-  if (matches.length > 0) {
-    return ok({
-      is_duplicate: true,
-      message: 'A possible existing record was found. Our admissions team will review and link your application if appropriate.',
-      matches: matches.slice(0, 5),
-    });
-  }
-  return ok({ is_duplicate: false });
+  return ok({
+    received: true,
+    message: 'Your information has been received. Our admissions team will review and link your application if appropriate.',
+  });
 }
 
 export async function checkAdmissionCodeExpiries(env: Env, ctx?: ExecutionContext): Promise<void> {

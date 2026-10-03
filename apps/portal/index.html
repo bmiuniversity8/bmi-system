@@ -8,11 +8,11 @@
     <!-- Fallback meta CSP for browsers that don't receive the HTTP header -->
     <meta http-equiv="Content-Security-Policy" content="
       default-src 'self';
-      script-src 'self' 'unsafe-inline' https://browser.sentry-cdn.com;
+      script-src 'self' 'unsafe-inline' https://browser.sentry-cdn.com https://static.cloudflareinsights.com;
       style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
       font-src 'self' https://fonts.gstatic.com;
       img-src 'self' data: blob: https:;
-      connect-src 'self' https://api.bmiuniversities.org https://bmi-api.bmi-university.workers.dev https://sentry.io https://ingest.sentry.io;
+      connect-src 'self' https://api.bmiuniversities.org https://bmi-api.bmi-university.workers.dev https://cloudflareinsights.com https://static.cloudflareinsights.com https://sentry.io https://ingest.sentry.io;
       base-uri 'self';
       form-action 'self';
     " />

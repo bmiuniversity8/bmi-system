@@ -150,26 +150,34 @@ export const VALID_DEGREE_LEVELS = ['undergraduate', 'graduate', 'doctorate', 'c
 export const VALID_APP_STATUSES = ['submitted', 'under_review', 'accepted', 'rejected', 'waitlisted'] as const;
 
 export const SubmitApplicationSchema = z.object({
-  program: z.string({ required_error: 'Program is required' }).min(1).max(LIMITS.MEDIUM).optional(),
-  program_id: z.string().max(LIMITS.UUID).optional(),
+  program: z.string({ required_error: 'Program is required' }).min(1).max(LIMITS.MEDIUM).optional().nullable(),
+  program_id: z.string().max(LIMITS.MEDIUM).optional().nullable(),
   degree_level: z.enum(VALID_DEGREE_LEVELS, {
     errorMap: () => ({ message: `Degree level must be one of: ${VALID_DEGREE_LEVELS.join(', ')}` }),
   }),
   personal_statement: z
     .string()
     .max(LIMITS.STATEMENT, `Personal statement must not exceed ${LIMITS.STATEMENT} characters`)
-    .optional(),
+    .optional()
+    .nullable(),
   prior_education: z
     .string()
     .max(5000, 'Prior education description must not exceed 5,000 characters')
-    .optional(),
+    .optional()
+    .nullable(),
   date_of_birth: z.string({ required_error: 'Date of birth is required' }).min(1, 'Date of birth is required'),
   nationality: z.string({ required_error: 'Nationality is required' }).min(1, 'Nationality is required').max(100),
-  address: z.string().max(500).optional(),
+  address: z.string().max(500).optional().nullable(),
   gender: z.string({ required_error: 'Gender is required' }).min(1, 'Gender is required').max(50),
-  high_school: z.string().max(200).optional(),
-  graduation_year: z.number().int().min(1900).max(2100).optional(),
-  gpa: z.number().min(0).max(5).optional(),
+  high_school: z.string().max(200).optional().nullable(),
+  graduation_year: z.union([
+    z.number().int().min(1900).max(2100),
+    z.string().regex(/^\d{4}$/).transform((v) => parseInt(v, 10)),
+  ]).optional().nullable(),
+  gpa: z.union([
+    z.number().min(0).max(5),
+    z.string().regex(/^\d+(\.\d+)?$/).transform((v) => parseFloat(v)),
+  ]).optional().nullable(),
 }).refine((d) => d.program || d.program_id, {
   message: 'Program selection is required (program_id preferred)',
   path: ['program_id'],
