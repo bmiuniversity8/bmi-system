@@ -116,6 +116,8 @@ export const RegisterSchema = z.object({
   first_name: nameField('First name'),
   last_name: nameField('Last name'),
   phone: z.string().max(LIMITS.PHONE, `Phone must not exceed ${LIMITS.PHONE} characters`).optional(),
+  program: z.string().max(LIMITS.MEDIUM).optional(),
+  program_id: z.string().max(LIMITS.SHORT).optional(),
 });
 
 export const LoginSchema = z.object({

@@ -191,15 +191,23 @@ export default function Register() {
         first_name: form.first_name,
         last_name: form.last_name,
         phone: form.phone || undefined,
+        program: prefillProgram || undefined,
       });
 
       // Clear saved form on success
       localStorage.removeItem(STORAGE_KEY);
 
       if (prefillProgram) {
-        // Came from the university apply page — go straight to the application form
+        try {
+          const existingApplyForm = JSON.parse(localStorage.getItem('bmi_apply_form') || '{}');
+          localStorage.setItem('bmi_apply_form', JSON.stringify({
+            ...existingApplyForm,
+            program: prefillProgram,
+          }));
+        } catch { /* ignore */ }
+        // Came from the university apply page — go straight to the application form with prefilled program
         setSuccess('Account created! Please check your email to verify your account, then complete your application.');
-        setTimeout(() => navigate('/apply'), 2000);
+        setTimeout(() => navigate(`/apply?program=${encodeURIComponent(prefillProgram)}`), 2000);
       } else {
         setSuccess('Account created! Please check your email to verify your account before logging in.');
         setForm({ first_name: '', last_name: '', email: '', phone: '', password: '', confirm_password: '' });

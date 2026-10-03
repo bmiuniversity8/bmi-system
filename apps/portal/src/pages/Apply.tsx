@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../hooks/useAuth';
 import { PROGRAMS as FALLBACK_PROGRAMS, API_WORKER_URL } from '@bmi/shared';
@@ -147,7 +147,11 @@ export default function Apply() {
     };
   });
 
-  // Check if applicant already has an active submitted application
+  const [searchParams] = useSearchParams();
+  const urlProgram = searchParams.get('program');
+  const urlProgramId = searchParams.get('program_id');
+
+  // Check if applicant already has an active submitted application or existing draft
   useEffect(() => {
     let active = true;
     (async () => {
@@ -155,6 +159,14 @@ export default function Apply() {
         const myApp = await api.applications.getMyApplication();
         if (active && myApp && myApp.status && !['draft', 'rejected'].includes(myApp.status)) {
           setExistingApp(myApp);
+        } else if (active && myApp && myApp.status === 'draft') {
+          // Pre-populate draft program info if form has not set a program yet
+          setForm((prev: any) => ({
+            ...prev,
+            program: prev.program || myApp.program || '',
+            program_id: prev.program_id || myApp.program_id || '',
+            degree_level: prev.degree_level || myApp.degree_level || '',
+          }));
         }
       } catch {
         // No application found or fetch failed, proceed with form
@@ -164,6 +176,8 @@ export default function Apply() {
     })();
     return () => { active = false; };
   }, []);
+
+
 
   // Auto-save to localStorage
   useEffect(() => {
@@ -275,6 +289,31 @@ export default function Apply() {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  // Sync program from URL query params when arriving with ?program=...
+  useEffect(() => {
+    if (!urlProgram && !urlProgramId) return;
+    const match = programs.find((p: any) =>
+      (urlProgramId && p.id === urlProgramId) ||
+      (urlProgram && p.label?.toLowerCase() === urlProgram.toLowerCase())
+    );
+    if (match) {
+      setForm((prev: any) => ({
+        ...prev,
+        program: match.label,
+        program_id: match.id || prev.program_id,
+        degree_level: match.level || prev.degree_level,
+      }));
+      if (match.level) {
+        setSelectedLevel(match.level);
+      }
+    } else if (urlProgram) {
+      setForm((prev: any) => ({
+        ...prev,
+        program: urlProgram,
+      }));
+    }
+  }, [urlProgram, urlProgramId, programs]);
 
   // Filtered Programs
   const filteredPrograms = useMemo(() => {

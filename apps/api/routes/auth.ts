@@ -74,7 +74,7 @@ export async function handleRegister(request: Request, env: Env, ctx?: Execution
     const parsed = await parseBody(request, RegisterSchema);
     if (parsed instanceof Response) return parsed;
 
-    const { email, password, first_name: cleanFirstName, last_name: cleanLastName, phone } = parsed;
+    const { email, password, first_name: cleanFirstName, last_name: cleanLastName, phone, program: requestedProgram, program_id: requestedProgramId } = parsed;
 
     if (!isValidEmail(email)) {
       return error('Please provide a valid email address.', 400);
@@ -116,8 +116,37 @@ export async function handleRegister(request: Request, env: Env, ctx?: Execution
     const normalizedEmail = email.toLowerCase();
     const appId = crypto.randomUUID();
 
-    // Registration: insert user, email verification record, and default application
-    // ACID transaction — all inserts succeed or roll back together
+    // Resolve default program BEFORE the transaction.
+    // Neon HTTP transactions are non-interactive (all statements sent as a single batch),
+    // so reading inside the tx and using the result for a dependent insert is not safe.
+    let targetProg: { id: string; name: string; level: string } | undefined;
+    try {
+      if (requestedProgramId) {
+        targetProg = (await db.select({ id: programs.id, name: programs.name, level: programs.level })
+          .from(programs)
+          .where(and(eq(programs.id, requestedProgramId), eq(programs.is_active, 1)))
+          .limit(1)
+          .execute())[0];
+      }
+      if (!targetProg && requestedProgram) {
+        targetProg = (await db.select({ id: programs.id, name: programs.name, level: programs.level })
+          .from(programs)
+          .where(and(eq(programs.name, requestedProgram), eq(programs.is_active, 1)))
+          .limit(1)
+          .execute())[0];
+      }
+      if (!targetProg) {
+        targetProg = (await db.select({ id: programs.id, name: programs.name, level: programs.level })
+          .from(programs)
+          .where(eq(programs.is_active, 1))
+          .limit(1)
+          .execute())[0];
+      }
+    } catch {
+      // Programs table may be empty or unavailable — draft creation will be skipped below.
+    }
+
+    // Registration: insert user + email verification in one ACID transaction.
     try {
       await db.transaction(async (tx) => {
         await tx.insert(users).values({
@@ -136,25 +165,28 @@ export async function handleRegister(request: Request, env: Env, ctx?: Execution
           token: verificationToken,
           expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000),
         });
-        // Auto-create initial application record as draft using the DB programs table as source of truth
-        try {
-          const defaultProg = (await tx.select({ id: programs.id, name: programs.name, level: programs.level }).from(programs).where(eq(programs.is_active, 1)).limit(1).execute())[0];
-          await tx.insert(applications).values({
-            id: appId,
-            user_id: userId,
-            program: defaultProg?.name || 'Unspecified Program',
-            program_id: defaultProg?.id || null,
-            degree_level: defaultProg?.level || 'undergraduate',
-            status: 'draft',
-          });
-        } catch (appErr) {
-          console.warn('Initial application record creation skipped (rollback-safe in tx):', appErr);
-          throw appErr;
-        }
       });
     } catch (e: any) {
       console.error('Registration transaction failed:', e);
       return error(`Registration failed: ${e?.message || String(e)}`, 500);
+    }
+
+    // Auto-create an initial draft application record after the user is committed.
+    // This is best-effort — if it fails (e.g. schema mismatch, empty programs table)
+    // the user is still registered; they can create an application manually.
+    if (targetProg) {
+      try {
+        await db.insert(applications).values({
+          id: appId,
+          user_id: userId,
+          program: targetProg.name,
+          program_id: targetProg.id,
+          degree_level: targetProg.level || 'undergraduate',
+          status: 'draft',
+        }).onConflictDoNothing();
+      } catch (appErr) {
+        console.warn('[register] Auto-draft application creation skipped:', appErr);
+      }
     }
 
     // Email verification — use the purpose-built template for consistent styling + expiry warning
