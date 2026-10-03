@@ -237,9 +237,9 @@ describe('handleSubmitApplication', () => {
       .mockResolvedValueOnce(null)         // no max apps
       .mockResolvedValueOnce(null)         // no deadline
       .mockResolvedValueOnce({ email: 'user@test.com', first_name: 'Test' }); // user fetch for email
-    
+
     env.PLATFORM_CONTEXT.db.run = vi.fn().mockResolvedValue({});
-    
+
     const req = makeRequest({
       program: 'BA in Biblical Studies',
       degree_level: 'undergraduate',
@@ -249,12 +249,64 @@ describe('handleSubmitApplication', () => {
       personal_statement: 'I want to study at BMI because of its mission.',
       prior_education: 'High school graduate.',
     });
-    
+
     const res = await handleSubmitApplication(req, env as any, 'user-1');
     expect(res.status).toBe(200);
     const body = await res.json() as any;
     expect(body.data?.application_id).toBeDefined();
     expect(body.data?.application_number).toBe('APP-2026-0001');
     expect(body.data?.status).toBe('submitted');
+  });
+
+  it('normalizes mixed-case degree_level from the program catalog', () => {
+    for (const raw of ['Undergraduate', ' UNDERGRADUATE ', 'Graduate', 'DiPlOmA']) {
+      const parsed = SubmitApplicationSchema.safeParse({
+        program: 'BA in Biblical Studies',
+        degree_level: raw,
+        date_of_birth: '2000-01-01',
+        nationality: 'Liberian',
+        gender: 'Male',
+      });
+      expect(parsed.success).toBe(true);
+      if (parsed.success) {
+        expect(parsed.data.degree_level).toBe(raw.trim().toLowerCase());
+      }
+    }
+  });
+
+  it('submits successfully with a catalog-cased degree_level', async () => {
+    env.PLATFORM_CONTEXT.db.first = vi.fn()
+      .mockResolvedValueOnce({ count: 0 }) // no active app
+      .mockResolvedValueOnce(null)         // no max apps
+      .mockResolvedValueOnce(null)         // no deadline
+      .mockResolvedValueOnce({ email: 'user@test.com', first_name: 'Test' }); // user fetch for email
+
+    env.PLATFORM_CONTEXT.db.run = vi.fn().mockResolvedValue({});
+
+    const req = makeRequest({
+      program: 'BA in Biblical Studies',
+      degree_level: 'Undergraduate',
+      date_of_birth: '2000-01-01',
+      nationality: 'Liberian',
+      gender: 'Male',
+    });
+
+    const res = await handleSubmitApplication(req, env as any, 'user-1');
+    expect(res.status).toBe(200);
+  });
+
+  it('admin create rejects an unknown degree_level with 400 (never 500)', async () => {
+    const { handleAdminCreateApplication } = await import('./apply');
+    const req = makeRequest({
+      email: 'new@app.test',
+      first_name: 'New',
+      last_name: 'Applicant',
+      program: 'BA in Biblical Studies',
+      degree_level: 'Bachelors',
+    });
+    const res = await handleAdminCreateApplication(req, env as any, 'admin-1');
+    expect(res.status).toBe(400);
+    const body = await res.json() as any;
+    expect(JSON.stringify(body)).toMatch(/degree_level/i);
   });
 });

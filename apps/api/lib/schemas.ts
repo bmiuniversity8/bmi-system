@@ -149,12 +149,29 @@ export const ChangePasswordSchema = z.object({
 export const VALID_DEGREE_LEVELS = ['undergraduate', 'graduate', 'doctorate', 'certificate', 'diploma'] as const;
 export const VALID_APP_STATUSES = ['submitted', 'under_review', 'accepted', 'rejected', 'waitlisted'] as const;
 
+/**
+ * Canonical degree-level normalizer. The portal feeds `programs.level`
+ * straight from the DB catalog into `degree_level`, and catalog rows created
+ * outside the validated paths can carry any case ('Undergraduate', 'UG', …).
+ * Normalizing here (instead of rejecting) keeps applicant submit working
+ * while the enum below still rejects genuinely unknown levels.
+ * Returns the canonical lowercase value, or null when unknown.
+ */
+export function normalizeDegreeLevel(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const v = value.trim().toLowerCase();
+  return (VALID_DEGREE_LEVELS as readonly string[]).includes(v) ? v : null;
+}
+
 export const SubmitApplicationSchema = z.object({
   program: z.string({ required_error: 'Program is required' }).min(1).max(LIMITS.MEDIUM).optional().nullable(),
   program_id: z.string().max(LIMITS.MEDIUM).optional().nullable(),
-  degree_level: z.enum(VALID_DEGREE_LEVELS, {
-    errorMap: () => ({ message: `Degree level must be one of: ${VALID_DEGREE_LEVELS.join(', ')}` }),
-  }),
+  degree_level: z.preprocess(
+    (v) => (typeof v === 'string' ? v.trim().toLowerCase() : v),
+    z.enum(VALID_DEGREE_LEVELS, {
+      errorMap: () => ({ message: `Degree level must be one of: ${VALID_DEGREE_LEVELS.join(', ')}` }),
+    }),
+  ),
   personal_statement: z
     .string()
     .max(LIMITS.STATEMENT, `Personal statement must not exceed ${LIMITS.STATEMENT} characters`)

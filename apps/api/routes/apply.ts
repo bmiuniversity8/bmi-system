@@ -12,7 +12,7 @@ import type { Env } from '../lib/types';
 import { dispatchWebhook } from '../lib/webhook';
 import { generateApplicationNumber } from '../lib/app_number';
 import { getLifecycleHistory } from '../lib/lifecycle';
-import { parseBody, SubmitApplicationSchema, ApplicationDraftSchema } from '../lib/schemas';
+import { parseBody, SubmitApplicationSchema, ApplicationDraftSchema, normalizeDegreeLevel, VALID_DEGREE_LEVELS } from '../lib/schemas';
 import { executeWithMonitoring } from '../lib/performance';
 import { createCoreDb, setRequestContext, isNeon } from '../lib/db';
 import { users } from '../schema/core';
@@ -704,6 +704,14 @@ export async function handleAdminCreateApplication(
     return error('Invalid program selected', 400);
   }
 
+  // Same normalization as the applicant schema: catalog-sourced levels may
+  // carry any case. Reject unknown levels with 400 (never let the DB CHECK
+  // turn this into a 500).
+  const normalizedLevel = normalizeDegreeLevel(degree_level);
+  if (!normalizedLevel) {
+    return error(`degree_level must be one of: ${VALID_DEGREE_LEVELS.join(', ')}`, 400);
+  }
+
   const db = env.PLATFORM_CONTEXT!.db;
 
   // Find-or-create the applicant user
@@ -752,7 +760,7 @@ export async function handleAdminCreateApplication(
     userId,
     program: resolved.name,
     programId: resolved.id,
-    degreeLevel: String(degree_level),
+    degreeLevel: normalizedLevel,
     highSchool: high_school ? String(high_school) : undefined,
     gpa: gpaValue ?? undefined,
     address: address ? String(address) : undefined,
@@ -763,7 +771,7 @@ export async function handleAdminCreateApplication(
     applicant_email: normalizedEmail,
     program: resolved.name,
     program_id: resolved.id,
-    degree_level,
+    degree_level: normalizedLevel,
   }, request);
 
   // Notify the applicant about their new application
