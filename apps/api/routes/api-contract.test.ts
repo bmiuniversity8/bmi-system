@@ -27,6 +27,7 @@ vi.mock('../lib/email', () => ({
   isValidEmail: (e: string) => /.+@.+\..+/.test(e),
 }));
 
+import { ROUTES } from '../index';
 import { handleCheckDuplicate } from './apply';
 import { handleListSections, handleFinalizeRegistration, handleSignEnrollmentAgreement, handleGetEnrollmentAgreement } from './registration';
 import { handleCreatePaymentIntent } from './payment';
@@ -150,5 +151,16 @@ describe('API contracts', () => {
     expect(res.status).toBe(200);
     // Server-resolved invoice amount (500), NOT the client-supplied 1
     expect(create).toHaveBeenCalledWith(expect.objectContaining({ amount: 500 }));
+  });
+
+  it('route table: POST /payment/create-intent admits applicants (deposit flow)', () => {
+    const entry = ROUTES.find((r: any) => {
+      const methods = Array.isArray(r.method) ? r.method : [r.method];
+      return methods.includes('POST') && r.path.test('/api/payment/create-intent');
+    });
+    expect(entry).toBeDefined();
+    // Deposits are paid while the user role is still 'applicant'. Ownership,
+    // purpose and amount are enforced inside the handler, not by the role gate.
+    expect(entry!.roles).toEqual(expect.arrayContaining(['applicant', 'student']));
   });
 });

@@ -472,14 +472,16 @@ export async function handleRefresh(request: Request, env: Env): Promise<Respons
     return error('Invalid or expired session', 401);
   }
 
-  // Fetch current session_version to include in new token
+  // Fetch current session_version AND role so a refreshed token self-heals
+  // after server-side role flips (e.g. applicant → student on acceptance).
   const db = createCoreDb(env);
   const sub = payload.sub as string;
-  const userRow = (await db.select({ session_version: users.session_version }).from(users).where(eq(users.id, sub)).execute())[0];
+  const userRow = (await db.select({ session_version: users.session_version, role: users.role }).from(users).where(eq(users.id, sub)).execute())[0];
   const sv = userRow?.session_version ?? (payload.sv as number) ?? 1;
+  const role = userRow?.role ?? (payload.role as string);
 
   // Issue new token and CSRF token
-  const newToken = await signJWT({ sub, email: payload.email as string, role: payload.role as string, sv }, env.JWT_SECRET);
+  const newToken = await signJWT({ sub, email: payload.email as string, role, sv }, env.JWT_SECRET);
   const newCsrfToken = generateCsrfToken();
   const expiresAt = new Date(Date.now() + 60 * 60 * 24 * 7 * 1000).toISOString();
 

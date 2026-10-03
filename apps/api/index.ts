@@ -133,7 +133,7 @@ type Route = {
   handler: RouteHandler;
 };
 
-const ROUTES: Route[] = [
+export const ROUTES: Route[] = [
   { method: 'POST', path: /^\/api\/auth\/register$/, roles: undefined, handler: async (req, env, _p, _auth, ctx) => handleRegister(req, env, ctx) },
   { method: 'POST', path: /^\/api\/auth\/login$/, roles: undefined, handler: async (req, env) => handleLogin(req, env) },
   { method: 'POST', path: /^\/api\/auth\/refresh$/, roles: undefined, handler: async (req, env) => handleRefresh(req, env) },
@@ -325,7 +325,10 @@ const ROUTES: Route[] = [
   { method: 'POST', path: /^\/api\/student\/documents\/upload$/, roles: ['student'], handler: async (req, env, _p, auth) => handleUploadStudentDocument(req, env, auth!.user.sub) },
   { method: 'GET', path: /^\/api\/lms\/courses$/, roles: ['student'], handler: async (req, env, _p, auth) => handleLmsCourses(req, env, auth!.user.sub) },
   { method: 'GET', path: /^\/api\/lms\/grades$/, roles: ['student'], handler: async (req, env, _p, auth) => handleLmsGrades(req, env, auth!.user.sub) },
-  { method: 'POST', path: /^\/api\/payment\/create-intent$/, roles: ['student'], handler: async (req, env, _p, auth) => handleCreatePaymentIntent(req, env, auth!.user.sub) },
+  // Applicants must be able to start gateway payments too (enrollment deposits
+  // are paid while the user role is still 'applicant'). Ownership, purpose and
+  // amount are enforced inside handleCreatePaymentIntent itself.
+  { method: 'POST', path: /^\/api\/payment\/create-intent$/, roles: ['applicant', 'student'], handler: async (req, env, _p, auth) => handleCreatePaymentIntent(req, env, auth!.user.sub) },
   { method: 'GET', path: /^\/api\/payment\/verify(?:\/([^/]+))?$/, roles: ['student'], handler: async (req, env, p, auth) => handleVerifyPayment(req, env, auth!.user.sub, p[1]) },
   { method: 'POST', path: /^\/api\/payment\/webhook$/, roles: undefined, handler: async (req, env) => handlePaymentWebhook(req, env) },
   { method: 'GET', path: /^\/api\/registration\/status$/, roles: ['student'], handler: async (req, env, _p, auth) => handleGetRegistrationStatus(req, env, auth!.user.sub) },

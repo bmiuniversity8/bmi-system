@@ -17,7 +17,7 @@ const STATUS_STEPS: Record<string, { label: string; icon: string; pct: number }>
 const DOC_TYPES = ['transcript', 'id_document', 'other'];
 
 export default function Status() {
-  const { user } = useAuth();
+  const { user, refresh } = useAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [app, setApp] = useState<Application | null>(null);
@@ -101,6 +101,14 @@ export default function Status() {
       const res = await api.admissions.acceptOffer(app.id);
       if (res.success) {
         setActionSuccess('🎉 Congratulations! You have accepted your admission offer. Your permanent institutional accounts are being provisioned.');
+        // Acceptance flips the server-side role applicant → student. Re-pull
+        // the session so route guards and student-only APIs work immediately
+        // without forcing a logout/login cycle.
+        try {
+          await refresh();
+        } catch {
+          // Non-fatal: the API authorizes against the live DB role anyway.
+        }
         loadData();
       }
     } catch (err: unknown) {
