@@ -23,7 +23,7 @@ describe('D1 migrations replay (Tasks 01-08)', () => {
       try {
         db.exec(sql);
       } catch (e: unknown) {
-        throw new Error(`Migration ${f} failed: ${e instanceof Error ? e.message : String(e)}`);
+        throw new Error(`Migration ${f} failed: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
       }
     }
 
