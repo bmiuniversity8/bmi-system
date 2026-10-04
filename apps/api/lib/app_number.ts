@@ -12,7 +12,7 @@ export async function generateApplicationNumber(db: IDatabase, year: number): Pr
   const result = await db.prepare(
     `INSERT INTO application_number_counters (year, last_serial)
      VALUES (?, 1)
-     ON CONFLICT(year) DO UPDATE SET last_serial = last_serial + 1
+     ON CONFLICT(year) DO UPDATE SET last_serial = application_number_counters.last_serial + 1
      RETURNING last_serial`
   ).bind(year).first<{ last_serial: number }>();
 

@@ -64,6 +64,21 @@ export function translateSqliteToPostgres(sql: string): string {
   // 13. json_object(k, v, ...) → json_build_object(k, v, ...)
   out = out.replace(/json_object\s*\(/gi, 'json_build_object(');
 
+  // 14. Disambiguate self-referencing counter updates in ON CONFLICT DO UPDATE
+  // In PostgreSQL, `DO UPDATE SET col = col + 1` causes error 42702 (ambiguous column reference).
+  // When an INSERT INTO <table> contains an unqualified `col = col + ...`, qualify the RHS with the table name.
+  const insertMatch = out.match(/INSERT\s+INTO\s+([a-zA-Z0-9_]+)/i);
+  if (insertMatch && /DO\s+UPDATE\s+SET/i.test(out)) {
+    const tableName = insertMatch[1];
+    out = out.replace(/(DO\s+UPDATE\s+SET\s+)([\s\S]+?)(RETURNING|$)/i, (_m, prefix, setBody, suffix) => {
+      const disambiguated = setBody.replace(
+        /(?<![a-zA-Z0-9_.]\b)([a-zA-Z0-9_]+)\s*=\s*(?<![a-zA-Z0-9_.]\b)\1(\s*[+\-*\/])/gi,
+        `$1 = ${tableName}.$1$2`
+      );
+      return `${prefix}${disambiguated}${suffix}`;
+    });
+  }
+
   return out;
 }
 

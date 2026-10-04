@@ -30,7 +30,7 @@ export async function generateRegNo(
     `INSERT INTO regno_counters (program_id, admission_year, last_serial)
      VALUES (?, ?, 1)
      ON CONFLICT(program_id, admission_year)
-     DO UPDATE SET last_serial = last_serial + 1
+     DO UPDATE SET last_serial = regno_counters.last_serial + 1
      RETURNING last_serial`
   ).bind(programId, admissionYear).first<{ last_serial: number }>();
 

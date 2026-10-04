@@ -44,6 +44,18 @@ describe('translateSqliteToPostgres', () => {
       `ON CONFLICT (id) DO UPDATE SET x = excluded.x`
     );
   });
+
+  it('disambiguates self-referencing counter updates in ON CONFLICT DO UPDATE', () => {
+    const input = `INSERT INTO application_number_counters (year, last_serial) VALUES (?, 1) ON CONFLICT(year) DO UPDATE SET last_serial = last_serial + 1 RETURNING last_serial`;
+    const expected = `INSERT INTO application_number_counters (year, last_serial) VALUES (?, 1) ON CONFLICT (year) DO UPDATE SET last_serial = application_number_counters.last_serial + 1 RETURNING last_serial`;
+    expect(translateSqliteToPostgres(input)).toBe(expected);
+  });
+
+  it('preserves already-qualified column references in ON CONFLICT DO UPDATE', () => {
+    const input = `INSERT INTO application_number_counters (year, last_serial) VALUES (?, 1) ON CONFLICT(year) DO UPDATE SET last_serial = application_number_counters.last_serial + 1 RETURNING last_serial`;
+    const expected = `INSERT INTO application_number_counters (year, last_serial) VALUES (?, 1) ON CONFLICT (year) DO UPDATE SET last_serial = application_number_counters.last_serial + 1 RETURNING last_serial`;
+    expect(translateSqliteToPostgres(input)).toBe(expected);
+  });
 });
 
 describe('rewritePlaceholders', () => {

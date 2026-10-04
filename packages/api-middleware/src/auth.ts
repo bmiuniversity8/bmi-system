@@ -41,7 +41,7 @@ export async function requireAuth(
   ).bind(user.sub).first<{ session_version: number; role?: string }>().catch(async () => {
     return await db.prepare(
       `SELECT session_version FROM users WHERE id = ?`
-    ).bind(user.sub).first<{ session_version: number }>();
+    ).bind(user.sub).first<{ session_version: number; role?: string }>();
   });
 
   if (!dbUser) {
