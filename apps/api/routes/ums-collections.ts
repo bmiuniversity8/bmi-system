@@ -173,6 +173,16 @@ export async function handleCreateHostel(request: Request, env: Env): Promise<Re
   return ok(row);
 }
 
+export async function handleUpdateHostel(request: Request, env: Env, id: string): Promise<Response> {
+  const body = await typedJson<Record<string, unknown>>(request);
+  await env.PLATFORM_CONTEXT!.db.prepare(
+    `UPDATE hostels SET name=COALESCE(?,name), type=COALESCE(?,type), capacity=COALESCE(?,capacity), location=COALESCE(?,location), status=COALESCE(?,status) WHERE id=?`
+  ).bind(body.name||null, body.type||null, (body.capacity as number)??null, body.location||null, body.status||null, id).run();
+  const row = await env.PLATFORM_CONTEXT!.db.prepare(`SELECT * FROM hostels WHERE id = ?`).bind(id).first();
+  if (!row) return error('Hostel not found', 404);
+  return ok(row);
+}
+
 export async function handleListRoomAssignments(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const { page, perPage, offset } = paginate(url);
@@ -240,6 +250,17 @@ export async function handleCreateMedicalRecord(request: Request, env: Env): Pro
   const id = crypto.randomUUID();
   await env.PLATFORM_CONTEXT!.db.prepare(`INSERT INTO medical_records (id,student_id,condition_name,blood_type,visit_date,attending_staff,status,vitals,notes) VALUES (?,?,?,?,?,?,?,?,?)`).bind(id, body.student_id||body.studentId, body.condition, body.bloodType||null, body.date||new Date().toISOString(), body.attendingStaff||null, body.status||'Normal', JSON.stringify(body.vitals||{}), body.notes||null).run();
   const row = await env.PLATFORM_CONTEXT!.db.prepare(`SELECT * FROM medical_records WHERE id = ?`).bind(id).first();
+  return ok(row);
+}
+
+export async function handleUpdateMedicalRecord(request: Request, env: Env, id: string): Promise<Response> {
+  const body = await typedJson<Record<string, unknown>>(request);
+  const vitals = body.vitals !== undefined ? JSON.stringify(body.vitals) : null;
+  await env.PLATFORM_CONTEXT!.db.prepare(
+    `UPDATE medical_records SET condition_name=COALESCE(?,condition_name), blood_type=COALESCE(?,blood_type), attending_staff=COALESCE(?,attending_staff), status=COALESCE(?,status), vitals=COALESCE(?,vitals), notes=COALESCE(?,notes) WHERE id=?`
+  ).bind(body.condition||null, body.bloodType||null, body.attendingStaff||null, body.status||null, vitals, (body.notes as string)||null, id).run();
+  const row = await env.PLATFORM_CONTEXT!.db.prepare(`SELECT * FROM medical_records WHERE id = ?`).bind(id).first();
+  if (!row) return error('Medical record not found', 404);
   return ok(row);
 }
 

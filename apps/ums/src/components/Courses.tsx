@@ -27,9 +27,11 @@ import { postCourseBatch } from "../services/batchService";
 import { useDataStore } from "../stores/dataStore";
 import { usePagination } from "../hooks/usePagination";
 import { useCoursesQuery } from "../hooks/useEntityQueries";
+import { useQueryClient } from "@tanstack/react-query";
 import { useDialogStore } from "../stores/dialogStore";
 
 const Courses: React.FC = () => {
+  const queryClient = useQueryClient();
   const courses = useDataStore((s) => s.courses);
   const _setCourses = useDataStore((s) => s.setCourses);
   const setCourses = (action: React.SetStateAction<Course[]>) => {
@@ -51,11 +53,10 @@ const Courses: React.FC = () => {
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [bulkCoursesOpen, setBulkCoursesOpen] = useState(false);
   const { page, perPage, meta, setPage, setMeta } = usePagination(50);
-//   const _queryClient = useQueryClient();
 
   const {
     data: courseResponse,
-    
+    refetch: refetchCourses,
     isFetching,
   } = useCoursesQuery({
     page,
@@ -137,6 +138,8 @@ const Courses: React.FC = () => {
           setCourses((prev) =>
             prev.map((c) => (c.id === editingCourse.id ? next : c)),
           );
+          await refetchCourses();
+          queryClient.invalidateQueries({ queryKey: ['courses'] });
           await useDialogStore.getState().alert({ title: "Course Updated", message: "The course record has been successfully updated in the institutional course registry.", variant: "success", confirmText: "Acknowledged", badgeText: "Academic Registry" });
         } else {
           // eslint-disable-next-line no-console
@@ -174,6 +177,8 @@ const Courses: React.FC = () => {
 
         if (result.success) {
           setCourses((prev) => [result.data || newCourse, ...prev]);
+          await refetchCourses();
+          queryClient.invalidateQueries({ queryKey: ['courses'] });
           await useDialogStore.getState().alert({ title: "Course Added", message: "The new course has been successfully registered in the institutional academic catalogue.", variant: "success", confirmText: "Acknowledged", badgeText: "Academic Registry" });
         } else {
           // eslint-disable-next-line no-console
@@ -208,6 +213,8 @@ const Courses: React.FC = () => {
         const result = await deleteCourseApi(id);
         if (result.success) {
           setCourses((prev) => prev.filter((c) => c.id !== id));
+          await refetchCourses();
+          queryClient.invalidateQueries({ queryKey: ['courses'] });
           await useDialogStore.getState().alert({ title: "Course Deleted", message: "The course has been successfully removed from the institutional academic catalogue.", variant: "success", confirmText: "Acknowledged", badgeText: "Academic Registry" });
         } else {
           // eslint-disable-next-line no-console

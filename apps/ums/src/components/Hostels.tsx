@@ -34,9 +34,13 @@ const Hostels: React.FC = () => {
     roomAssignments: assignments,
     fetchHostels,
     fetchRoomAssignments,
+    createHostel,
     createRoomAssignment,
     deleteRoomAssignment,
   } = useApiDataStore();
+  const [isHostelModalOpen, setIsHostelModalOpen] = useState(false);
+  const [editingHostel, setEditingHostel] = useState<any | null>(null);
+  const [hostelForm, setHostelForm] = useState({ name: '', type: 'Male', capacity: 100, location: '' });
 
   const [activeTab, setActiveTab] = useState<"halls" | "registry" | "transport">("halls");
   
@@ -175,6 +179,12 @@ const Hostels: React.FC = () => {
           </div>
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end flex-wrap">
+          <button
+            onClick={() => { setEditingHostel(null); setHostelForm({ name: '', type: 'Male', capacity: 100, location: '' }); setIsHostelModalOpen(true); }}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border rounded-lg font-bold text-[10px] uppercase"
+          >
+            <Plus size={12} /> New Hostel
+          </button>
           <button
             onClick={() => {
               setIsAllocationModalOpen(true);
@@ -676,6 +686,26 @@ const Hostels: React.FC = () => {
               </form>
             </div>
           </div>
+        )}
+        {isHostelModalOpen && (
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (!hostelForm.name) return;
+              const res = await createHostel(hostelForm as any);
+              if (res) { setIsHostelModalOpen(false); await fetchHostels(); }
+            }}
+            className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+          >
+            <div className="bg-white rounded-xl p-5 w-full max-w-sm space-y-2 text-sm">
+              <h3 className="font-black uppercase">{editingHostel ? 'Edit Hostel' : 'New Hostel'}</h3>
+              <input required placeholder="Hostel name" value={hostelForm.name} onChange={e => setHostelForm({ ...hostelForm, name: e.target.value })} className="w-full border rounded p-2" />
+              <select value={hostelForm.type} onChange={e => setHostelForm({ ...hostelForm, type: e.target.value })} className="w-full border rounded p-2"><option>Male</option><option>Female</option></select>
+              <input type="number" value={hostelForm.capacity} onChange={e => setHostelForm({ ...hostelForm, capacity: Number(e.target.value) })} className="w-full border rounded p-2" />
+              <input placeholder="Location" value={hostelForm.location} onChange={e => setHostelForm({ ...hostelForm, location: e.target.value })} className="w-full border rounded p-2" />
+              <div className="flex justify-end gap-2"><button type="button" onClick={() => setIsHostelModalOpen(false)}>Cancel</button><button className="px-4 py-1.5 bg-[#4B0082] text-white rounded">Save to Database</button></div>
+            </div>
+          </form>
         )}
 
         <div className="bg-gray-900 border-l-4 border-[#FFD700] p-6 text-white flex items-start gap-5 shadow-2xl">

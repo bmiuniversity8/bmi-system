@@ -21,7 +21,7 @@ vi.mock('./lib/types', () => ({
 // since index imports all routes, we should mock them so they don't break.
 vi.mock('./routes/auth', () => ({ handleLogin: vi.fn() }));
 vi.mock('./routes/admin', () => ({ handleListUsers: vi.fn().mockResolvedValue(new Response('users')) }));
-vi.mock('./routes/ums-timetabling', () => ({ handleCreateTimetabling: vi.fn().mockResolvedValue(new Response('created')) }));
+vi.mock('./routes/ums-timetabling', () => ({ handleCreateTimetabling: vi.fn().mockResolvedValue(new Response('created')), handleListTimetabling: vi.fn().mockResolvedValue(new Response('list')), handleUpdateTimetabling: vi.fn().mockResolvedValue(new Response('updated')), handleDeleteTimetabling: vi.fn().mockResolvedValue(new Response('deleted')) }));
 vi.mock('./routes/ums-students', () => ({ handleListStudents: vi.fn().mockResolvedValue(new Response('students')) }));
 
 // Note: we can't easily mock everything index imports without a lot of setup,

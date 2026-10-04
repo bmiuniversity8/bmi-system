@@ -49,7 +49,7 @@ const Finance: React.FC = () => {
     page: 1,
     perPage: 1000,
   });
-  const { data: transactionsRes } = useTransactionsQuery({
+  const { data: transactionsRes, refetch: refetchTransactions } = useTransactionsQuery({
     page: 1,
     perPage: 1000,
   });
@@ -220,6 +220,7 @@ const Finance: React.FC = () => {
           setTransactions((prev) =>
             prev.map((t) => (t.id === editingTx.id ? committedTx! : t)),
           );
+          try { await refetchTransactions(); } catch { /* ignore */ }
         } else {
           setToastMsg(res.error || "Update failed");
           setShowToast(true);
@@ -246,20 +247,32 @@ const Finance: React.FC = () => {
       } else {
         const randomValues = new Uint32Array(1);
         crypto.getRandomValues(randomValues);
+        const match = (students as any[]).find((s: any) =>
+          `${s.first_name || ''} ${s.last_name || ''}`.trim().toLowerCase() === newTx.name.trim().toLowerCase() ||
+          s.id === newTx.name || s.student_number === newTx.name,
+        );
+        const student_id = (match as any)?.id || (match as any)?.user_id || (students as any[])[0]?.id;
+        if (!student_id) {
+          setToastMsg("No student in registry — add a student first");
+          setShowToast(true);
+          return;
+        }
         const res = await createTransaction({
+          student_id,
           ref: `TRX-${(randomValues[0] % 10000).toString().padStart(4, "0")}`,
           name: newTx.name,
           desc: newTx.desc,
           date: newTx.date,
           amt: parseFloat(newTx.amt) || 0,
           status: newTx.status,
-        });
+        } as any);
         if (res.success && res.data) {
           committedTx = res.data as Transaction;
           setTransactions((prev) => [committedTx!, ...prev]);
+          try { await refetchTransactions(); } catch { /* ignore */ }
           setToastMsg(`Entry for ${committedTx.name} committed successfully`);
         } else {
-          setToastMsg(res.error || "Create failed");
+          setToastMsg(res.error || "Create failed — not persisted");
           setShowToast(true);
           return;
         }

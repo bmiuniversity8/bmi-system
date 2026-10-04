@@ -101,11 +101,13 @@ interface ApiDataState {
   // Convenience methods per module
   fetchHostels: () => Promise<void>;
   createHostel: (data: Partial<Hostel>) => Promise<Hostel | null>;
+  updateHostel: (id: string, data: Partial<Hostel>) => Promise<Hostel | null>;
   fetchRoomAssignments: () => Promise<void>;
   createRoomAssignment: (data: Partial<RoomAssignment>) => Promise<RoomAssignment | null>;
   deleteRoomAssignment: (id: string) => Promise<boolean>;
   fetchMedicalVisits: () => Promise<void>;
   createMedicalVisit: (data: Partial<MedicalVisit>) => Promise<MedicalVisit | null>;
+  updateMedicalVisit: (id: string, data: Partial<MedicalVisit>) => Promise<MedicalVisit | null>;
   deleteMedicalVisit: (id: string) => Promise<boolean>;
   fetchInventory: () => Promise<void>;
   createInventoryItem: (data: Partial<InventoryItem>) => Promise<InventoryItem | null>;
@@ -247,6 +249,10 @@ export const useApiDataStore = create<ApiDataState>((set, get) => ({
     return await get().createItem<Hostel>('hostels', '/hostels', data);
   },
 
+  updateHostel: async (id, data) => {
+    return await get().updateItem<Hostel>('hostels', '/hostels', id, data);
+  },
+
   fetchRoomAssignments: async () => {
     await get().fetchCollection<RoomAssignment>('roomAssignments', '/hostels/assignments');
   },
@@ -266,6 +272,10 @@ export const useApiDataStore = create<ApiDataState>((set, get) => ({
 
   createMedicalVisit: async (data) => {
     return await get().createItem<MedicalVisit>('medicalVisits', '/medical', data);
+  },
+
+  updateMedicalVisit: async (id, data) => {
+    return await get().updateItem<MedicalVisit>('medicalVisits', '/medical', id, data);
   },
 
   deleteMedicalVisit: async (id) => {

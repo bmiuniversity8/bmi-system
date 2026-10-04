@@ -78,6 +78,14 @@ export async function updateProgram(id: string, data: Partial<Program>): Promise
   }
 }
 
+export async function deleteProgram(id: string): Promise<ApiResponse<{ deleted: boolean }>> {
+  try {
+    const response = await authFetch(`${API_URL}/programs/${id}`, { method: 'DELETE' });
+    const result = await parseJsonSafe<ApiResponse<{ deleted: boolean }>>(response);
+    return result ?? { success: false, data: { deleted: false } };
+  } catch { return { success: false, data: { deleted: false } }; }
+}
+
 // ── Catalog (Faculties & Departments) ─────────────────────────────────────────
 
 export async function getFaculties(): Promise<ApiResponse<Faculty[]>> {

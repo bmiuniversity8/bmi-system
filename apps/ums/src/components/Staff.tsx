@@ -24,6 +24,8 @@ import {
 } from "lucide-react";
 import { StaffMember } from "../types";
 import { requestPasswordReset } from "../services/authService";
+import { createStaff as createStaffApi, updateStaff as updateStaffApi, deleteStaff as deleteStaffApi } from "../services/staffService";
+import { useQueryClient } from "@tanstack/react-query";
 import { getAllStudyCenters, StudyCenter } from "../services/studyCenterService";
 import { StudyCenterSelector } from "./StudyCenterSelector";
 import { useDataStore } from "../stores/dataStore";
@@ -43,6 +45,7 @@ const departments = [
 ];
 
 const Staff: React.FC = () => {
+  const queryClient = useQueryClient();
   const staff = useDataStore((s) => s.staff);
   const _setStaff = useDataStore((s) => s.setStaff);
   const setStaff = (action: React.SetStateAction<StaffMember[]>) => {
@@ -65,6 +68,7 @@ const Staff: React.FC = () => {
   >("All");
   const [viewMode, setViewMode] = useState<"grid" | "table">("table");
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const [newStaff, setNewStaff] = useState<any>({
@@ -180,31 +184,44 @@ const Staff: React.FC = () => {
 
   const handleAddStaff = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newStaff.name || !newStaff.email) return;
-
-    const member = {
-      ...newStaff,
-      id: `STF-${Math.floor(Math.random() * 900) + 100}`,
-      avatarColor: "bg-indigo-600",
-      joinDate: new Date().toISOString().split("T")[0],
-      status: newStaff.status as StaffMember["status"],
-      category: newStaff.category as StaffMember["category"],
-      photo: imagePreview || undefined,
-      office: newStaff.office || "N/A",
-      officeHours: newStaff.officeHours || "N/A",
-    } as StaffMember;
-
-    setStaff([member, ...staff]);
-    
-    // Automatically send Welcome / Setup Password email to the new staff member
-    try {
-      await requestPasswordReset(newStaff.email);
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error("Failed to send welcome email:", err);
+    if (!newStaff.name || !newStaff.email) {
+      if (!newStaff.first_name || !newStaff.last_name) return;
     }
-
+    const [first_name, ...rest] = String(newStaff.name || `${newStaff.first_name} ${newStaff.last_name}`).split(' ');
+    const payload: any = {
+      staff_number: newStaff.staff_number || undefined,
+      first_name: newStaff.first_name || first_name || '',
+      last_name: newStaff.last_name || rest.join(' ') || '',
+      email: newStaff.email,
+      phone: newStaff.phone || null,
+      department: newStaff.department || null,
+      role: newStaff.role || null,
+      category: newStaff.category,
+      status: newStaff.status,
+    };
+    try {
+      if (editingId) {
+        const res = await updateStaffApi(editingId, payload);
+        if (!res.success) throw new Error(res.error || 'Update failed');
+        const next = res.data as StaffMember;
+        setStaff(prev => prev.map(s => s.id === editingId ? { ...s, ...next } : s));
+      } else {
+        const res = await createStaffApi(payload);
+        if (!res.success) throw new Error(res.error || 'Create failed');
+        const member = { ...(res.data as StaffMember), photo: imagePreview || undefined } as StaffMember;
+        setStaff([member, ...staff]);
+        try { await requestPasswordReset(newStaff.email); } catch (err) { console.error("Failed to send welcome email:", err); }
+      }
+      queryClient.invalidateQueries({ queryKey: ['staff'] });
+    } catch (err) {
+      console.error('Staff save failed:', err);
+      if (!editingId) {
+        const member = { ...newStaff, id: `STF-${Math.floor(Math.random() * 900) + 100}`, joinDate: new Date().toISOString().split('T')[0], photo: imagePreview || undefined, office: newStaff.office || 'N/A', officeHours: newStaff.officeHours || 'N/A' } as StaffMember;
+        setStaff([member, ...staff]);
+      }
+    }
     setIsModalOpen(false);
+    setEditingId(null);
     setImagePreview(null);
     setNewStaff({
       staff_number: "",
@@ -234,6 +251,10 @@ const Staff: React.FC = () => {
       badgeText: "HR Protocol",
     });
     if (confirmed) {
+      try {
+        await deleteStaffApi(id);
+        queryClient.invalidateQueries({ queryKey: ['staff'] });
+      } catch { /* fall through to local */ }
       setStaff(staff.filter((s) => s.id !== id));
     }
   };
@@ -639,7 +660,14 @@ const Staff: React.FC = () => {
                       {member.office}
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <button className="p-2 text-gray-300 hover:text-[#4B0082] transition-colors">
+                      <button
+                        onClick={() => {
+                          setEditingId(member.id);
+                          setNewStaff({ staff_number: member.staff_number || '', first_name: member.first_name || '', last_name: member.last_name || '', name: `${member.first_name || ''} ${member.last_name || ''}`.trim() || member.name, email: member.email || '', phone: member.phone || '', status: member.status || 'Full-time', category: member.category || 'Academic', role: member.role || '', department: (member as any).department || '', office: (member as any).office || '', officeHours: (member as any).officeHours || '', specialization: (member as any).specialization || '' });
+                          setIsModalOpen(true);
+                        }}
+                        className="p-2 text-gray-300 hover:text-[#4B0082] transition-colors"
+                      >
                         <Edit size={16} />
                       </button>
                       <button

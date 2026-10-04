@@ -80,6 +80,58 @@ export async function handleListTransactions(request: Request, env: Env): Promis
   });
 }
 
+// ─── create / update invoice (admin writes — Finance UI calls these) ───────
+
+export async function handleCreateInvoice(request: Request, env: Env): Promise<Response> {
+  const body = await request.json() as Record<string, unknown>;
+  const student_id = (body.student_id || (body as any).studentId) as string;
+  const amount = Number((body as any).amount ?? (body as any).amt ?? 0);
+  if (!student_id || !Number.isFinite(amount) || amount <= 0) {
+    return error('student_id and a positive amount are required', 400);
+  }
+  const id = crypto.randomUUID();
+  const due = ((body as any).due_date || (body as any).date || new Date(Date.now() + 30 * 86400000).toISOString()) as string;
+  const term_id = ((body as any).term_id || (body as any).termId || null) as string | null;
+  try {
+    await env.PLATFORM_CONTEXT!.db.prepare(
+      `INSERT INTO invoices (id, student_id, amount, status, due_date, term_id) VALUES (?, ?, ?, 'unpaid', ?, ?)`
+    ).bind(id, student_id, Math.round(amount), due, term_id).run();
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/no such column|undefined column/i.test(msg)) {
+      await env.PLATFORM_CONTEXT!.db.prepare(
+        `INSERT INTO invoices (id, student_id, amount, status, due_date) VALUES (?, ?, ?, 'unpaid', ?)`
+      ).bind(id, student_id, Math.round(amount), due).run();
+    } else throw e;
+  }
+  const row = await env.PLATFORM_CONTEXT!.db.prepare(`SELECT * FROM invoices WHERE id = ?`).bind(id).first();
+  return json({ success: true, data: row }, 201);
+}
+
+export async function handleUpdateInvoice(request: Request, env: Env, invoiceId: string): Promise<Response> {
+  const body = await request.json() as Record<string, unknown>;
+  const sets: string[] = [];
+  const vals: unknown[] = [];
+  const status = (body as any).status as string | undefined;
+  if (status !== undefined) {
+    const norm = String(status).toLowerCase();
+    const mapped = norm === 'paid' ? 'paid' : norm === 'pending' ? 'unpaid' : norm === 'failed' ? 'unpaid' : norm;
+    if (!['paid', 'unpaid'].includes(mapped)) return error('status must be paid, unpaid/pending', 400);
+    sets.push(`status = ?`); vals.push(mapped);
+  }
+  if ((body as any).amount !== undefined || (body as any).amt !== undefined) {
+    sets.push(`amount = ?`); vals.push(Math.round(Number((body as any).amount ?? (body as any).amt)));
+  }
+  if ((body as any).due_date !== undefined || (body as any).date !== undefined) {
+    sets.push(`due_date = ?`); vals.push(((body as any).due_date || (body as any).date) as string);
+  }
+  if (!sets.length) return error('No valid fields to update (status, amount, due_date)', 400);
+  await env.PLATFORM_CONTEXT!.db.prepare(`UPDATE invoices SET ${sets.join(', ')} WHERE id = ?`).bind(...vals, invoiceId).run();
+  const row = await env.PLATFORM_CONTEXT!.db.prepare(`SELECT * FROM invoices WHERE id = ?`).bind(invoiceId).first();
+  if (!row) return error('Invoice not found', 404);
+  return ok(row);
+}
+
 // ─── invoice details with lines and allocations ───────────────────────────────
 
 export async function handleGetInvoiceDetails(env: Env, invoiceId: string): Promise<Response> {

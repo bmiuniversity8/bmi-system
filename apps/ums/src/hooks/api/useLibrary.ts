@@ -46,7 +46,7 @@ export interface LibraryFine {
 export function useLibraryBooksQuery() {
   return useQuery({
     queryKey: QUERY_KEYS.library.books(),
-    queryFn: () => apiClient.get<LibraryBook[]>('/api/v1/library/books'),
+    queryFn: () => apiClient.get<LibraryBook[]>('/api/v1/library'),
     staleTime: 5 * 60 * 1000,
     retry: 1,
   });
@@ -103,7 +103,28 @@ export function useAddBookMutation() {
 
   return useMutation({
     mutationFn: (data: Omit<LibraryBook, 'id'>) =>
-      apiClient.post<LibraryBook>('/api/v1/library/books', data),
+      apiClient.post<LibraryBook>('/api/v1/library', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.library.books() });
+    },
+  });
+}
+
+export function useUpdateBookMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string | number; data: Partial<LibraryBook> }) =>
+      apiClient.patch<LibraryBook>(`/api/v1/library/${id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.library.books() });
+    },
+  });
+}
+
+export function useDeleteBookMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string | number) => apiClient.delete(`/api/v1/library/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.library.books() });
     },

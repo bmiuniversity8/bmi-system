@@ -68,7 +68,7 @@ export function useAddStaffMutation() {
 
   return useMutation({
     mutationFn: (data: Record<string, unknown>) =>
-      apiClient.post<unknown>('/api/v1/hr/staff', data),
+      apiClient.post<unknown>('/api/v1/staff', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.staff.all() });
     },
@@ -80,7 +80,7 @@ export function useUpdateStaffMutation() {
 
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) =>
-      apiClient.patch<unknown>(`/api/v1/hr/staff/${id}`, data),
+      apiClient.patch<unknown>(`/api/v1/staff/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.staff.all() });
     },

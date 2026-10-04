@@ -28,6 +28,16 @@ export const QUERY_KEYS = {
     detail: (id: string) => ['courses', id] as const,
   },
 
+  // ── Terms & Programs ──
+  terms: {
+    all:    () => ['terms'] as const,
+    detail: (id: string) => ['terms', id] as const,
+  },
+  programs: {
+    all:    (filters?: Record<string, unknown>) => ['programs', filters ?? {}] as const,
+    detail: (id: string) => ['programs', id] as const,
+  },
+
   // ── Finance / Invoices ──
   invoices: {
     all:       (filters?: Record<string, unknown>) => ['invoices', filters ?? {}] as const,

@@ -107,6 +107,75 @@ export async function handleUpdateCourse(request: Request, env: Env, courseId: s
   return ok(updated);
 }
 
+// ─── create / update / delete program (admin writes — UI calls these) ─────
+
+export async function handleCreateProgram(request: Request, env: Env): Promise<Response> {
+  const body = await request.json() as Record<string, unknown>;
+  const name = String(body.name || '').trim();
+  const code = String(body.code || '').trim().toUpperCase();
+  if (!name || !code) return error('name and code are required', 400);
+  const id = String(body.id || crypto.randomUUID());
+  const department_id = (body.department_id as string) || (body as any).departmentId || null;
+  try {
+    await env.PLATFORM_CONTEXT!.db.prepare(
+      `INSERT INTO programs (id, name, code, degree_type, level, department_id, duration_years, total_credit_hours, mode_of_study, is_active)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`
+    ).bind(
+      id, name, code,
+      (body.degree_type as string) || (body.level as string) || 'bachelor',
+      (body.level as string) || 'bachelor',
+      department_id,
+      Number((body as any).duration_years ?? 4),
+      Number((body as any).total_credit_hours ?? 120),
+      (body as any).mode_of_study || 'full_time',
+    ).run();
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/UNIQUE|unique|duplicate/i.test(msg)) return error('Program code already exists', 409);
+    throw e;
+  }
+  await invalidateCachePrefix(env.PLATFORM_CONTEXT?.kv, 'catalog:programs');
+  const created = await env.PLATFORM_CONTEXT!.db.prepare(`SELECT * FROM programs WHERE id = ?`).bind(id).first();
+  return json({ success: true, data: created }, 201);
+}
+
+export async function handleUpdateProgram(request: Request, env: Env, programId: string): Promise<Response> {
+  const body = await request.json() as Record<string, unknown>;
+  const allowed = ['name', 'code', 'degree_type', 'level', 'department_id', 'duration_years', 'total_credit_hours', 'mode_of_study', 'description', 'is_active'];
+  const updates: string[] = [];
+  const vals: unknown[] = [];
+  for (const key of allowed) {
+    if ((body as any)[key] !== undefined) { updates.push(`${key} = ?`); vals.push((body as any)[key]); }
+  }
+  // tolerate camelCase from UI
+  if ((body as any).departmentId !== undefined && (body as any).department_id === undefined) { updates.push(`department_id = ?`); vals.push((body as any).departmentId); }
+  if (!updates.length) return error('No valid fields to update', 400);
+  updates.push(`updated_at = datetime('now')`);
+  try {
+    await env.PLATFORM_CONTEXT!.db.prepare(`UPDATE programs SET ${updates.join(', ')} WHERE id = ?`).bind(...vals, programId).run();
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/no such column/i.test(msg)) {
+      // description/updated_at may not exist on older DBs — retry with core columns only
+      const core = allowed.filter(k => !['description', 'updated_at'].includes(k));
+      const u2: string[] = []; const v2: unknown[] = [];
+      for (const key of core) if ((body as any)[key] !== undefined) { u2.push(`${key} = ?`); v2.push((body as any)[key]); }
+      if (!u2.length) return error('No valid fields to update', 400);
+      await env.PLATFORM_CONTEXT!.db.prepare(`UPDATE programs SET ${u2.join(', ')} WHERE id = ?`).bind(...v2, programId).run();
+    } else throw e;
+  }
+  await invalidateCachePrefix(env.PLATFORM_CONTEXT?.kv, 'catalog:programs');
+  const updated = await env.PLATFORM_CONTEXT!.db.prepare(`SELECT * FROM programs WHERE id = ?`).bind(programId).first();
+  if (!updated) return error('Program not found', 404);
+  return ok(updated);
+}
+
+export async function handleDeleteProgram(_request: Request, env: Env, programId: string): Promise<Response> {
+  await env.PLATFORM_CONTEXT!.db.prepare(`DELETE FROM programs WHERE id = ?`).bind(programId).run();
+  await invalidateCachePrefix(env.PLATFORM_CONTEXT?.kv, 'catalog:programs');
+  return ok({ deleted: true, id: programId });
+}
+
 // ─── delete course ────────────────────────────────────────────────────────────
 
 export async function handleDeleteCourse(_request: Request, env: Env, courseId: string): Promise<Response> {

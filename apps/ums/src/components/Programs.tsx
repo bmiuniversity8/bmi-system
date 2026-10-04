@@ -18,7 +18,8 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { Program, Faculty, Department } from "../types";
-import { getPrograms, getFaculties, getDepartments, createProgram } from "../services/programService";
+import { getPrograms, getFaculties, getDepartments, createProgram, updateProgram, deleteProgram } from "../services/programService";
+import { useQueryClient } from "@tanstack/react-query";
 
 
 // Beautiful mapping of program levels to distinct, premium aesthetics
@@ -67,6 +68,7 @@ const LEVEL_CONFIG = {
 
 const Programs: React.FC = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const [programs, setPrograms] = useState<Program[]>([]);
   const [faculties, setFaculties] = useState<Faculty[]>([]);
@@ -153,6 +155,7 @@ const Programs: React.FC = () => {
 
   // Modal & Toast State
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [editingProgram, setEditingProgram] = useState<Program | null>(null);
   const [newProgData, setNewProgData] = useState({
     name: "",
     code: "",
@@ -196,20 +199,29 @@ const Programs: React.FC = () => {
     e.preventDefault();
     if (!newProgData.name || !newProgData.code) return;
 
+    const payload = {
+      ...newProgData,
+      department_id: newProgData.department_id || (departments[0]?.id || "dept-1"),
+      faculty_id: newProgData.faculty_id || (faculties[0]?.id || "fac-1"),
+    };
     try {
-      const res = await createProgram({
-        ...newProgData,
-        department_id: newProgData.department_id || (departments[0]?.id || "dept-1"),
-        faculty_id: newProgData.faculty_id || (faculties[0]?.id || "fac-1"),
-      });
-
-      if (res.success && res.data) {
-        // @ts-expect-error editor state uses a loose shape
-        setPrograms(prev => (prev as any).map((p: any) => p.id === editingProgram.id ? {
-          ...p,
-        } : p));
-        showToast("New degree program created successfully!");
+      if (editingProgram) {
+        const res = await updateProgram(editingProgram.id, payload);
+        if (res.success && res.data) {
+          setPrograms(prev => prev.map(p => p.id === editingProgram.id ? { ...p, ...(res.data as Program) } : p));
+          showToast("Program updated in database!");
+        } else throw new Error(typeof res.error === 'string' ? res.error : res.error?.message || 'Update failed');
       } else {
+        const res = await createProgram(payload);
+        if (res.success && res.data) {
+          setPrograms(prev => [res.data as Program, ...prev]);
+          showToast("New degree program created successfully!");
+        } else throw new Error(typeof (res as any).error === 'string' ? (res as any).error : (res as any).error?.message || 'Create failed');
+      }
+      queryClient.invalidateQueries({ queryKey: ['programs'] });
+    } catch (err: any) {
+      showToast(err?.message || 'Save failed — not persisted');
+      if (!editingProgram) {
         const localProg = {
           id: `prog-${Date.now()}`,
           ...newProgData,
@@ -219,21 +231,10 @@ const Programs: React.FC = () => {
           updated: new Date().toISOString(),
         } as Program;
         setPrograms((prev) => [localProg, ...prev]);
-        showToast("New degree program added to catalog!");
       }
-    } catch {
-      const localProg = {
-        id: `prog-${Date.now()}`,
-        ...newProgData,
-        department_id: newProgData.department_id || "dept-1",
-        faculty_id: newProgData.faculty_id || "fac-1",
-        created: new Date().toISOString(),
-        updated: new Date().toISOString(),
-      } as Program;
-      setPrograms((prev) => [localProg, ...prev]);
-      showToast("New degree program added to catalog!");
     } finally {
       setIsCreateModalOpen(false);
+      setEditingProgram(null);
       setNewProgData({
         name: "",
         code: "",
@@ -463,8 +464,36 @@ const Programs: React.FC = () => {
                           </span>
                         </div>
                       </div>
-                      <div className="text-gray-300 group-hover:text-[#4B0082] dark:group-hover:text-[#FFD700] group-hover:translate-x-1.5 transition-all">
-                        <ChevronRight size={18} />
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingProgram(prog);
+                            setNewProgData({ name: prog.name, code: prog.code, level: prog.level as any, duration_years: prog.duration_years, total_credit_hours: prog.total_credit_hours, department_id: prog.department_id, faculty_id: (prog as any).faculty_id || '', description: (prog as any).description || '' });
+                            setIsCreateModalOpen(true);
+                          }}
+                          className="px-2 py-1 text-[10px] font-bold border rounded-lg hover:bg-gray-50"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            if (!window.confirm(`Delete program ${prog.code}?`)) return;
+                            try {
+                              await deleteProgram(prog.id);
+                              setPrograms(prev => prev.filter(p => p.id !== prog.id));
+                              queryClient.invalidateQueries({ queryKey: ['programs'] });
+                              showToast('Program deleted from database');
+                            } catch (err: any) { showToast('Delete failed'); }
+                          }}
+                          className="px-2 py-1 text-[10px] font-bold border rounded-lg text-red-600 hover:bg-red-50"
+                        >
+                          Delete
+                        </button>
+                        <div className="text-gray-300 group-hover:text-[#4B0082] dark:group-hover:text-[#FFD700] group-hover:translate-x-1.5 transition-all">
+                          <ChevronRight size={18} />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -497,7 +526,7 @@ const Programs: React.FC = () => {
                   <GraduationCap size={18} />
                 </span>
                 <h3 className="text-base font-black text-gray-900 dark:text-white uppercase tracking-tight">
-                  Create Degree Program
+                  {editingProgram ? 'Edit Degree Program' : 'Create Degree Program'}
                 </h3>
               </div>
               <button onClick={() => setIsCreateModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-white">
@@ -610,7 +639,7 @@ const Programs: React.FC = () => {
                   type="submit"
                   className="px-5 py-2 font-black uppercase text-xs tracking-wider bg-[#2E004F] text-[#FFD700] hover:bg-purple-950 rounded-lg shadow-md transition-all"
                 >
-                  Create Program
+                  {editingProgram ? 'Save Changes' : 'Create Program'}
                 </button>
               </div>
             </form>

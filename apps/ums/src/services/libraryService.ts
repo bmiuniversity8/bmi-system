@@ -20,6 +20,21 @@ export async function getLibraryItems(filters?: { page?: number; perPage?: numbe
   return (await res.json()) as LibraryListResponse;
 }
 
+export async function createLibraryItem(data: Partial<LibraryItem>) {
+  const res = await authFetch(`${API_URL}/library`, { method: 'POST', body: JSON.stringify(data) });
+  return (await res.json()) as { success: boolean; data?: LibraryItem; error?: string };
+}
+
+export async function updateLibraryItem(id: string, data: Partial<LibraryItem>) {
+  const res = await authFetch(`${API_URL}/library/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+  return (await res.json()) as { success: boolean; data?: LibraryItem; error?: string };
+}
+
+export async function deleteLibraryItem(id: string) {
+  const res = await authFetch(`${API_URL}/library/${id}`, { method: 'DELETE' });
+  return (await res.json()) as { success: boolean; error?: string };
+}
+
 
 
 

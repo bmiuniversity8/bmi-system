@@ -42,11 +42,16 @@ export async function getTransactions(filters?: any): Promise<TransactionListRes
   }
 }
 
-export async function createTransaction(data: Partial<Transaction>): Promise<TransactionResponse> {
+export async function createTransaction(data: Partial<Transaction> & { student_id?: string; studentId?: string }): Promise<TransactionResponse> {
   try {
+    const body: any = { ...data };
+    // Map UI shape (name/amt/ref/date) to invoices shape (student_id/amount/due_date)
+    if (!body.student_id && (body as any).studentId) body.student_id = (body as any).studentId;
+    if (body.amt !== undefined && body.amount === undefined) body.amount = body.amt;
+    if (body.date && !body.due_date) body.due_date = body.date;
     const response = await authFetch(`${API_URL}/finance/transactions`, {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(body),
     });
     const result = await parseJsonSafe<TransactionResponse>(response);
     return result ?? { success: false, error: 'Failed to parse create transaction response' };
@@ -56,9 +61,12 @@ export async function createTransaction(data: Partial<Transaction>): Promise<Tra
 
 export async function updateTransaction(id: string, data: Partial<Transaction>): Promise<TransactionResponse> {
   try {
+    const body: any = { ...data };
+    if (body.amt !== undefined && body.amount === undefined) body.amount = body.amt;
+    if (body.date && !body.due_date) body.due_date = body.date;
     const response = await authFetch(`${API_URL}/finance/transactions/${id}`, {
       method: 'PATCH',
-      body: JSON.stringify(data),
+      body: JSON.stringify(body),
     });
     const result = await parseJsonSafe<TransactionResponse>(response);
     return result ?? { success: false, error: 'Failed to parse update transaction response' };

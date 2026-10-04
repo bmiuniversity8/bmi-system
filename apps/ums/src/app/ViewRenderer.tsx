@@ -24,6 +24,7 @@ import Staff from "../components/Staff";
 import Attendance from "../components/Attendance";
 import Finance from "../components/Finance";
 import Courses from "../components/Courses";
+import Terms from "../components/Terms";
 import Exams from "../components/Exams";
 import Grades from "../components/Grades";
 import { Transcripts } from "../components/Transcripts";
@@ -149,6 +150,8 @@ export default function ViewRenderer(props: ViewRendererProps) {
       return <Finance />;
     case "courses":
       return <Courses />;
+    case "terms":
+      return <Terms />;
     case "exams":
       return <Exams />;
     case "grades":

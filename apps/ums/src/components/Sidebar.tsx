@@ -60,6 +60,7 @@ const viewToRoute: Record<string, string> = {
   attendance: "/attendance",
   finance: "/finance",
   courses: "/courses",
+  terms: "/terms",
   timetable: "/timetable",
   programs: "/programs",
   exams: "/exams",
@@ -145,6 +146,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       icon: MonitorPlay,
       items: [
         { id: "courses", label: "Courses", icon: MonitorPlay },
+        { id: "terms", label: "Academic Terms", icon: Calendar },
         { id: "programs", label: `Degree ${t("academic.programs")}`, icon: GraduationCap },
         { id: "grades", label: "Assessments & Grades", icon: FileSpreadsheet },
         { id: "rubrics", label: "Marking Rubrics", icon: FileText },

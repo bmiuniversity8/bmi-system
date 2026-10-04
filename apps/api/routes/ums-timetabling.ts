@@ -47,3 +47,19 @@ export async function handleCreateTimetabling(request: Request, env: Env): Promi
 
   return handleListTimetabling(request, env);
 }
+
+export async function handleUpdateTimetabling(request: Request, env: Env, id: string): Promise<Response> {
+  const body = await request.json() as Record<string, unknown>;
+  const allowed = ['course_id', 'instructor_id', 'classroom_id', 'day_of_week', 'start_time', 'end_time'];
+  const updates: string[] = [];
+  const vals: unknown[] = [];
+  for (const k of allowed) if ((body as any)[k] !== undefined) { updates.push(`${k} = ?`); vals.push((body as any)[k]); }
+  if (!updates.length) return (await import('../lib/types')).error('No valid fields to update', 400);
+  await env.PLATFORM_CONTEXT!.db.prepare(`UPDATE timetabling SET ${updates.join(', ')} WHERE id = ?`).bind(...vals, id).run();
+  return handleListTimetabling(request, env);
+}
+
+export async function handleDeleteTimetabling(request: Request, env: Env, id: string): Promise<Response> {
+  await env.PLATFORM_CONTEXT!.db.prepare(`DELETE FROM timetabling WHERE id = ?`).bind(id).run();
+  return handleListTimetabling(request, env);
+}

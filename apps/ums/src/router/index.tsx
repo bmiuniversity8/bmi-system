@@ -43,6 +43,7 @@ const FacultyPortal = lazy(() => import("../components/FacultyPortal"));
 const Programs = lazy(() => import("../components/Programs"));
 const ProgramDetail = lazy(() => import("../components/ProgramDetail"));
 const Timetable = lazy(() => import("../components/Timetable"));
+const Terms = lazy(() => import("../components/Terms"));
 const RubricBuilder = lazy(() => import("../components/grading/RubricBuilder"));
 const SystemHealth = lazy(() => import("../components/SystemHealth"));
 const AdminDocuments = lazy(() => import("../components/AdminDocuments"));
@@ -147,6 +148,7 @@ export function AppRoutes() {
           }
         />
         <Route path="/courses" element={<Courses />} />
+        <Route path="/terms" element={<Terms />} />
         <Route path="/timetable" element={<Timetable />} />
         <Route path="/programs" element={<Programs />} />
         <Route path="/programs/:id" element={<ProgramDetail />} />

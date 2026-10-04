@@ -6,7 +6,7 @@ import { handleRequestRecommendation, handleGetRecommendationInfo, handleUploadR
 import { requireAuth, rateLimit, withCors, getCorsHeaders, createLogger, requestLogger } from '@bmi/api-middleware';
 import { handleGetDashboard, handleGetCourses, handleEnroll, handleGetFinances, handlePayInvoice, handleDropCourse, handleGetTranscript, handleGetSettings, handleUpdateSettings, handleUpdatePhoto, handleGetTickets, handleCreateTicket } from './routes/student';
 import { handleAdminSetup, handleAdminSetupInfo, handleAdminSetupReset, handleListUsers, handleUpdateUserRole, handleDeleteUser, handleAdminResetPassword, handleGetAuditLogs, handleBulkEmails, handleListContactSubmissions, handleListNewsletterSubscribers } from './routes/admin';
-import { handleListTimetabling, handleCreateTimetabling } from './routes/ums-timetabling';
+import { handleListTimetabling, handleCreateTimetabling, handleUpdateTimetabling, handleDeleteTimetabling } from './routes/ums-timetabling';
 import { handleListRubrics, handleCreateRubric, handleDeleteRubric } from './routes/ums-rubrics';
 import { handleGetPerformanceMetrics, handleGetQueryAnalysis, handleRunMaintenance, handleGetSystemHealth, handleClearMetrics } from './routes/performance';
 import { trackResponseTime } from './lib/performance';
@@ -23,11 +23,13 @@ import { handleInboundWebhook, handleListEvents, handleListDeadLetters, handleRe
 import { handleListStudents, handleGetStudent, handleCreateStudent, handleUpdateStudent, handleDeleteStudent } from './routes/ums-students';
 import { handleImportV2 } from './routes/ums-import';
 import { handleListGrades, handleCreateGrade, handleUpdateGrade } from './routes/ums-grades';
-import { handleListUmsCourses, handleCreateCourse, handleUpdateCourse, handleDeleteCourse, handleListPrograms, handleListFaculties, handleListDepartments, handleListTerms, handleCreateTerm, handleUpdateTerm, handleCompleteCourseRegistration, handleCloseTermWithCompletions, handleListEnrollments, handleCreateEnrollment } from './routes/ums-courses';
+import { handleListUmsCourses, handleCreateCourse, handleUpdateCourse, handleDeleteCourse, handleListPrograms, handleCreateProgram, handleUpdateProgram, handleDeleteProgram, handleListFaculties, handleListDepartments, handleListTerms, handleCreateTerm, handleUpdateTerm, handleCompleteCourseRegistration, handleCloseTermWithCompletions, handleListEnrollments, handleCreateEnrollment } from './routes/ums-courses';
 import { handleListStaff, handleGetStaff, handleCreateStaff, handleUpdateStaff, handleProvisionControlledAccount } from './routes/ums-staff';
 import { handleGetStudentPrograms, handleProgramTransfer } from './routes/programs';
 import {
   handleListTransactions,
+  handleCreateInvoice,
+  handleUpdateInvoice,
   handleGetInvoiceDetails,
   handleGetFeeSchedules,
   handleGetExchangeRates,
@@ -41,9 +43,9 @@ import {
   handleCreateStudyCenter, handleUpdateStudyCenter,
   handleListLibraryBooks,
   handleCreateLibraryBook, handleUpdateLibraryBook, handleDeleteLibraryBook,
-  handleListHostels, handleCreateHostel,
+  handleListHostels, handleCreateHostel, handleUpdateHostel,
   handleListRoomAssignments, handleCreateRoomAssignment, handleDeleteRoomAssignment,
-  handleListMedicalRecords, handleCreateMedicalRecord, handleDeleteMedicalRecord,
+  handleListMedicalRecords, handleCreateMedicalRecord, handleUpdateMedicalRecord, handleDeleteMedicalRecord,
   handleListInventory, handleCreateInventoryItem, handleUpdateInventoryItem, handleDeleteInventoryItem,
   handleListVisitors, handleCreateVisitor, handleUpdateVisitor, handleDeleteVisitor,
   handleListAttendance, handleCreateAttendanceRecord, handleUpdateAttendanceRecord,
@@ -245,6 +247,8 @@ export const ROUTES: Route[] = [
   { method: 'DELETE', path: /^\/api\/cms\/pages\/([^/]+)$/, roles: ['admin'], handler: async (req, env, p, auth) => handleDeletePage(req, env, p[1], auth!.user.sub) },
   { method: 'GET', path: /^\/api\/v1\/timetabling$/, roles: [], handler: async (req, env) => handleListTimetabling(req, env) },
   { method: 'POST', path: /^\/api\/v1\/timetabling$/, roles: ['admin', 'staff'], handler: async (req, env) => handleCreateTimetabling(req, env) },
+  { method: ['PUT', 'PATCH'], path: /^\/api\/v1\/timetabling\/([^/]+)$/, roles: ['admin', 'staff'], handler: async (req, env, p) => handleUpdateTimetabling(req, env, p[1]) },
+  { method: 'DELETE', path: /^\/api\/v1\/timetabling\/([^/]+)$/, roles: ['admin'], handler: async (req, env, p) => handleDeleteTimetabling(req, env, p[1]) },
   { method: 'POST', path: /^\/api\/webhooks\/inbound$/, roles: undefined, handler: async (req, env) => handleInboundWebhook(req, env) },
   { method: 'GET', path: /^\/api\/webhooks\/events$/, roles: ['admin'], handler: async (req, env) => handleListEvents(req, env) },
   { method: 'GET', path: /^\/api\/webhooks\/dead-letters$/, roles: ['admin'], handler: async (req, env) => handleListDeadLetters(req, env) },
@@ -272,6 +276,9 @@ export const ROUTES: Route[] = [
   { method: 'POST', path: /^\/api\/v1\/rubrics$/, roles: ['admin', 'staff'], handler: async (req, env) => handleCreateRubric(req, env) },
   { method: 'DELETE', path: /^\/api\/v1\/rubrics\/([^/]+)$/, roles: ['admin', 'staff'], handler: async (req, env, p) => handleDeleteRubric(req, env, p[1]) },
   { method: 'GET', path: /^\/api\/v1\/programs$/, roles: [], handler: async (req, env) => handleListPrograms(req, env) },
+  { method: 'POST', path: /^\/api\/v1\/programs$/, roles: ['admin', 'staff'], handler: async (req, env) => handleCreateProgram(req, env) },
+  { method: ['PUT', 'PATCH'], path: /^\/api\/v1\/programs\/([^/]+)$/, roles: ['admin', 'staff'], handler: async (req, env, p) => handleUpdateProgram(req, env, p[1]) },
+  { method: 'DELETE', path: /^\/api\/v1\/programs\/([^/]+)$/, roles: ['admin'], handler: async (req, env, p) => handleDeleteProgram(req, env, p[1]) },
   { method: 'GET', path: /^\/api\/v1\/faculties$/, roles: [], handler: async (req, env) => handleListFaculties(req, env) },
   { method: 'GET', path: /^\/api\/v1\/departments$/, roles: [], handler: async (req, env) => handleListDepartments(req, env) },
   { method: 'GET', path: /^\/api\/v1\/terms$/, roles: [], handler: async (req, env) => handleListTerms(req, env) },
@@ -287,6 +294,8 @@ export const ROUTES: Route[] = [
   { method: 'GET', path: /^\/api\/v1\/staff\/([^/]+)$/, roles: ['admin', 'staff'], handler: async (req, env, p) => handleGetStaff(req, env, p[1]) },
   { method: ['PUT', 'PATCH'], path: /^\/api\/v1\/staff\/([^/]+)$/, roles: ['admin'], handler: async (req, env, p) => handleUpdateStaff(req, env, p[1]) },
   { method: 'GET', path: /^\/api\/v1\/finance\/transactions$/, roles: ['admin', 'staff'], handler: async (req, env) => handleListTransactions(req, env) },
+  { method: 'POST', path: /^\/api\/v1\/finance\/transactions$/, roles: ['admin', 'staff'], handler: async (req, env) => handleCreateInvoice(req, env) },
+  { method: ['PUT', 'PATCH'], path: /^\/api\/v1\/finance\/transactions\/([^/]+)$/, roles: ['admin', 'staff'], handler: async (req, env, p) => handleUpdateInvoice(req, env, p[1]) },
   { method: 'GET', path: /^\/api\/v1\/finance\/invoices\/([^/]+)$/, roles: ['admin', 'staff', 'student'], handler: async (_req, env, p) => handleGetInvoiceDetails(env, p[1]) },
   { method: 'GET', path: /^\/api\/v1\/finance\/schedules$/, roles: ['admin', 'staff'], handler: async (_req, env) => handleGetFeeSchedules(env) },
   { method: 'GET', path: /^\/api\/v1\/finance\/fx-rates$/, roles: ['admin', 'staff'], handler: async (_req, env) => handleGetExchangeRates(env) },
@@ -308,11 +317,13 @@ export const ROUTES: Route[] = [
   { method: 'GET', path: /^\/api\/v1\/library$/, roles: ['admin', 'staff', 'student'], handler: async (req, env) => handleListLibraryBooks(req, env) },
   { method: 'GET', path: /^\/api\/v1\/hostels$/, roles: ['admin', 'staff'], handler: async (req, env) => handleListHostels(req, env) },
   { method: 'POST', path: /^\/api\/v1\/hostels$/, roles: ['admin'], handler: async (req, env) => handleCreateHostel(req, env) },
+  { method: ['PUT', 'PATCH'], path: /^\/api\/v1\/hostels\/([^/]+)$/, roles: ['admin'], handler: async (req, env, p) => handleUpdateHostel(req, env, p[1]) },
   { method: 'GET', path: /^\/api\/v1\/hostels\/assignments$/, roles: ['admin', 'staff'], handler: async (req, env) => handleListRoomAssignments(req, env) },
   { method: 'POST', path: /^\/api\/v1\/hostels\/assignments$/, roles: ['admin', 'staff'], handler: async (req, env) => handleCreateRoomAssignment(req, env) },
   { method: 'DELETE', path: /^\/api\/v1\/hostels\/assignments\/([^/]+)$/, roles: ['admin'], handler: async (req, env, p) => handleDeleteRoomAssignment(req, env, p[1]) },
   { method: 'GET', path: /^\/api\/v1\/medical$/, roles: ['admin', 'staff'], handler: async (req, env) => handleListMedicalRecords(req, env) },
   { method: 'POST', path: /^\/api\/v1\/medical$/, roles: ['admin', 'staff'], handler: async (req, env) => handleCreateMedicalRecord(req, env) },
+  { method: ['PUT', 'PATCH'], path: /^\/api\/v1\/medical\/([^/]+)$/, roles: ['admin', 'staff'], handler: async (req, env, p) => handleUpdateMedicalRecord(req, env, p[1]) },
   { method: 'DELETE', path: /^\/api\/v1\/medical\/([^/]+)$/, roles: ['admin'], handler: async (req, env, p) => handleDeleteMedicalRecord(req, env, p[1]) },
   { method: 'GET', path: /^\/api\/v1\/inventory$/, roles: ['admin', 'staff'], handler: async (req, env) => handleListInventory(req, env) },
   { method: 'POST', path: /^\/api\/v1\/inventory$/, roles: ['admin'], handler: async (req, env) => handleCreateInventoryItem(req, env) },

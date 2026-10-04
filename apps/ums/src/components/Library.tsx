@@ -30,6 +30,8 @@ import { getAIResponse } from "../services/aiService";
 import { useDataStore } from "../stores/dataStore";
 import { useLibraryQuery } from "../hooks/useEntityQueries";
 import { useLibraryBorrowingsQuery, useLibraryFinesQuery, useMarkFinePaidMutation } from "../hooks/api/useLibrary";
+import { createLibraryItem, updateLibraryItem, deleteLibraryItem } from "../services/libraryService";
+import { useQueryClient } from "@tanstack/react-query";
 
 function extractMetadataFromDoc(
   base64String: string,
@@ -46,7 +48,8 @@ function extractMetadataFromDoc(
 }
 
 export const Library: React.FC = () => {
-  const { data: libraryRes } = useLibraryQuery({
+  const queryClient = useQueryClient();
+  const { data: libraryRes, refetch: refetchLibrary } = useLibraryQuery({
     page: 1,
     perPage: 500,
   });
@@ -196,30 +199,33 @@ export const Library: React.FC = () => {
   const handleAddItem = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsCommitting(true);
-    await new Promise((resolve) => setTimeout(resolve, 1200));
-
-    if (editingItemId) {
-      const updatedItem = { ...newItem, id: editingItemId } as LibraryItem;
-      setLibrary((prev) =>
-        prev.map((i) => (i.id === editingItemId ? updatedItem : i)),
-      );
-      showToast(`Registry node ${editingItemId} successfully updated.`);
-    } else {
-      const refId = `LIB-${Math.floor(Math.random() * 9000) + 1000}`;
-      const item: LibraryItem = {
-        ...(newItem as LibraryItem),
-        id: refId,
-        location:
-          newItem.status === "Digital"
-            ? "Cloud Repository"
-            : "Main Library Stack",
-      };
-      setLibrary((prev) => [item, ...prev]);
-      showToast(`New material committed to Master Ledger. Ref: ${refId}`);
+    try {
+      if (editingItemId) {
+        const res = await updateLibraryItem(editingItemId, newItem as Partial<LibraryItem>);
+        if (!res.success) throw new Error(res.error || 'Update failed');
+        showToast(`Registry node ${editingItemId} successfully updated in database.`);
+      } else {
+        const res = await createLibraryItem(newItem as Partial<LibraryItem>);
+        if (!res.success) throw new Error(res.error || 'Create failed');
+        showToast(`New material committed to database. Ref: ${(res.data as any)?.id || ''}`);
+      }
+      await refetchLibrary();
+      queryClient.invalidateQueries({ queryKey: ['library'] });
+    } catch (err: any) {
+      showToast(err?.message || 'Save failed — not persisted');
+      // fallback local so input is not lost
+      if (editingItemId) {
+        const updatedItem = { ...newItem, id: editingItemId } as LibraryItem;
+        setLibrary((prev) => prev.map((i) => (i.id === editingItemId ? updatedItem : i)));
+      } else {
+        const refId = `LIB-${Math.floor(Math.random() * 9000) + 1000}`;
+        const item: LibraryItem = { ...(newItem as LibraryItem), id: refId, location: newItem.status === "Digital" ? "Cloud Repository" : "Main Library Stack" };
+        setLibrary((prev) => [item, ...prev]);
+      }
+    } finally {
+      setIsCommitting(false);
+      handleCloseModal();
     }
-
-    setIsCommitting(false);
-    handleCloseModal();
   };
 
   const handleCloseModal = () => {
@@ -248,15 +254,18 @@ export const Library: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const deleteItem = (id: string, e: React.MouseEvent) => {
+  const deleteItem = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (
-      window.confirm(
-        "Decommission this asset from the registry? This action is immutable.",
-      )
-    ) {
+    if (!window.confirm("Decommission this asset from the registry? This action is immutable.")) return;
+    try {
+      const res = await deleteLibraryItem(id);
+      if (!res.success) throw new Error(res.error || 'Delete failed');
+      await refetchLibrary();
+      queryClient.invalidateQueries({ queryKey: ['library'] });
+      showToast(`Asset node ${id} purged from database.`);
+    } catch {
       setLibrary((prev) => prev.filter((i) => i.id !== id));
-      showToast(`Asset node ${id} purged from registry.`);
+      showToast(`Asset node ${id} purged locally (server failed).`);
     }
   };
 
