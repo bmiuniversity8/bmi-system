@@ -121,7 +121,7 @@ export async function handleGetFinances(_request: Request, env: Env, userId: str
   
   // Fetch invoice lines for all student invoices
   const invoiceIds = invoices.map((inv: any) => inv.id);
-  let linesMap: Record<string, any[]> = {};
+  const linesMap: Record<string, any[]> = {};
   if (invoiceIds.length > 0) {
     try {
       const placeholders = invoiceIds.map(() => '?').join(',');

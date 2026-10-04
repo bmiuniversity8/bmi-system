@@ -74,6 +74,6 @@ export async function fetchCbkExchangeRate(fetchImpl: typeof fetch = fetch): Pro
     };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    throw new Error(`Failed to import exchange rate from Central Bank of Kenya: ${msg}`);
+    throw new Error(`Failed to import exchange rate from Central Bank of Kenya: ${msg}`, { cause: err });
   }
 }

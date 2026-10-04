@@ -61,6 +61,7 @@ export async function processSuccessfulPayment(
 
       // Verify amount matches within 0.01 tolerance
       if (Number.isFinite(payableAmount) && Number.isFinite(paidAmount) && Math.abs(payableAmount - paidAmount) > 0.05) {
+        amountMatched = false;
         // Partial payment or mismatch
         console.warn(
           `[finance:payment] Amount difference: invoice ${invoiceId} balance is ${payableAmount}, received ${paidAmount}`
