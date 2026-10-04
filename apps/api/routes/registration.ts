@@ -213,7 +213,6 @@ export async function handleGetRegistrationStatus(_req: Request, env: Env, userI
     }
 
     // Auto-populate default program if missing (ID-first, name fallback)
-    let selectedProgName = currentData.program?.program_name || appRow?.program;
     let selectedProgId = currentData.program?.program_id || (appRow as { program_id?: string | null })?.program_id || null;
 
     if (appRow && !currentData.program) {
@@ -231,24 +230,25 @@ export async function handleGetRegistrationStatus(_req: Request, env: Env, userI
         level: appRow.degree_level || prog?.level || 'undergraduate',
         study_mode: 'full_time',
       };
-      selectedProgName = appRow.program;
     }
 
     let programFeeInfo: { amount: number; description?: string } | null = null;
-    if (selectedProgId) {
-      const feeRow = await db.prepare(
-        `SELECT amount, description FROM program_fees WHERE program_id = ? LIMIT 1`
-      ).bind(selectedProgId).first<{ amount: number; description?: string }>().catch(() => null);
-      if (feeRow) {
-        programFeeInfo = { amount: feeRow.amount, description: feeRow.description || undefined };
-      }
-    }
-    if (!programFeeInfo && selectedProgName) {
-      const feeRow = await db.prepare(
-        `SELECT pf.amount, pf.description FROM program_fees pf JOIN programs p ON p.id = pf.program_id WHERE p.name = ? LIMIT 1`
-      ).bind(selectedProgName).first<{ amount: number; description?: string }>();
-      if (feeRow) {
-        programFeeInfo = { amount: feeRow.amount, description: feeRow.description || undefined };
+    const selectedLevel = currentData?.program?.level || appRow?.degree_level || 'undergraduate';
+    try {
+      const { resolveTuitionForLevel } = await import('../lib/finance/fee-engine');
+      const tuition = await resolveTuitionForLevel(db, selectedLevel);
+      programFeeInfo = {
+        amount: tuition.totalUsd,
+        description: `${tuition.feeItem.name} ($${tuition.totalUsd} over ${tuition.feeItem.billing_periods} installments)`,
+      };
+    } catch {
+      if (selectedProgId) {
+        const feeRow = await db.prepare(
+          `SELECT amount, description FROM program_fees WHERE program_id = ? LIMIT 1`
+        ).bind(selectedProgId).first<{ amount: number; description?: string }>().catch(() => null);
+        if (feeRow) {
+          programFeeInfo = { amount: feeRow.amount, description: feeRow.description || undefined };
+        }
       }
     }
 
@@ -333,6 +333,14 @@ export async function handleCompleteRegistration(_req: Request, env: Env, userId
     });
 
     const finalRegNo = result.regNo || userRow.reg_no;
+
+    // Section 18: Issue Registration Fee invoice ($16 USD / KES equivalent)
+    try {
+      const { createRegistrationFeeInvoice } = await import('../lib/finance/fee-engine');
+      await createRegistrationFeeInvoice(db, userId, userRow.uid || undefined, 'KE');
+    } catch (e) {
+      console.warn('[registration] Registration fee invoice creation skipped/failed:', e);
+    }
 
     const runPostRegistrationTasks = async () => {
       const tasks: Promise<unknown>[] = [];
@@ -706,15 +714,29 @@ export async function handleGetFeeAgreement(
   try {
     const db = env.PLATFORM_CONTEXT!.db;
     const student = await db.prepare(
-      `SELECT s.program, s.program_id, s.catalog_year_id FROM students s WHERE s.user_id = ?`
-    ).bind(userId).first<{ program: string; program_id: string; catalog_year_id: string }>();
+      `SELECT s.program, s.program_id, s.degree_level, s.catalog_year_id FROM students s WHERE s.user_id = ?`
+    ).bind(userId).first<{ program: string; program_id: string; degree_level?: string; catalog_year_id: string }>();
 
-    let grossTuition = 1500; // default base tuition
-    if (student?.program_id) {
-      const feeRow = await db.prepare(
-        `SELECT amount FROM program_fees WHERE program_id = ? LIMIT 1`
-      ).bind(student.program_id).first<{ amount: number }>();
-      if (feeRow?.amount) grossTuition = feeRow.amount;
+    let degreeLevel = student?.degree_level;
+    if (!degreeLevel && student?.program_id) {
+      const prog = await db.prepare(
+        `SELECT level FROM programs WHERE id = ? LIMIT 1`
+      ).bind(student.program_id).first<{ level: string }>();
+      degreeLevel = prog?.level;
+    }
+
+    let grossTuition = 1000; // default base tuition
+    try {
+      const { resolveTuitionForLevel } = await import('../lib/finance/fee-engine');
+      const tuition = await resolveTuitionForLevel(db, degreeLevel || 'undergraduate');
+      grossTuition = tuition.totalUsd;
+    } catch {
+      if (student?.program_id) {
+        const feeRow = await db.prepare(
+          `SELECT amount FROM program_fees WHERE program_id = ? LIMIT 1`
+        ).bind(student.program_id).first<{ amount: number }>().catch(() => null);
+        if (feeRow?.amount) grossTuition = feeRow.amount;
+      }
     }
 
     // Query financial aid to calculate net balance

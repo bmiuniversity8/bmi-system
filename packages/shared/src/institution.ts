@@ -61,14 +61,14 @@ export function paymentReceiptFooter(reference?: string): string {
 
 /**
  * Currencies accepted through Paystack on this platform.
- * Amounts are always submitted to Paystack in the SUBUNIT (kobo/pesewas/cents).
- * Default charge currency is NGN (Paystack home currency for this merchant).
+ * Amounts are always submitted to Paystack in the SUBUNIT (cents for KES/USD).
+ * Default Kenyan billing currency is KES.
  */
-export const PAYSTACK_SUPPORTED_CURRENCIES = ['NGN', 'GHS', 'ZAR', 'KES', 'USD'] as const;
+export const PAYSTACK_SUPPORTED_CURRENCIES = ['KES', 'USD', 'NGN', 'GHS', 'ZAR'] as const;
 
 export type PaystackCurrency = (typeof PAYSTACK_SUPPORTED_CURRENCIES)[number];
 
-export const PAYSTACK_DEFAULT_CURRENCY: PaystackCurrency = 'NGN';
+export const PAYSTACK_DEFAULT_CURRENCY: PaystackCurrency = 'KES';
 
 /** Payment channels enabled on Paystack checkout (card, bank, USSD, mobile money, transfer). */
 export const PAYSTACK_DEFAULT_CHANNELS = [

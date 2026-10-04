@@ -455,20 +455,232 @@ export const webhookDeadLetters = pgTable('webhook_dead_letters', {
   index('idx_dead_letters_event').on(t.event_log_id),
 ]);
 
-// ─── Finance ──────────────────────────────────────────────────────────────────
+// ─── Finance: Centralized Currencies, FX, Fees & Invoicing ───────────────────
+export const currencies = pgTable('currencies', {
+  code: text('code').primaryKey(), // 'USD', 'KES'
+  name: text('name').notNull(),
+  symbol: text('symbol').notNull(),
+  minor_unit: integer('minor_unit').notNull().default(2),
+  is_base: integer('is_base').notNull().default(0), // 1 for USD
+  is_active: integer('is_active').notNull().default(1),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+});
+
+export const exchangeRates = pgTable('exchange_rates', {
+  id: text('id').primaryKey(),
+  base_currency: text('base_currency').notNull().default('USD'),
+  quote_currency: text('quote_currency').notNull().default('KES'),
+  rate: real('rate').notNull(),
+  rate_type: text('rate_type').notNull().default('MEAN'), // 'MEAN', 'BID', 'ASK', 'MANUAL'
+  source: text('source').notNull().default('CBK'), // 'CBK', 'MANUAL'
+  source_reference: text('source_reference'),
+  status: text('status').notNull().default('active'), // 'active', 'stale', 'superseded', 'expired'
+  published_at: timestamp('published_at'),
+  effective_at: timestamp('effective_at').notNull().defaultNow(),
+  retrieved_at: timestamp('retrieved_at').notNull().defaultNow(),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+}, (t) => [
+  index('idx_exchange_rates_pair').on(t.base_currency, t.quote_currency),
+  index('idx_exchange_rates_status').on(t.status),
+  index('idx_exchange_rates_effective').on(t.effective_at),
+]);
+
+export const feeSchedules = pgTable('fee_schedules', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  version: text('version').notNull().default('2026.1'),
+  academic_year: text('academic_year').notNull().default('2026-2027'),
+  base_currency: text('base_currency').notNull().default('USD'),
+  status: text('status').notNull().default('active'), // 'active', 'draft', 'archived'
+  effective_from: timestamp('effective_from'),
+  effective_to: timestamp('effective_to'),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+  updated_at: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const feeGroups = pgTable('fee_groups', {
+  id: text('id').primaryKey(),
+  code: text('code').notNull(), // 'TUITION', 'STUDENT_ONBOARDING', 'STATUTORY'
+  name: text('name').notNull(),
+  description: text('description'),
+  display_order: integer('display_order').notNull().default(0),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('fee_groups_code_unique').on(t.code),
+]);
+
+export const feeItems = pgTable('fee_items', {
+  id: text('id').primaryKey(),
+  fee_schedule_id: text('fee_schedule_id').notNull(),
+  fee_group_id: text('fee_group_id').notNull(),
+  code: text('code').notNull(), // 'APPLICATION_FEE', 'REGISTRATION_FEE', 'STUDENT_ID_FEE', etc.
+  name: text('name').notNull(),
+  degree_level: text('degree_level'), // 'certificate', 'diploma', 'undergraduate', 'graduate', 'doctorate'
+  amount_base_minor: integer('amount_base_minor').notNull(),
+  amount_base: real('amount_base').notNull(),
+  base_currency: text('base_currency').notNull().default('USD'),
+  billing_frequency: text('billing_frequency').notNull().default('once'),
+  billing_periods: integer('billing_periods').notNull().default(1),
+  allocation_strategy: text('allocation_strategy').notNull().default('DESCENDING_WHOLE_UNIT'),
+  trigger_event: text('trigger_event'),
+  is_optional: integer('is_optional').notNull().default(0),
+  is_configured: integer('is_configured').notNull().default(1),
+  is_billable: integer('is_billable').notNull().default(1),
+  is_active: integer('is_active').notNull().default(1),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+}, (t) => [
+  index('idx_fee_items_schedule').on(t.fee_schedule_id),
+  index('idx_fee_items_group').on(t.fee_group_id),
+  index('idx_fee_items_level').on(t.degree_level),
+  index('idx_fee_items_code').on(t.code),
+]);
+
+export const feeScheduleInstallments = pgTable('fee_schedule_installments', {
+  id: text('id').primaryKey(),
+  fee_schedule_id: text('fee_schedule_id').notNull(),
+  fee_item_id: text('fee_item_id').notNull(),
+  degree_level: text('degree_level').notNull(),
+  period_number: integer('period_number').notNull(),
+  amount_base_minor: integer('amount_base_minor').notNull(),
+  amount_base: real('amount_base').notNull(),
+  currency: text('currency').notNull().default('USD'),
+  allocation_strategy: text('allocation_strategy').notNull().default('DESCENDING_WHOLE_UNIT'),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('idx_fee_installments_unique').on(t.fee_item_id, t.period_number),
+  index('idx_fee_installments_level').on(t.degree_level),
+]);
+
 export const invoices = pgTable('invoices', {
   id: text('id').primaryKey(),
+  invoice_number: text('invoice_number'),
   student_id: text('student_id').notNull(),
   uid: text('uid'),
-  amount: integer('amount').notNull(),
-  status: text('status').notNull().default('unpaid'),
-  due_date: timestamp('due_date').notNull(),
+  programme_id: text('programme_id'),
+  degree_level: text('degree_level'),
+  fee_schedule_id: text('fee_schedule_id'),
+  academic_year: text('academic_year'),
   term_id: text('term_id'),
+  period_number: integer('period_number'),
+
+  // FX Snapshot
+  base_currency: text('base_currency').notNull().default('USD'),
+  billing_currency: text('billing_currency').notNull().default('KES'),
+  exchange_rate: real('exchange_rate'),
+  exchange_rate_id: text('exchange_rate_id'),
+  exchange_rate_source: text('exchange_rate_source').default('CBK'),
+  exchange_rate_effective_at: timestamp('exchange_rate_effective_at'),
+
+  // Financial Totals
+  subtotal_base: real('subtotal_base'),
+  subtotal_billing: real('subtotal_billing'),
+  discount: real('discount').notNull().default(0),
+  adjustment: real('adjustment').notNull().default(0),
+  total_base: real('total_base'),
+  total_billing: real('total_billing'),
+  amount: real('amount').notNull(), // Preserved for backward compatibility (= total_billing)
+  paid_amount: real('paid_amount').notNull().default(0),
+  balance: real('balance'),
+
+  status: text('status').notNull().default('unpaid'),
+  issue_date: timestamp('issue_date'),
+  due_date: timestamp('due_date').notNull(),
   created_at: timestamp('created_at').notNull().defaultNow(),
+  updated_at: timestamp('updated_at').notNull().defaultNow(),
 }, (t) => [
   index('idx_invoices_student').on(t.student_id),
   index('idx_invoices_uid').on(t.uid),
   index('idx_invoices_term').on(t.term_id),
+  index('idx_invoices_status').on(t.status),
+  uniqueIndex('idx_invoices_number_unique').on(t.invoice_number),
+]);
+
+export const invoiceLines = pgTable('invoice_lines', {
+  id: text('id').primaryKey(),
+  invoice_id: text('invoice_id').notNull(),
+  fee_item_id: text('fee_item_id'),
+  fee_group_id: text('fee_group_id'),
+  description: text('description').notNull(),
+  quantity: integer('quantity').notNull().default(1),
+  unit_amount_base: real('unit_amount_base').notNull(),
+  base_currency: text('base_currency').notNull().default('USD'),
+  unit_amount_billing: real('unit_amount_billing').notNull(),
+  billing_currency: text('billing_currency').notNull().default('KES'),
+  exchange_rate: real('exchange_rate').notNull(),
+  period_number: integer('period_number'),
+  term_id: text('term_id'),
+  line_total_base: real('line_total_base').notNull(),
+  line_total_billing: real('line_total_billing').notNull(),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+}, (t) => [
+  index('idx_invoice_lines_invoice').on(t.invoice_id),
+]);
+
+export const payments = pgTable('payments', {
+  id: text('id').primaryKey(),
+  payment_reference: text('payment_reference').notNull(),
+  student_id: text('student_id').notNull(),
+  uid: text('uid'),
+  provider: text('provider').notNull().default('paystack'),
+  channel: text('channel'),
+  amount: real('amount').notNull(),
+  currency: text('currency').notNull(),
+  amount_base_equivalent: real('amount_base_equivalent'),
+  exchange_rate: real('exchange_rate'),
+  exchange_rate_source: text('exchange_rate_source'),
+  status: text('status').notNull().default('pending'),
+  provider_status: text('provider_status'),
+  raw_response: text('raw_response'),
+  paid_at: timestamp('paid_at'),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('idx_payments_reference_unique').on(t.payment_reference),
+  index('idx_payments_student').on(t.student_id),
+  index('idx_payments_status').on(t.status),
+]);
+
+export const paymentAllocations = pgTable('payment_allocations', {
+  id: text('id').primaryKey(),
+  payment_id: text('payment_id').notNull(),
+  invoice_id: text('invoice_id').notNull(),
+  invoice_line_id: text('invoice_line_id'),
+  allocated_amount: real('allocated_amount').notNull(),
+  currency: text('currency').notNull(),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+}, (t) => [
+  index('idx_allocations_payment').on(t.payment_id),
+  index('idx_allocations_invoice').on(t.invoice_id),
+]);
+
+export const financialAuditLog = pgTable('financial_audit_log', {
+  id: text('id').primaryKey(),
+  action: text('action').notNull(),
+  actor_id: text('actor_id'),
+  target_type: text('target_type').notNull(),
+  target_id: text('target_id').notNull(),
+  old_value: text('old_value'),
+  new_value: text('new_value'),
+  reason: text('reason'),
+  source: text('source'),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+}, (t) => [
+  index('idx_fin_audit_action').on(t.action),
+  index('idx_fin_audit_target').on(t.target_type, t.target_id),
+]);
+
+export const financialAdjustments = pgTable('financial_adjustments', {
+  id: text('id').primaryKey(),
+  student_id: text('student_id').notNull(),
+  invoice_id: text('invoice_id'),
+  adjustment_type: text('adjustment_type').notNull(),
+  amount: real('amount').notNull(),
+  currency: text('currency').notNull().default('USD'),
+  reason: text('reason').notNull(),
+  approved_by: text('approved_by').notNull(),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+}, (t) => [
+  index('idx_fin_adj_student').on(t.student_id),
+  index('idx_fin_adj_invoice').on(t.invoice_id),
 ]);
 
 export const ledgerAccounts = pgTable('ledger_accounts', {
@@ -489,7 +701,7 @@ export const ledgerEntries = pgTable('ledger_entries', {
   account_id: text('account_id').notNull(),
   entry_type: text('entry_type').notNull(),
   amount: real('amount').notNull(),
-  currency: text('currency').notNull().default('XAF'),
+  currency: text('currency').notNull(), // Explicit currency required (KES or USD), no default XAF
   description: text('description'),
   reference_type: text('reference_type'),
   reference_id: text('reference_id'),

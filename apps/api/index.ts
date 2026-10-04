@@ -26,7 +26,15 @@ import { handleListGrades, handleCreateGrade, handleUpdateGrade } from './routes
 import { handleListUmsCourses, handleCreateCourse, handleUpdateCourse, handleDeleteCourse, handleListPrograms, handleListFaculties, handleListDepartments, handleListTerms, handleCreateTerm, handleUpdateTerm, handleCompleteCourseRegistration, handleCloseTermWithCompletions, handleListEnrollments, handleCreateEnrollment } from './routes/ums-courses';
 import { handleListStaff, handleGetStaff, handleCreateStaff, handleUpdateStaff, handleProvisionControlledAccount } from './routes/ums-staff';
 import { handleGetStudentPrograms, handleProgramTransfer } from './routes/programs';
-import { handleListTransactions } from './routes/ums-finance';
+import {
+  handleListTransactions,
+  handleGetInvoiceDetails,
+  handleGetFeeSchedules,
+  handleGetExchangeRates,
+  handleRefreshCbkRate,
+  handleManualFxOverride,
+  handleGetFinanceReports,
+} from './routes/ums-finance';
 import { handleGetRevenueTrend, handleGetDashboardStats, handleGetUpcomingDeadlines, handleRegisterTranscript } from './routes/ums-dashboard';
 import {
   handleListStudyCenters, handleGetStudyCenter, handleGetStudyCenterStats,
@@ -279,6 +287,12 @@ export const ROUTES: Route[] = [
   { method: 'GET', path: /^\/api\/v1\/staff\/([^/]+)$/, roles: ['admin', 'staff'], handler: async (req, env, p) => handleGetStaff(req, env, p[1]) },
   { method: ['PUT', 'PATCH'], path: /^\/api\/v1\/staff\/([^/]+)$/, roles: ['admin'], handler: async (req, env, p) => handleUpdateStaff(req, env, p[1]) },
   { method: 'GET', path: /^\/api\/v1\/finance\/transactions$/, roles: ['admin', 'staff'], handler: async (req, env) => handleListTransactions(req, env) },
+  { method: 'GET', path: /^\/api\/v1\/finance\/invoices\/([^/]+)$/, roles: ['admin', 'staff', 'student'], handler: async (_req, env, p) => handleGetInvoiceDetails(env, p[1]) },
+  { method: 'GET', path: /^\/api\/v1\/finance\/schedules$/, roles: ['admin', 'staff'], handler: async (_req, env) => handleGetFeeSchedules(env) },
+  { method: 'GET', path: /^\/api\/v1\/finance\/fx-rates$/, roles: ['admin', 'staff'], handler: async (_req, env) => handleGetExchangeRates(env) },
+  { method: 'POST', path: /^\/api\/v1\/finance\/fx-rates\/cbk-import$/, roles: ['admin'], handler: async (_req, env, _p, auth) => handleRefreshCbkRate(env, auth!.user.sub) },
+  { method: 'POST', path: /^\/api\/v1\/finance\/fx-rates\/manual-override$/, roles: ['admin'], handler: async (req, env, _p, auth) => handleManualFxOverride(req, env, auth!.user.sub) },
+  { method: 'GET', path: /^\/api\/v1\/finance\/reports$/, roles: ['admin', 'staff'], handler: async (_req, env) => handleGetFinanceReports(env) },
   { method: 'GET', path: /^\/api\/v1\/dashboard\/revenue-trend$/, roles: ['admin'], handler: async (req, env) => handleGetRevenueTrend(req, env) },
   { method: 'GET', path: /^\/api\/v1\/dashboard\/stats$/, roles: ['admin', 'staff'], handler: async (req, env) => handleGetDashboardStats(req, env) },
   { method: 'GET', path: /^\/api\/v1\/dashboard\/deadlines$/, roles: ['admin', 'staff', 'student'], handler: async (req, env) => handleGetUpcomingDeadlines(req, env) },

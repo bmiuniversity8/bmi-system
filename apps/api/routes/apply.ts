@@ -185,13 +185,24 @@ export async function handleSubmitApplication(request: Request, env: Env, userId
     console.warn(`Slow application submission detected: ${duration}ms for user ${userId}`);
   }
 
-  return ok({
-    application_id: appId,
-    application_number: applicationNumber,
-    status: 'submitted',
-    _perf: { duration_ms: Math.round(duration) }
-  });
-}
+    // Section 17: On application submission, issue idempotent Application Fee invoice ($4 USD / KES equivalent)
+    let applicationInvoice: any = null;
+    try {
+      const { createApplicationFeeInvoice } = await import('../lib/finance/fee-engine');
+      applicationInvoice = await createApplicationFeeInvoice(db, userId, undefined, 'KE');
+    } catch (e) {
+      console.warn('[apply] Application fee invoice generation skipped/failed:', e);
+    }
+
+    return ok({
+      application_id: appId,
+      application_number: applicationNumber,
+      status: 'submitted',
+      invoice_id: applicationInvoice?.id,
+      invoice_number: applicationInvoice?.invoice_number,
+      _perf: { duration_ms: Math.round(duration) }
+    });
+  }
 
 export async function handleSaveDraft(request: Request, env: Env, userId: string): Promise<Response> {
   const parsed = await parseBody(request, ApplicationDraftSchema);

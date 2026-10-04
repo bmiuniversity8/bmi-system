@@ -102,27 +102,88 @@ export async function handleEnroll(request: Request, env: Env, userId: string): 
 }
 
 export async function handleGetFinances(_request: Request, env: Env, userId: string): Promise<Response> {
-  const { results: invoices } = await env.PLATFORM_CONTEXT!.db.prepare(
-    'SELECT id, amount, due_date, status, created_at FROM invoices WHERE student_id = ? ORDER BY due_date DESC'
+  const db = env.PLATFORM_CONTEXT!.db;
+  
+  // Select full invoice details including FX snapshots and multi-currency amounts
+  const { results: invoices } = await db.prepare(
+    `SELECT i.*, 
+            COALESCE(i.total_billing, i.amount) as payable_amount,
+            COALESCE(i.total_base, i.amount) as authoritative_usd,
+            COALESCE(i.balance, i.amount) as current_balance,
+            COALESCE(i.base_currency, 'USD') as base_currency,
+            COALESCE(i.billing_currency, 'KES') as billing_currency,
+            COALESCE(i.exchange_rate, 129.76) as exchange_rate,
+            COALESCE(i.exchange_rate_source, 'CBK') as exchange_rate_source
+     FROM invoices i 
+     WHERE i.student_id = ? 
+     ORDER BY i.created_at DESC`
   ).bind(userId).all();
   
-  const balance = invoices.filter((i: Record<string, unknown>) => i.status === 'unpaid').reduce((sum: number, inv: Record<string, unknown>) => sum + (inv.amount as number), 0);
+  // Fetch invoice lines for all student invoices
+  const invoiceIds = invoices.map((inv: any) => inv.id);
+  let linesMap: Record<string, any[]> = {};
+  if (invoiceIds.length > 0) {
+    try {
+      const placeholders = invoiceIds.map(() => '?').join(',');
+      const { results: lines } = await db.prepare(
+        `SELECT * FROM invoice_lines WHERE invoice_id IN (${placeholders}) ORDER BY created_at ASC`
+      ).bind(...invoiceIds).all();
+      for (const line of lines) {
+        if (!linesMap[line.invoice_id]) linesMap[line.invoice_id] = [];
+        linesMap[line.invoice_id].push(line);
+      }
+    } catch {
+      // Compatibility fallback if invoice_lines table is empty
+    }
+  }
+
+  const enrichedInvoices = invoices.map((inv: any) => ({
+    ...inv,
+    lines: linesMap[inv.id] || [],
+  }));
+
+  const balanceBilling = enrichedInvoices
+    .filter((i: any) => i.status === 'unpaid' || i.status === 'partially_paid')
+    .reduce((sum: number, inv: any) => sum + (Number(inv.current_balance ?? inv.balance ?? inv.amount) || 0), 0);
+
+  const balanceBase = enrichedInvoices
+    .filter((i: any) => i.status === 'unpaid' || i.status === 'partially_paid')
+    .reduce((sum: number, inv: any) => sum + (Number(inv.authoritative_usd ?? inv.total_base ?? inv.amount) || 0), 0);
+
+  // Fetch student payment history & receipts
+  let payments: any[] = [];
+  try {
+    const { results: payRows } = await db.prepare(
+      `SELECT * FROM payments WHERE student_id = ? ORDER BY created_at DESC LIMIT 50`
+    ).bind(userId).all();
+    payments = payRows;
+  } catch {
+    // Non-fatal
+  }
 
   return ok({
-    balance,
-    invoices
+    balance: balanceBilling, // Primary billing currency (KES)
+    balance_base_usd: balanceBase,
+    currency: 'KES',
+    base_currency: 'USD',
+    invoices: enrichedInvoices,
+    payments,
   });
 }
 
 export async function handlePayInvoice(_request: Request, env: Env, userId: string, invoiceId: string): Promise<Response> {
-  const invoice = await env.PLATFORM_CONTEXT!.db.prepare('SELECT id, amount, status FROM invoices WHERE id = ? AND student_id = ?').bind(invoiceId, userId).first();
+  const db = env.PLATFORM_CONTEXT!.db;
+  const invoice = await db.prepare(
+    `SELECT id, amount, total_billing, balance, billing_currency, status FROM invoices WHERE id = ? AND student_id = ?`
+  ).bind(invoiceId, userId).first<{ id: string; amount: number; total_billing: number | null; balance: number | null; billing_currency: string | null; status: string }>();
+  
   if (!invoice) return error('Invoice not found', 404);
   if (invoice.status === 'paid') return error('Invoice is already paid', 400);
 
   // Resolve payer email — Paystack requires it to initialize a transaction.
   let payerEmail = '';
   try {
-    const user = await env.PLATFORM_CONTEXT!.db
+    const user = await db
       .prepare('SELECT email FROM users WHERE id = ?')
       .bind(userId)
       .first<{ email: string }>();
@@ -130,13 +191,13 @@ export async function handlePayInvoice(_request: Request, env: Env, userId: stri
   } catch { /* handled below */ }
   if (!payerEmail) return error('Student email is required to initialize payment', 400);
 
+  const payableAmount = Number(invoice.balance ?? invoice.total_billing ?? invoice.amount);
+  const payCurrency = (invoice.billing_currency || 'KES').toUpperCase();
+
   try {
     const paymentIntent = await env.PLATFORM_CONTEXT!.payment.createPaymentIntent({
-      amount: invoice.amount,
-      // Invoices are stored without currency; the gateway adapter applies the
-      // platform default (NGN for Paystack). Currency override happens via
-      // POST /api/payment/create-intent when needed.
-      currency: 'NGN',
+      amount: payableAmount,
+      currency: payCurrency,
       email: payerEmail,
       description: buildPaymentDescription(`Tuition Invoice ${String(invoice.id).slice(0, 8)}`),
       callbackUrl: env.PAYSTACK_CALLBACK_URL || `${PORTAL_URL}/student/finances`,
@@ -148,9 +209,6 @@ export async function handlePayInvoice(_request: Request, env: Env, userId: stri
       }
     });
 
-    // NOTE: the invoice is marked paid ONLY after server-side verification
-    // (webhook charge.success or GET /api/payment/verify/:reference).
-    // Never mark paid here — the student has not paid yet at this point.
     return ok({
       success: true,
       requires_action: true,
@@ -160,6 +218,8 @@ export async function handlePayInvoice(_request: Request, env: Env, userId: stri
       authorization_url: paymentIntent.authorizationUrl,
       authorizationUrl: paymentIntent.authorizationUrl,
       access_code: paymentIntent.accessCode,
+      currency: payCurrency,
+      amount: payableAmount,
       merchant: INSTITUTION_LEGAL_NAME,
       tradingAs: INSTITUTION_TRADING_AS_LINE,
     });

@@ -197,29 +197,52 @@ async function executeJob(env: Env, job: ProvisioningJob): Promise<void> {
 
     case 'finance': {
       const studentRow = await ctx.db.prepare(
-        `SELECT s.user_id, s.program, p.uid
+        `SELECT s.user_id, s.program, s.degree_level, s.program_id, p.uid
          FROM students s
          JOIN persons p ON s.user_id = (SELECT id FROM users WHERE person_id = p.id LIMIT 1)
          WHERE p.uid = ?`
-      ).bind(uid).first<{ user_id: string; program: string }>();
+      ).bind(uid).first<{ user_id: string; program: string; degree_level?: string; program_id?: string }>();
       if (!studentRow) throw new Error('Student not found for finance provisioning');
 
-      const invoiceId = crypto.randomUUID().replace(/-/g, '');
-      const invoiceAmount = 1000;
-      const invoiceDesc = `Tuition fee: ${studentRow.program || 'Program'}`;
+      let degreeLevel = studentRow.degree_level;
+      if (!degreeLevel && studentRow.program_id) {
+        const prog = await ctx.db.prepare(
+          `SELECT level FROM programs WHERE id = ? LIMIT 1`
+        ).bind(studentRow.program_id).first<{ level: string }>();
+        degreeLevel = prog?.level;
+      }
 
-      await ctx.db.transaction(async (tx) => {
-        await tx.prepare(
-          `INSERT INTO invoices (id, student_id, uid, amount, due_date, status, created_at)
-           VALUES (?, ?, ?, ?, datetime('now', '+30 days'), 'unpaid', datetime('now'))`
-        ).bind(invoiceId, studentRow.user_id, uid, invoiceAmount).run();
+      const { resolveTuitionForLevel, createInvoice } = await import('./finance/fee-engine');
+      const tuitionInfo = await resolveTuitionForLevel(ctx.db, degreeLevel || 'undergraduate');
+      const period1Installment = tuitionInfo.installments[0] || { amount_base: 89, period_number: 1 };
+      const invoiceDesc = `Tuition Installment (Period ${period1Installment.period_number}) — ${studentRow.program || 'Academic Program'}`;
 
-        await tx.prepare(
-          `INSERT OR IGNORE INTO lifecycle_events
-           (id, uid, application_id, stage, status, idempotency_key, notes)
-           VALUES (lower(hex(randomblob(16))), ?, NULL, 'invoice_created', 'completed', ?, ?)`
-        ).bind(uid, `invoice:${invoiceId}`, `Invoice ${invoiceId.slice(0, 8)} created for ${invoiceDesc}`).run();
+      const createdInv = await createInvoice(ctx.db, {
+        studentId: studentRow.user_id,
+        uid,
+        programmeId: studentRow.program_id,
+        degreeLevel: tuitionInfo.feeItem.degree_level || 'undergraduate',
+        feeScheduleId: tuitionInfo.feeItem.fee_schedule_id,
+        periodNumber: period1Installment.period_number,
+        lines: [
+          {
+            feeItemId: tuitionInfo.feeItem.id,
+            feeGroupId: tuitionInfo.feeItem.fee_group_id,
+            description: invoiceDesc,
+            amountBaseUsd: period1Installment.amount_base,
+            periodNumber: period1Installment.period_number,
+          },
+        ],
       });
+
+      const invoiceId = createdInv.id;
+      const invoiceAmount = createdInv.total_billing;
+
+      await ctx.db.prepare(
+        `INSERT OR IGNORE INTO lifecycle_events
+         (id, uid, application_id, stage, status, idempotency_key, notes)
+         VALUES (lower(hex(randomblob(16))), ?, NULL, 'invoice_created', 'completed', ?, ?)`
+      ).bind(uid, `invoice:${invoiceId}`, `Invoice ${invoiceId.slice(0, 8)} created for ${invoiceDesc}`).run();
 
       // RC #9: send invoice created notification email
       if (env.RESEND_API_KEY) {
@@ -268,17 +291,30 @@ async function executeJob(env: Env, job: ProvisioningJob): Promise<void> {
          WHERE p.uid = ?`
       ).bind(uid).first<{ first_name: string; last_name: string; reg_no: string; program: string; uid: string }>();
 
-      if (info && ctx.document) {
-        await ctx.document.generateDocument({
-          type: 'id_card',
-          userId: uid,
-          metadata: {
-            name: `${info.first_name} ${info.last_name}`,
-            uid: info.uid,
-            regNo: info.reg_no,
-            program: info.program,
-          },
-        });
+      if (info) {
+        if (ctx.document) {
+          await ctx.document.generateDocument({
+            type: 'id_card',
+            userId: uid,
+            metadata: {
+              name: `${info.first_name} ${info.last_name}`,
+              uid: info.uid,
+              regNo: info.reg_no,
+              program: info.program,
+            },
+          });
+        }
+
+        // Bill initial student ID fee component ($4 / KES equivalent)
+        const userRow = await ctx.db.prepare(
+          `SELECT u.id FROM users u JOIN persons p ON u.person_id = p.id WHERE p.uid = ? LIMIT 1`
+        ).bind(uid).first<{ id: string }>();
+        if (userRow?.id) {
+          const { createStudentIdFeeInvoice } = await import('./finance/fee-engine');
+          await createStudentIdFeeInvoice(ctx.db, userRow.id, uid).catch(e => {
+            console.warn('[provisioning] student ID fee creation failed:', e);
+          });
+        }
       }
       break;
     }

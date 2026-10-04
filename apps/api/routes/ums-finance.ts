@@ -1,8 +1,9 @@
 /**
- * BMI UMS – Finance & Transactions Routes
+ * BMI UMS – Centralized Finance & Transactions Routes
  */
-import { json } from '../lib/types';
+import { json, ok, error } from '../lib/types';
 import type { Env } from '../lib/types';
+import { getActiveExchangeRate, importAndActivateCbkRate, recordManualFxOverride } from '../lib/finance/fx-service';
 
 function paginate(url: URL) {
   const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'));
@@ -49,21 +50,26 @@ export async function handleListTransactions(request: Request, env: Env): Promis
   
   const { results } = await env.PLATFORM_CONTEXT!.db.prepare(dataQuery).bind(...bindings, perPage, offset).all();
 
-  interface InvoiceRow { id: string; student_id: string; first_name: string | null; last_name: string | null; amount: number; status: string; created_at: string }
-  const items = results.map((inv: InvoiceRow) => ({
+  const items = results.map((inv: any) => ({
     id: inv.id,
     studentId: inv.student_id,
     studentName: `${inv.first_name || ''} ${inv.last_name || ''}`.trim() || 'Unknown Student',
-    amount: inv.amount,
-    amt: inv.amount,
-    type: 'Tuition',
+    amount: inv.total_billing ?? inv.amount,
+    amt: inv.total_billing ?? inv.amount,
+    amountBaseUsd: inv.total_base ?? inv.amount,
+    currency: inv.billing_currency || 'KES',
+    baseCurrency: inv.base_currency || 'USD',
+    exchangeRate: inv.exchange_rate || 129.76,
+    exchangeRateSource: inv.exchange_rate_source || 'CBK',
+    paidAmount: inv.paid_amount || 0,
+    balance: inv.balance ?? (inv.status === 'paid' ? 0 : inv.amount),
+    type: inv.degree_level ? `${inv.degree_level.toUpperCase()} Tuition` : 'Tuition',
     status: inv.status === 'paid' ? 'Paid' : (inv.status === 'unpaid' ? 'Pending' : 'Failed'),
     date: inv.created_at,
-    reference: inv.id.substring(0, 8).toUpperCase()
+    reference: inv.invoice_number || inv.id.substring(0, 8).toUpperCase(),
+    invoiceNumber: inv.invoice_number,
   }));
 
-  // Use json() directly (not ok()) so `data` is the items array itself,
-  // matching what the frontend expects: `transactionsRes?.data || []`
   return json({
     success: true,
     data: items,
@@ -71,5 +77,178 @@ export async function handleListTransactions(request: Request, env: Env): Promis
     page,
     perPage,
     totalPages: Math.ceil(total / perPage)
+  });
+}
+
+// ─── invoice details with lines and allocations ───────────────────────────────
+
+export async function handleGetInvoiceDetails(env: Env, invoiceId: string): Promise<Response> {
+  const db = env.PLATFORM_CONTEXT!.db;
+  const invoice = await db.prepare(
+    `SELECT i.*, u.first_name, u.last_name, u.email
+     FROM invoices i
+     LEFT JOIN users u ON i.student_id = u.id
+     WHERE i.id = ? LIMIT 1`
+  ).bind(invoiceId).first();
+
+  if (!invoice) return error('Invoice not found', 404);
+
+  const { results: lines } = await db.prepare(
+    `SELECT * FROM invoice_lines WHERE invoice_id = ? ORDER BY created_at ASC`
+  ).bind(invoiceId).all();
+
+  const { results: allocations } = await db.prepare(
+    `SELECT pa.*, p.payment_reference, p.provider, p.paid_at 
+     FROM payment_allocations pa
+     JOIN payments p ON pa.payment_id = p.id
+     WHERE pa.invoice_id = ?
+     ORDER BY pa.created_at DESC`
+  ).bind(invoiceId).all();
+
+  return ok({
+    invoice,
+    lines,
+    allocations,
+  });
+}
+
+// ─── fee schedules, groups, items, and installments ───────────────────────────
+
+export async function handleGetFeeSchedules(env: Env): Promise<Response> {
+  const db = env.PLATFORM_CONTEXT!.db;
+
+  const { results: schedules } = await db.prepare(
+    `SELECT * FROM fee_schedules ORDER BY created_at DESC`
+  ).all();
+
+  const { results: groups } = await db.prepare(
+    `SELECT * FROM fee_groups ORDER BY display_order ASC`
+  ).all();
+
+  const { results: items } = await db.prepare(
+    `SELECT * FROM fee_items ORDER BY fee_group_id, amount_base DESC`
+  ).all();
+
+  const { results: installments } = await db.prepare(
+    `SELECT * FROM fee_schedule_installments ORDER BY fee_item_id, period_number ASC`
+  ).all();
+
+  return ok({
+    schedules,
+    groups,
+    items,
+    installments,
+  });
+}
+
+// ─── exchange rates & freshness ──────────────────────────────────────────────
+
+export async function handleGetExchangeRates(env: Env): Promise<Response> {
+  const db = env.PLATFORM_CONTEXT!.db;
+
+  let activeRate: any = null;
+  try {
+    activeRate = await getActiveExchangeRate(db, 'USD', 'KES');
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    activeRate = { error: msg };
+  }
+
+  const { results: rates } = await db.prepare(
+    `SELECT * FROM exchange_rates ORDER BY effective_at DESC LIMIT 50`
+  ).all();
+
+  const configRows = await db.prepare(
+    `SELECT key, value FROM app_config WHERE key IN ('fx_rate_source', 'fx_rate_max_age_hours', 'fx_rate_stale_policy')`
+  ).all<{ key: string; value: string }>();
+
+  const configMap: Record<string, string> = {};
+  for (const c of configRows.results) {
+    configMap[c.key] = c.value;
+  }
+
+  return ok({
+    activeRate,
+    history: rates,
+    config: configMap,
+  });
+}
+
+// ─── trigger CBK forex import ────────────────────────────────────────────────
+
+export async function handleRefreshCbkRate(env: Env, actorId: string): Promise<Response> {
+  const db = env.PLATFORM_CONTEXT!.db;
+  try {
+    const newRate = await importAndActivateCbkRate(db, actorId);
+    return ok({
+      message: 'CBK indicative exchange rate imported successfully',
+      rate: newRate,
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return error(msg, 502);
+  }
+}
+
+// ─── record manual FX override ────────────────────────────────────────────────
+
+export async function handleManualFxOverride(request: Request, env: Env, actorId: string): Promise<Response> {
+  const db = env.PLATFORM_CONTEXT!.db;
+  try {
+    const body = await request.json() as { rate?: number; reason?: string };
+    if (!body.rate || body.rate <= 0) return error('A valid positive exchange rate is required', 400);
+    if (!body.reason) return error('A reason for manual override is required', 400);
+
+    const override = await recordManualFxOverride(db, Number(body.rate), actorId, body.reason);
+    return ok({
+      message: 'Manual exchange rate override recorded and activated',
+      rate: override,
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return error(msg, 400);
+  }
+}
+
+// ─── centralized finance reports ─────────────────────────────────────────────
+
+export async function handleGetFinanceReports(env: Env): Promise<Response> {
+  const db = env.PLATFORM_CONTEXT!.db;
+
+  const totalInvoicesRow = await db.prepare(
+    `SELECT COUNT(*) as count, 
+            COALESCE(SUM(total_base), 0) as total_usd_billed,
+            COALESCE(SUM(total_billing), 0) as total_kes_billed,
+            COALESCE(SUM(paid_amount), 0) as total_kes_collected
+     FROM invoices`
+  ).first<{ count: number; total_usd_billed: number; total_kes_billed: number; total_kes_collected: number }>();
+
+  const activeFx = await db.prepare(
+    `SELECT rate, source, effective_at FROM exchange_rates WHERE status = 'active' LIMIT 1`
+  ).first<{ rate: number; source: string; effective_at: string }>();
+
+  // Revenue by degree level
+  const { results: byLevel } = await db.prepare(
+    `SELECT COALESCE(degree_level, 'other') as degree_level,
+            COUNT(*) as invoice_count,
+            COALESCE(SUM(total_base), 0) as billed_usd,
+            COALESCE(SUM(total_billing), 0) as billed_kes,
+            COALESCE(SUM(paid_amount), 0) as collected_kes,
+            COALESCE(SUM(balance), 0) as balance_kes
+     FROM invoices
+     GROUP BY degree_level`
+  ).all();
+
+  return ok({
+    overview: {
+      invoicesCount: totalInvoicesRow?.count || 0,
+      usdBilled: totalInvoicesRow?.total_usd_billed || 0,
+      kesBilled: totalInvoicesRow?.total_kes_billed || 0,
+      kesCollected: totalInvoicesRow?.total_kes_collected || 0,
+      kesOutstanding: Math.max(0, (totalInvoicesRow?.total_kes_billed || 0) - (totalInvoicesRow?.total_kes_collected || 0)),
+      activeRate: activeFx?.rate || 129.76,
+      rateSource: activeFx?.source || 'CBK',
+    },
+    byLevel,
   });
 }

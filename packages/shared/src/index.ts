@@ -88,3 +88,19 @@ export { API_STATUS } from './api-types.js';
 
 // Grading logic
 export { calculateGrade, percentageToGrade } from './grading.js';
+
+// Centralized Finance, Pricing & FX
+export {
+  BMI_BASE_CURRENCY,
+  BMI_SETTLEMENT_CURRENCY_KE,
+  LEVEL_TUITION_CONFIG,
+  ONBOARDING_PACKAGE,
+  allocateDescendingWholeUnits,
+  usdToCents,
+  centsToUsd,
+  convertUsdToKes,
+  toGatewaySubunits,
+  fromGatewaySubunits,
+  formatFinancialAmount,
+} from './finance.js';
+export type { DegreeLevel, LevelPricingConfig } from './finance.js';

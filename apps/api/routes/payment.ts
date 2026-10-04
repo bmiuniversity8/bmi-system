@@ -1,15 +1,15 @@
 import { Env, ok, error, typedJson } from '../lib/types';
 import { ExecutionContext } from '@cloudflare/workers-types';
-import { safeDispatchEmail, buildEmailLayout, isValidEmail } from '../lib/email';
+import { isValidEmail } from '../lib/email';
 import {
   PORTAL_URL,
   INSTITUTION_LEGAL_NAME,
   INSTITUTION_TRADING_AS_LINE,
   PAYSTACK_DEFAULT_CURRENCY,
   buildPaymentDescription,
-  paymentReceiptFooter,
 } from '@bmi/shared';
 import type { PaymentIntent } from '@bmi/ports';
+import { processSuccessfulPayment } from '../lib/finance/payment-service';
 
 interface PaymentBody {
   amount?: number;
@@ -61,13 +61,15 @@ export async function handleCreatePaymentIntent(req: Request, env: Env, userId: 
       depositApplicationId = applicationId;
     }
 
+    let currency = (body.currency || PAYSTACK_DEFAULT_CURRENCY).toUpperCase();
+
     // Server is authoritative for the amount: when an invoice is referenced,
     // resolve the charge from the invoice row and ignore any client-supplied amount.
     if (invoiceId) {
       const invoice = await env.PLATFORM_CONTEXT!.db
-        .prepare('SELECT id, amount, status, student_id FROM invoices WHERE id = ?')
+        .prepare('SELECT id, amount, total_billing, billing_currency, status, student_id FROM invoices WHERE id = ?')
         .bind(invoiceId)
-        .first<{ id: string; amount: number; status: string; student_id: string }>()
+        .first<{ id: string; amount: number; total_billing: number | null; billing_currency: string | null; status: string; student_id: string }>()
         .catch(() => null);
       if (!invoice) return error('Invoice not found', 404);
       if (invoice.status === 'paid') return error('Invoice is already paid', 409);
@@ -75,7 +77,10 @@ export async function handleCreatePaymentIntent(req: Request, env: Env, userId: 
       if (invoice.student_id && invoice.student_id !== userId) {
         return error('Invoice does not belong to this student', 403);
       }
-      amount = Number(invoice.amount);
+      amount = Number(invoice.total_billing ?? invoice.amount);
+      if (invoice.billing_currency) {
+        currency = invoice.billing_currency.toUpperCase();
+      }
     }
 
     if (!amount || Number(amount) <= 0) return error('Amount is required', 400);
@@ -95,7 +100,6 @@ export async function handleCreatePaymentIntent(req: Request, env: Env, userId: 
       return error('A valid payer email is required to initialize payment', 400);
     }
 
-    const currency = (body.currency || PAYSTACK_DEFAULT_CURRENCY).toUpperCase();
     if (!/^[A-Z]{3}$/.test(currency)) return error('Invalid currency code', 400);
 
     const callbackUrl =
@@ -225,7 +229,6 @@ export async function fulfillSuccessfulPayment(
 ): Promise<{ invoiceId?: string; amountMatched?: boolean; depositId?: string }> {
   const metadata = intent.metadata || {};
   const userId = metadata.userId as string | undefined;
-  const invoiceId = (metadata.invoiceId || metadata.invoice_id) as string | undefined;
   const depositPurpose = metadata.purpose === 'deposit';
   const depositApplicationId = (metadata.applicationId || metadata.application_id) as string | undefined;
   const db = env.PLATFORM_CONTEXT!.db;
@@ -264,66 +267,7 @@ export async function fulfillSuccessfulPayment(
     }
   }
 
-  if (invoiceId) {
-    const invoice = await db
-      .prepare('SELECT id, amount, status FROM invoices WHERE id = ?')
-      .bind(invoiceId)
-      .first<{ id: string; amount: number; status: string }>()
-      .catch(() => null);
-
-    if (invoice) {
-      if (invoice.status === 'paid') {
-        return { invoiceId, amountMatched: true }; // already fulfilled — idempotent no-op
-      }
-      const expected = Number(invoice.amount);
-      const received = Number(intent.amount);
-      if (Number.isFinite(expected) && Number.isFinite(received) && Math.abs(expected - received) > 0.01) {
-        console.warn(
-          `[payment] amount mismatch: invoice ${invoiceId} expects ${expected}, gateway verified ${received} (${intent.reference || intent.id}) — holding for review`,
-        );
-        return { invoiceId, amountMatched: false };
-      }
-      await db.prepare('UPDATE invoices SET status = ? WHERE id = ?').bind('paid', invoiceId).run();
-    }
-  }
-
-  if (userId) {
-    await db.prepare(
-      `UPDATE student_holds SET is_active = 0, resolved_at = datetime('now') WHERE student_id = ? AND hold_type = 'payment' AND is_active = 1`
-    ).bind(userId).run();
-
-    const user = await db.prepare('SELECT email, first_name FROM users WHERE id = ?').bind(userId).first<{ email: string; first_name: string }>().catch(() => null);
-    if (user?.email && isValidEmail(user.email)) {
-      const reference = intent.reference || intent.id;
-      // Normalize subunit amounts (Paystack kobo/cents) for display.
-      const displayAmount = Number(intent.amount) >= 1000 ? (Number(intent.amount) / 100).toLocaleString(undefined, { minimumFractionDigits: 2 }) : Number(intent.amount).toLocaleString(undefined, { minimumFractionDigits: 2 });
-      const runNotify = async () => {
-        await safeDispatchEmail(env, ctx, {
-          to: user.email,
-          subject: `${INSTITUTION_LEGAL_NAME} — Payment Received`,
-          html: buildEmailLayout('Payment Confirmation', `
-            <h2 style="color: #0f172a;">Thank you, ${user.first_name}!</h2>
-            <p style="color: #475569; line-height: 1.6;">
-              We have successfully processed your tuition/fee payment of
-              <strong>${intent.currency.toUpperCase()} ${displayAmount}</strong>.
-              Your payment hold has been cleared and your student account is in good standing.
-            </p>
-            <div style="background: #f8fafc; border-left: 4px solid #d4af37; padding: 16px; margin: 20px 0; border-radius: 4px;">
-              <p style="margin: 0 0 6px; color: #0f172a;"><strong>Payee:</strong> ${INSTITUTION_TRADING_AS_LINE}</p>
-              <p style="margin: 0; color: #475569; font-size: 13px;">${paymentReceiptFooter(reference)}</p>
-            </div>
-          `),
-          templateName: 'payment_received',
-          context: { action: 'payment_received', user_id: userId, invoice_id: invoiceId, reference },
-        });
-      };
-      if (ctx) {
-        ctx.waitUntil(runNotify());
-      } else {
-        await runNotify();
-      }
-    }
-  }
-
-  return { invoiceId, amountMatched: true };
+  // Settle invoice, record payment allocation and ledger entries via centralized payment service
+  const res = await processSuccessfulPayment(env, intent, ctx);
+  return { invoiceId: res.invoiceId, amountMatched: res.amountMatched };
 }

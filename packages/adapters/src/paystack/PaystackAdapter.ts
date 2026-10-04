@@ -80,7 +80,7 @@ export class PaystackAdapter implements IPaymentProvider {
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       throw new Error('Paystack: customer email is required to initialize a transaction');
     }
-    const currency = (input.currency || 'NGN').toUpperCase();
+    const currency = (input.currency || 'KES').toUpperCase();
     if (!/^[A-Z]{3}$/.test(currency)) {
       throw new Error(`Paystack: invalid currency "${input.currency}"`);
     }
@@ -150,7 +150,7 @@ export class PaystackAdapter implements IPaymentProvider {
     return {
       id: res.data.reference,
       amount: this.fromSubunit(res.data.amount),
-      currency: (res.data.currency || 'NGN').toLowerCase(),
+      currency: (res.data.currency || 'KES').toLowerCase(),
       status: this.mapStatus(res.data.status),
       reference: res.data.reference,
       provider: 'paystack',
@@ -215,7 +215,7 @@ export class PaystackAdapter implements IPaymentProvider {
       return {
         id: reference,
         amount: this.fromSubunit(event.data?.amount ?? 0),
-        currency: (event.data?.currency || 'NGN').toLowerCase(),
+        currency: (event.data?.currency || 'KES').toLowerCase(),
         status: 'failed',
         reference,
         provider: 'paystack',
