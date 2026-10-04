@@ -54,7 +54,7 @@ const lastName = rest.join(' ') || 'User';
 const id = `admin-${Date.now().toString(36)}`;
 
 console.log(`-- Admin seed for ${email} (environment: ${environment})`);
-console.log(`-- Run: wrangler d1 execute bmi-portal-db --file <this-file>  (or psql for Neon)`);
+console.log(`-- Run: wrangler d1 execute bmi-cache-db --file <this-file>  (or psql for Neon)`);
 console.log(
   `INSERT INTO users (id, email, password_hash, first_name, last_name, role, is_verified) VALUES ('${id.replace(/'/g, "''")}', '${email.replace(/'/g, "''")}', '<ADMIN_PASSWORD_HASH>', '${firstName.replace(/'/g, "''")}', '${lastName.replace(/'/g, "''")}', 'admin', 1);`
 );

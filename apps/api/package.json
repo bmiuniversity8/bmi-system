@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "wrangler dev --local --port 8787",
     "deploy": "wrangler deploy",
-    "db:migrate": "wrangler d1 migrations apply bmi-portal-db --remote",
-    "db:migrate:local": "wrangler d1 migrations apply bmi-portal-db --local",
+    "db:migrate": "wrangler d1 migrations apply bmi-cache-db --remote",
+    "db:migrate:local": "wrangler d1 migrations apply bmi-cache-db --local",
     "verify-migrations": "tsx scripts/verify-migrations.ts",
     "db:generate": "drizzle-kit generate --config drizzle.config.ts",
     "db:generate:hr": "drizzle-kit generate --config drizzle-hr.config.ts",

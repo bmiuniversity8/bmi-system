@@ -11,7 +11,7 @@ const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bmi-d1-verify-'));
 try {
   // Run wrangler migrations apply against the temporary local directory
   // We pipe yes to it to bypass the "Are you sure?" prompt from wrangler
-  const command = `npx wrangler d1 migrations apply bmi-portal-db --local --persist-to="${tempDir}"`;
+  const command = `npx wrangler d1 migrations apply bmi-cache-db --local --persist-to="${tempDir}"`;
   
   console.log(`Running: ${command}`);
   execSync(command, { stdio: 'inherit', env: { ...process.env, CI: 'true' } });
