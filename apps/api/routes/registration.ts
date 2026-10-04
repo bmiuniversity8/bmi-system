@@ -554,28 +554,32 @@ export async function handleReserveSeat(
 
     // 2. Validate the full term load (already-registered + new section) for
     //    prerequisites, credit cap and timetable clashes BEFORE claiming a seat.
+    //    Fail CLOSED: any validator/DB error blocks the reservation (500) —
+    //    it must never be swallowed to let a seat be claimed unchecked.
+    const sectionRow = await db.prepare(
+      `SELECT course_id, term_id FROM course_sections WHERE id = ? LIMIT 1`
+    ).bind(body.section_id).first<{ course_id: string; term_id: string }>().catch(() => null);
+    if (!sectionRow) {
+      return error('Course section not found or inactive', 404);
+    }
     try {
-      const sectionRow = await db.prepare(
-        `SELECT course_id, term_id FROM course_sections WHERE id = ? LIMIT 1`
-      ).bind(body.section_id).first<{ course_id: string; term_id: string }>().catch(() => null);
-      if (sectionRow) {
-        const termId = body.term_id || eligibility.term?.id || sectionRow.term_id;
-        const existing = await db.prepare(
-          `SELECT course_id, section_id FROM student_course_registrations WHERE student_id = ? AND term_id = ? AND status = 'registered'`
-        ).bind(userId, termId).all<{ course_id: string; section_id: string | null }>().catch(() => null);
-        const existingRows = existing?.results || [];
-        const courseIds = [...new Set([...existingRows.map(r => r.course_id), sectionRow.course_id])];
-        const sectionIds = [...new Set([...existingRows.map(r => r.section_id).filter(Boolean) as string[], body.section_id])];
-        const validation = await validateCourseRegistration(db, userId, courseIds, sectionIds);
-        if (!validation.valid) {
-          return error(`Course validation failed: ${validation.errors.join('; ')}`, 422);
-        }
+      const termId = body.term_id || eligibility.term?.id || sectionRow.term_id;
+      const existing = await db.prepare(
+        `SELECT course_id, section_id FROM student_course_registrations WHERE student_id = ? AND term_id = ? AND status = 'registered'`
+      ).bind(userId, termId).all<{ course_id: string; section_id: string | null }>().catch(() => null);
+      const existingRows = existing?.results || [];
+      const courseIds = [...new Set([...existingRows.map(r => r.course_id), sectionRow.course_id])];
+      const sectionIds = [...new Set([...existingRows.map(r => r.section_id).filter(Boolean) as string[], body.section_id])];
+      const validation = await validateCourseRegistration(db, userId, courseIds, sectionIds);
+      if (!validation.valid) {
+        return error(`Course validation failed: ${validation.errors.join('; ')}`, 422);
       }
     } catch (e: unknown) {
-      // Validation-path failures surface as 422, never 500 — unless the
-      // section lookup itself failed, in which case fall through to reserve
-      // (which returns a clean failed/inactive message).
-      if (e instanceof Error && /Course validation failed/i.test(e.message)) throw e;
+      // Validator threw (DB error, malformed schedule, etc.) — fail closed.
+      const msg = e instanceof Error ? e.message : String(e);
+      if (/Course validation failed/i.test(msg)) return error(msg, 422);
+      console.error('[registration][reserve-seat] validation error (fail-closed):', msg);
+      return error(`Course validation could not be completed: ${msg}`, 500);
     }
 
     const result = await reserveSectionSeat(db, {
@@ -831,8 +835,12 @@ export async function handleSignEnrollmentAgreement(
         signatureTermId,
         now
       ).run();
-    } catch {
-      // Fallback for DBs without the term_id column (pre-migration).
+    } catch (e: unknown) {
+      // Fallback ONLY for DBs without the term_id column (pre-migration).
+      // Any other error (constraint, I/O) must surface — never silently retry
+      // a different shape and risk a duplicate/lost signature.
+      const msg = e instanceof Error ? e.message : String(e);
+      if (!/no such column|no column named|undefined column|term_id/i.test(msg)) throw e;
       await db.prepare(
         `INSERT INTO esignatures (
            id, document_id, user_id, signed_name, signed_at, ip_address, user_agent, document_version_hash, created_at

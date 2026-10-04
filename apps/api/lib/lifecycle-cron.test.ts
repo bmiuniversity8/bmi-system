@@ -241,6 +241,11 @@ describe('Task 04: reconciliation', () => {
         return stmt(null, [{ id: 'job-1', status: 'failed', attempts: 6 }]);
       }
       if (sql.includes('FROM applications a')) return stmt(null, []);
+      // (e) seats check: new single-query shape (JOIN + GROUP BY) and legacy
+      // per-section shape both supported by the mock.
+      if (sql.includes('FROM course_sections') && sql.includes('student_course_registrations')) {
+        return stmt(null, [{ id: 'sec-1', seats_taken: 5, registered_count: 3 }]);
+      }
       if (sql.includes('FROM course_sections') && !sql.includes('registrations')) {
         return stmt(null, [{ id: 'sec-1', seats_taken: 5 }]);
       }

@@ -123,10 +123,13 @@ export async function setEnrollmentStatus(
   if (!params.force) {
     let current: string | null = null;
     try {
+      // Portable ordering: id is a UUID tiebreaker (deterministic on D1 and
+      // Postgres). rowid is SQLite-only and throws on Postgres, which would
+      // silently skip transition validation — so it must not be used here.
       const row = await db.prepare(
         `SELECT status FROM enrollment_status_logs
          WHERE user_id = ?
-         ORDER BY changed_at DESC, rowid DESC LIMIT 1`
+         ORDER BY changed_at DESC, id DESC LIMIT 1`
       ).bind(params.userId).first<{ status: string }>();
       current = row?.status ?? null;
     } catch {
@@ -180,11 +183,12 @@ export async function getEnrollmentStatus(
   userId: string
 ): Promise<{ status: EnrollmentStatus; lastChangedAt: string; reason: string | null }> {
   try {
+    // Portable tiebreaker (see above): never use rowid here.
     const row = await db.prepare(
       `SELECT status, changed_at, reason
        FROM enrollment_status_logs
        WHERE user_id = ?
-       ORDER BY changed_at DESC, rowid DESC LIMIT 1`
+       ORDER BY changed_at DESC, id DESC LIMIT 1`
     ).bind(userId).first<{ status: EnrollmentStatus; changed_at: string; reason: string | null }>();
 
     if (row?.status) {

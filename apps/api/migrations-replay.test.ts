@@ -17,7 +17,10 @@ describe('D1 migrations replay (Tasks 01-08)', () => {
     const dir = join(here, 'migrations');
     const files = readdirSync(dir).filter((f) => f.endsWith('.sql')).sort();
     expect(files.length).toBeGreaterThanOrEqual(48);
-    expect(files[files.length - 1]).toMatch(/^0048_/);
+    // Compare against the highest migration number present instead of a
+    // hardcoded prefix, so adding 0049+ does not break the test.
+    const maxNum = Math.max(...files.map((f) => Number(f.slice(0, 4))));
+    expect(files[files.length - 1]).toMatch(new RegExp(`^${String(maxNum).padStart(4, '0')}_`));
     for (const f of files) {
       const sql = readFileSync(join(dir, f), 'utf8');
       try {
@@ -48,6 +51,13 @@ describe('D1 migrations replay (Tasks 01-08)', () => {
 
     const cfg = db.prepare(`SELECT value FROM app_config WHERE key = 'max_credits_per_term'`).get() as any;
     expect(cfg?.value).toBe('18');
+
+    // 0049: completion writer support — wider status CHECK + completed_at.
+    const scr = columns(db, 'student_course_registrations');
+    expect(scr).toContain('completed_at');
+    const scrCheck = db.prepare(`SELECT sql FROM sqlite_master WHERE name = 'student_course_registrations'`).get() as any;
+    expect(scrCheck.sql).toContain('waitlisted');
+    expect(scrCheck.sql).toContain('completed');
 
     // Fixture preservation: withdrawn row survives the rebuild.
     db.exec(`INSERT INTO users (id, email, password_hash, first_name, last_name, role, is_verified) VALUES ('u-1','a@b.c','h','A','B','applicant',1);`);

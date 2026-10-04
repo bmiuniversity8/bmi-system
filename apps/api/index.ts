@@ -23,7 +23,7 @@ import { handleInboundWebhook, handleListEvents, handleListDeadLetters, handleRe
 import { handleListStudents, handleGetStudent, handleCreateStudent, handleUpdateStudent, handleDeleteStudent } from './routes/ums-students';
 import { handleImportV2 } from './routes/ums-import';
 import { handleListGrades, handleCreateGrade, handleUpdateGrade } from './routes/ums-grades';
-import { handleListUmsCourses, handleCreateCourse, handleUpdateCourse, handleDeleteCourse, handleListPrograms, handleListFaculties, handleListDepartments, handleListTerms, handleListEnrollments, handleCreateEnrollment } from './routes/ums-courses';
+import { handleListUmsCourses, handleCreateCourse, handleUpdateCourse, handleDeleteCourse, handleListPrograms, handleListFaculties, handleListDepartments, handleListTerms, handleCreateTerm, handleUpdateTerm, handleCompleteCourseRegistration, handleCloseTermWithCompletions, handleListEnrollments, handleCreateEnrollment } from './routes/ums-courses';
 import { handleListStaff, handleGetStaff, handleCreateStaff, handleUpdateStaff, handleProvisionControlledAccount } from './routes/ums-staff';
 import { handleGetStudentPrograms, handleProgramTransfer } from './routes/programs';
 import { handleListTransactions } from './routes/ums-finance';
@@ -267,6 +267,10 @@ export const ROUTES: Route[] = [
   { method: 'GET', path: /^\/api\/v1\/faculties$/, roles: [], handler: async (req, env) => handleListFaculties(req, env) },
   { method: 'GET', path: /^\/api\/v1\/departments$/, roles: [], handler: async (req, env) => handleListDepartments(req, env) },
   { method: 'GET', path: /^\/api\/v1\/terms$/, roles: [], handler: async (req, env) => handleListTerms(req, env) },
+  { method: 'POST', path: /^\/api\/v1\/terms$/, roles: ['admin'], handler: async (req, env) => handleCreateTerm(req, env) },
+  { method: ['PUT', 'PATCH'], path: /^\/api\/v1\/terms\/([^/]+)$/, roles: ['admin'], handler: async (req, env, p) => handleUpdateTerm(req, env, p[1]) },
+  { method: 'POST', path: /^\/api\/v1\/admin\/registrations\/complete$/, roles: ['admin', 'staff'], handler: async (req, env) => handleCompleteCourseRegistration(req, env) },
+  { method: 'POST', path: /^\/api\/v1\/admin\/terms\/([^/]+)\/close$/, roles: ['admin'], handler: async (req, env, p) => handleCloseTermWithCompletions(req, env, p[1]) },
   { method: 'GET', path: /^\/api\/v1\/enrollments$/, roles: ['admin', 'staff', 'student'], handler: async (req, env) => handleListEnrollments(req, env) },
   { method: 'POST', path: /^\/api\/v1\/enrollments$/, roles: ['admin', 'staff'], handler: async (req, env) => handleCreateEnrollment(req, env) },
   { method: 'GET', path: /^\/api\/v1\/staff$/, roles: ['admin', 'staff'], handler: async (req, env) => handleListStaff(req, env) },

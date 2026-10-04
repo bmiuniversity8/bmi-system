@@ -241,13 +241,13 @@ export async function fulfillSuccessfulPayment(
       if (!decision.offer_expires_at || new Date() <= new Date(decision.offer_expires_at)) {
         const expected = Number(decision.deposit_amount || 0);
         const receivedRaw = Number(intent.amount);
-        // Normalize subunit (kobo/cents) the same way invoice receipts do.
-        const candidates = [receivedRaw, receivedRaw / 100];
-        const matched = candidates.some(
-          (v) => Number.isFinite(v) && Number.isFinite(expected) && Math.abs(v - expected) < 0.01
-        );
+        // Single-unit comparison: adapters already normalize to major units.
+        const matched =
+          Number.isFinite(receivedRaw) &&
+          Number.isFinite(expected) &&
+          Math.abs(receivedRaw - expected) < 0.01;
         if (matched) {
-          const settledAmount = Math.abs(receivedRaw - expected) < 0.01 ? receivedRaw : expected;
+          const settledAmount = expected;
           const res = await recordEnrollmentDeposit(db, {
             applicationId: depositApplicationId,
             userId,

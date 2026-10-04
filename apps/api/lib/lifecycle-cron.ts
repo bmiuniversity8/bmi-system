@@ -3,7 +3,6 @@ import type { ExecutionContext } from '@cloudflare/workers-types';
 import { runTermCensusJob } from './census-job';
 import { dispatchPendingJobs } from './provisioning';
 import {
-  setEnrollmentStatus,
   getEnrollmentStatus,
   ENROLLMENT_STATUS,
   ALLOWED_TRANSITIONS,
@@ -206,29 +205,77 @@ export async function runLifecycleCronJobs(
           }
 
           const nowIso = now.toISOString();
-          await db.transaction(async (tx: any) => {
-            await tx
-              .prepare(
-                `UPDATE applications SET status = 'rejected', updated_at = ? WHERE id = ?`
-              )
-              .bind(nowIso, dec.application_id)
-              .run();
+          // Atomic: application + app log + enrollment status in one batch.
+          // db.batch is atomic on D1 and on Neon (non-interactive txn),
+          // unlike db.transaction which is sequential-only on both drivers.
+          // Transition was validated above, so the direct enrollment insert
+          // cannot split-brain the application row.
+          const enrollmentId = crypto.randomUUID();
+          const appUpdate = db
+            .prepare(
+              `UPDATE applications SET status = 'rejected', updated_at = ? WHERE id = ?`
+            )
+            .bind(nowIso, dec.application_id);
+          const appLog = db
+            .prepare(
+              `INSERT INTO application_status_logs (id, application_id, changed_by, old_status, new_status, notes, changed_at)
+               VALUES (?, ?, 'system_offer_expiry', 'accepted', 'rejected', 'Admission offer expired past deadline', ?)`
+            )
+            .bind(crypto.randomUUID(), dec.application_id, nowIso);
+          const enrollmentLog = db
+            .prepare(
+              `INSERT INTO enrollment_status_logs
+               (id, user_id, person_id, status, term_id, changed_by, reason, changed_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+            )
+            .bind(
+              enrollmentId,
+              dec.user_id,
+              null,
+              ENROLLMENT_STATUS.DENIED,
+              null,
+              'system_offer_expiry',
+              'Admission offer expired past deadline without acceptance',
+              nowIso,
+            );
+          if (typeof (db as any).batch === 'function') {
+            await (db as any).batch([appUpdate, appLog, enrollmentLog]);
+          } else {
+            await db.transaction(async (tx: any) => {
+              await tx
+                .prepare(
+                  `UPDATE applications SET status = 'rejected', updated_at = ? WHERE id = ?`
+                )
+                .bind(nowIso, dec.application_id)
+                .run();
 
-            await tx
-              .prepare(
-                `INSERT INTO application_status_logs (id, application_id, changed_by, old_status, new_status, notes, changed_at)
-                 VALUES (?, ?, 'system_offer_expiry', 'accepted', 'rejected', 'Admission offer expired past deadline', ?)`
-              )
-              .bind(crypto.randomUUID(), dec.application_id, nowIso)
-              .run();
-          });
+              await tx
+                .prepare(
+                  `INSERT INTO application_status_logs (id, application_id, changed_by, old_status, new_status, notes, changed_at)
+                   VALUES (?, ?, 'system_offer_expiry', 'accepted', 'rejected', 'Admission offer expired past deadline', ?)`
+                )
+                .bind(crypto.randomUUID(), dec.application_id, nowIso)
+                .run();
 
-          await setEnrollmentStatus(db as any, {
-            userId: dec.user_id,
-            status: ENROLLMENT_STATUS.DENIED,
-            changedBy: 'system_offer_expiry',
-            reason: 'Admission offer expired past deadline without acceptance',
-          });
+              await tx
+                .prepare(
+                  `INSERT INTO enrollment_status_logs
+                   (id, user_id, person_id, status, term_id, changed_by, reason, changed_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+                )
+                .bind(
+                  enrollmentId,
+                  dec.user_id,
+                  null,
+                  ENROLLMENT_STATUS.DENIED,
+                  null,
+                  'system_offer_expiry',
+                  'Admission offer expired past deadline without acceptance',
+                  nowIso,
+                )
+                .run();
+            });
+          }
 
           report.offerExpiry.expired++;
         } else if (expiryDate <= threeDaysFromNow) {
@@ -338,17 +385,20 @@ export async function runLifecycleCronJobs(
 
       const missingUids = unprovisionedStudents?.results || [];
       for (const st of missingUids) {
-        discrepancies++;
-        details.missingUid++;
         try {
           await writeReconciliationAudit(db, 'student', st.user_id, {
             issue: 'Active student missing UID or person link',
             email: st.email,
           });
+          discrepancies++;
+          details.missingUid++;
         } catch {
-          discrepancies--; // audit write failure already logged; don't double-count silently
-          details.missingUid--;
-          throw new Error('audit insert failed for missingUid');
+          // Audit-write failure already logged inside helper; count it but
+          // continue with the remaining students — one bad row must not stop
+          // the check.
+          discrepancies++;
+          details.missingUid++;
+          continue;
         }
       }
     } catch (err: unknown) {
@@ -356,25 +406,30 @@ export async function runLifecycleCronJobs(
     }
 
     // (b) Students stuck in PROVISIONING_IN_PROGRESS for over an hour.
+    // Portable: no rowid, no bare GROUP BY (both fail on Postgres). Fetch
+    // distinct candidates, then confirm each one's LATEST log is still stuck.
     try {
       const cutoff = new Date(Date.now() - 3600000).toISOString();
       const stuck = await db.prepare(
-        `SELECT user_id, status, changed_at FROM enrollment_status_logs
-         WHERE status = 'PROVISIONING_IN_PROGRESS' AND changed_at < ?
-         GROUP BY user_id`
-      ).bind(cutoff).all<{ user_id: string; status: string; changed_at: string }>().catch(() => null);
+        `SELECT DISTINCT user_id FROM enrollment_status_logs
+         WHERE status = 'PROVISIONING_IN_PROGRESS' AND changed_at < ?`
+      ).bind(cutoff).all<{ user_id: string }>().catch(() => null);
       for (const row of stuck?.results || []) {
         // Confirm still current (latest log is still PROVISIONING_IN_PROGRESS).
+        // Portable tiebreaker: changed_at + id (never rowid — SQLite-only).
         const latest = await db.prepare(
-          `SELECT status FROM enrollment_status_logs WHERE user_id = ? ORDER BY changed_at DESC, rowid DESC LIMIT 1`
-        ).bind(row.user_id).first<{ status: string }>().catch(() => null);
-        if (latest?.status === 'PROVISIONING_IN_PROGRESS') {
+          `SELECT status, changed_at FROM enrollment_status_logs WHERE user_id = ? ORDER BY changed_at DESC, id DESC LIMIT 1`
+        ).bind(row.user_id).first<{ status: string; changed_at: string }>().catch(() => null);
+        // Tolerate mocks/rows without changed_at: the candidate was already
+        // older than the cutoff, so a missing timestamp still counts as stuck.
+        const since = (latest as any)?.changed_at ?? cutoff;
+        if (latest?.status === 'PROVISIONING_IN_PROGRESS' && (!(latest as any)?.changed_at || (latest as any).changed_at < cutoff)) {
           discrepancies++;
           details.provisioningStuck++;
           try {
             await writeReconciliationAudit(db, 'student', row.user_id, {
               issue: 'Stuck in PROVISIONING_IN_PROGRESS for over an hour',
-              since: row.changed_at,
+              since,
             });
           } catch { /* logged inside helper */ }
         }
@@ -443,26 +498,26 @@ export async function runLifecycleCronJobs(
     }
 
     // (e) course_sections.seats_taken differing from the count of registered rows.
+    // Single aggregated query (no N+1 per-section count).
     try {
-      const sections = await db.prepare(
-        `SELECT id, seats_taken FROM course_sections`
-      ).all<{ id: string; seats_taken: number }>().catch(() => null);
-      for (const sec of sections?.results || []) {
-        const cnt = await db.prepare(
-          `SELECT COUNT(*) as count FROM student_course_registrations WHERE section_id = ? AND status = 'registered'`
-        ).bind(sec.id).first<{ count: number }>().catch(() => null);
-        const actual = Number(cnt?.count ?? 0);
-        if (Number(sec.seats_taken ?? 0) !== actual) {
-          discrepancies++;
-          details.seatsMismatch++;
-          try {
-            await writeReconciliationAudit(db, 'course_section', sec.id, {
-              issue: 'seats_taken differs from registered count',
-              seats_taken: sec.seats_taken,
-              registered_count: actual,
-            });
-          } catch { /* logged inside helper */ }
-        }
+      const mismatched = await db.prepare(
+        `SELECT cs.id, cs.seats_taken, COUNT(scr.id) AS registered_count
+         FROM course_sections cs
+         LEFT JOIN student_course_registrations scr
+           ON scr.section_id = cs.id AND scr.status = 'registered'
+         GROUP BY cs.id, cs.seats_taken
+         HAVING cs.seats_taken != COUNT(scr.id)`
+      ).all<{ id: string; seats_taken: number; registered_count: number }>().catch(() => null);
+      for (const sec of mismatched?.results || []) {
+        discrepancies++;
+        details.seatsMismatch++;
+        try {
+          await writeReconciliationAudit(db, 'course_section', sec.id, {
+            issue: 'seats_taken differs from registered count',
+            seats_taken: sec.seats_taken,
+            registered_count: Number(sec.registered_count ?? 0),
+          });
+        } catch { /* logged inside helper */ }
       }
     } catch (err: unknown) {
       console.error('[lifecycle-cron][reconciliation] seatsMismatch check failed:', err instanceof Error ? err.message : String(err));

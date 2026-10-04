@@ -215,6 +215,223 @@ export async function handleListTerms(_request: Request, env: Env): Promise<Resp
   return response;
 }
 
+// ─── admin: create / update academic term (registration window + census) ─────
+// Gap 2 fix: census_date / registration_opens_at / registration_closes_at
+// previously had no writer, so the nightly census could never run. These two
+// handlers are the canonical writers (wired in index.ts as admin-only routes).
+
+function parseOptionalDate(v: unknown): string | null | undefined {
+  if (v === undefined) return undefined; // not supplied — leave unchanged
+  if (v === null || v === '') return null; // explicit clear
+  const d = new Date(String(v));
+  if (Number.isNaN(d.getTime())) throw new Error(`Invalid date: ${String(v)}`);
+  return d.toISOString();
+}
+
+function validateTermWindow(args: {
+  registration_opens_at?: string | null;
+  registration_closes_at?: string | null;
+  census_date?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+}): void {
+  const { registration_opens_at: opens, registration_closes_at: closes, census_date: census } = args;
+  if (opens && closes && new Date(opens).getTime() >= new Date(closes).getTime()) {
+    throw new Error('registration_opens_at must be before registration_closes_at');
+  }
+  if (closes && census && new Date(closes).getTime() > new Date(census).getTime()) {
+    throw new Error('registration_closes_at must be on or before census_date');
+  }
+  if (args.start_date && args.end_date && new Date(args.start_date).getTime() >= new Date(args.end_date).getTime()) {
+    throw new Error('start_date must be before end_date');
+  }
+}
+
+export async function handleCreateTerm(request: Request, env: Env): Promise<Response> {
+  try {
+    const body = (await request.json()) as Record<string, unknown>;
+    const name = String(body.name || '').trim();
+    const code = String(body.code || '').trim();
+    if (!name || !code) return error('name and code are required', 400);
+    const academic_year = String(body.academic_year || '').trim();
+    const semester_number = Number(body.semester_number ?? 1);
+    const status = String(body.status || 'upcoming').trim();
+    const allowed = new Set(['upcoming', 'registration', 'active', 'exam', 'grading', 'closed']);
+    if (!allowed.has(status)) return error(`Invalid status: ${status}`, 400);
+
+    let start_date: string | null = null;
+    let end_date: string | null = null;
+    try {
+      const s = parseOptionalDate(body.start_date);
+      const e = parseOptionalDate(body.end_date);
+      start_date = s === undefined ? null : s;
+      end_date = e === undefined ? null : e;
+      if (!start_date || !end_date) return error('start_date and end_date are required', 400);
+    } catch (e: unknown) {
+      return error(e instanceof Error ? e.message : 'Invalid term dates', 400);
+    }
+
+    let registration_opens_at: string | null = null;
+    let registration_closes_at: string | null = null;
+    let census_date: string | null = null;
+    try {
+      const o = parseOptionalDate(body.registration_opens_at);
+      const c = parseOptionalDate(body.registration_closes_at);
+      const cd = parseOptionalDate(body.census_date);
+      registration_opens_at = o === undefined ? null : o;
+      registration_closes_at = c === undefined ? null : c;
+      census_date = cd === undefined ? null : cd;
+      validateTermWindow({ registration_opens_at, registration_closes_at, census_date, start_date, end_date });
+    } catch (e: unknown) {
+      return error(e instanceof Error ? e.message : 'Invalid registration window', 400);
+    }
+
+    const id = String(body.id || crypto.randomUUID());
+    try {
+      await env.PLATFORM_CONTEXT!.db.prepare(
+        `INSERT INTO academic_terms
+         (id, name, code, academic_year, semester_number, start_date, end_date, status,
+          registration_opens_at, registration_closes_at, census_date)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(
+        id, name, code, academic_year, semester_number, start_date, end_date, status,
+        registration_opens_at, registration_closes_at, census_date,
+      ).run();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      // Pre-migration DBs lack the window columns — fall back to the base
+      // columns so term creation still works, then report the gap.
+      if (/no such column|no column named|undefined column/i.test(msg)) {
+        await env.PLATFORM_CONTEXT!.db.prepare(
+          `INSERT INTO academic_terms
+           (id, name, code, academic_year, semester_number, start_date, end_date, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        ).bind(id, name, code, academic_year, semester_number, start_date, end_date, status).run();
+        return json({ success: true, data: { id }, warning: 'Term created without window columns (DB pre-migration 0048)' }, 201);
+      }
+      if (/UNIQUE|unique|duplicate/i.test(msg)) return error('Term code already exists', 409);
+      throw e;
+    }
+    await invalidateCachePrefix(env.PLATFORM_CONTEXT?.kv, 'catalog:terms');
+    const created = await env.PLATFORM_CONTEXT!.db.prepare(`SELECT * FROM academic_terms WHERE id = ?`).bind(id).first().catch(() => ({ id }));
+    return json({ success: true, data: created }, 201);
+  } catch (e: unknown) {
+    return error(e instanceof Error ? e.message : 'Failed to create term', 500);
+  }
+}
+
+export async function handleUpdateTerm(request: Request, env: Env, termId: string): Promise<Response> {
+  try {
+    if (!termId) return error('term id is required', 400);
+    const body = (await request.json()) as Record<string, unknown>;
+    const db = env.PLATFORM_CONTEXT!.db;
+
+    const existing = await db.prepare(`SELECT * FROM academic_terms WHERE id = ?`).bind(termId).first<Record<string, any>>().catch(() => null);
+    if (!existing) return error('Academic term not found', 404);
+
+    const patch: Record<string, unknown> = {};
+    for (const k of ['name', 'code', 'academic_year', 'semester_number', 'status', 'start_date', 'end_date', 'registration_opens_at', 'registration_closes_at', 'census_date']) {
+      if (k in body) patch[k] = (body as any)[k];
+    }
+    if (Object.keys(patch).length === 0) return error('No updatable fields supplied', 400);
+
+    if (patch.status !== undefined) {
+      const allowed = new Set(['upcoming', 'registration', 'active', 'exam', 'grading', 'closed']);
+      if (!allowed.has(String(patch.status))) return error(`Invalid status: ${String(patch.status)}`, 400);
+    }
+
+    // Normalize date fields (explicit null clears the column).
+    try {
+      for (const k of ['start_date', 'end_date', 'registration_opens_at', 'registration_closes_at', 'census_date']) {
+        if (k in patch) {
+          const v = parseOptionalDate((patch as any)[k]);
+          (patch as any)[k] = v === undefined ? existing[k] ?? null : v;
+        }
+      }
+      validateTermWindow({
+        registration_opens_at: ((patch as any).registration_opens_at ?? (existing as any).registration_opens_at ?? null) as string | null,
+        registration_closes_at: ((patch as any).registration_closes_at ?? (existing as any).registration_closes_at ?? null) as string | null,
+        census_date: ((patch as any).census_date ?? (existing as any).census_date ?? null) as string | null,
+        start_date: ((patch as any).start_date ?? (existing as any).start_date ?? null) as string | null,
+        end_date: ((patch as any).end_date ?? (existing as any).end_date ?? null) as string | null,
+      });
+    } catch (e: unknown) {
+      return error(e instanceof Error ? e.message : 'Invalid term dates', 400);
+    }
+
+    const sets: string[] = [];
+    const vals: unknown[] = [];
+    for (const [k, v] of Object.entries(patch)) {
+      sets.push(`${k} = ?`);
+      vals.push(v);
+    }
+    vals.push(termId);
+    try {
+      await db.prepare(`UPDATE academic_terms SET ${sets.join(', ')} WHERE id = ?`).bind(...vals).run();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (/no such column|no column named|undefined column/i.test(msg)) {
+        return error('Term window columns missing — apply migration 0048 first', 500);
+      }
+      if (/UNIQUE|unique|duplicate/i.test(msg)) return error('Term code already exists', 409);
+      throw e;
+    }
+    await invalidateCachePrefix(env.PLATFORM_CONTEXT?.kv, 'catalog:terms');
+    const updated = await db.prepare(`SELECT * FROM academic_terms WHERE id = ?`).bind(termId).first().catch(() => null);
+    return ok(updated);
+  } catch (e: unknown) {
+    return error(e instanceof Error ? e.message : 'Failed to update term', 500);
+  }
+}
+
+// ─── admin: course completion (Gap 1 writer) ─────────────────────────────────
+// Canonical writer for student_course_registrations.status = 'completed'.
+// Without this, prerequisite validation could never pass.
+
+export async function handleCompleteCourseRegistration(request: Request, env: Env): Promise<Response> {
+  try {
+    const body = (await request.json()) as { student_id?: string; course_id?: string; term_id?: string; passed?: boolean; grade_percent?: number };
+    if (!body.student_id || !body.course_id || !body.term_id) {
+      return error('student_id, course_id and term_id are required', 400);
+    }
+    let passed = body.passed;
+    if (passed === undefined && body.grade_percent !== undefined) {
+      passed = Number(body.grade_percent) >= 40;
+    }
+    if (passed === undefined) return error('passed or grade_percent is required', 400);
+    const { markCourseCompletion } = await import('../lib/course-completion');
+    const res = await markCourseCompletion(env.PLATFORM_CONTEXT!.db, {
+      studentId: body.student_id,
+      courseId: body.course_id,
+      termId: body.term_id,
+      passed: !!passed,
+    });
+    return ok(res);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Failed to complete registration';
+    if (/not found/i.test(msg)) return error(msg, 404);
+    if (/Cannot complete/i.test(msg)) return error(msg, 409);
+    return error(msg, 500);
+  }
+}
+
+export async function handleCloseTermWithCompletions(_request: Request, env: Env, termId: string): Promise<Response> {
+  try {
+    if (!termId) return error('term id is required', 400);
+    const db = env.PLATFORM_CONTEXT!.db;
+    const term = await db.prepare(`SELECT id, status FROM academic_terms WHERE id = ?`).bind(termId).first<{ id: string; status: string }>().catch(() => null);
+    if (!term) return error('Academic term not found', 404);
+    const { finalizeTermCompletions } = await import('../lib/course-completion');
+    const result = await finalizeTermCompletions(db, termId);
+    // Mark the term closed only after completions are written.
+    await db.prepare(`UPDATE academic_terms SET status = 'closed' WHERE id = ?`).bind(termId).run().catch(() => null);
+    await invalidateCachePrefix(env.PLATFORM_CONTEXT?.kv, 'catalog:terms');
+    return ok(result);
+  } catch (e: unknown) {
+    return error(e instanceof Error ? e.message : 'Failed to close term', 500);
+  }
+}
+
 // ─── enrollments ──────────────────────────────────────────────────────────────
 
 export async function handleListEnrollments(request: Request, env: Env): Promise<Response> {

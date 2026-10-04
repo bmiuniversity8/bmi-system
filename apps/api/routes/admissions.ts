@@ -171,25 +171,29 @@ export async function handlePayDeposit(
       return error('Payment has not succeeded according to the gateway', 402);
     }
     const ownerId = intent.metadata?.userId as string | undefined;
-    if (ownerId && ownerId !== userId) {
+    // Fail closed: all three bindings must be present and equal. A gateway
+    // success with missing metadata must never confirm a deposit.
+    if (!ownerId || ownerId !== userId) {
       return error('Payment reference does not belong to this student', 403);
     }
-    if (intent.metadata?.purpose && intent.metadata.purpose !== 'deposit') {
+    if (intent.metadata?.purpose !== 'deposit') {
       return error('Payment reference is not a deposit payment', 400);
     }
     const intentAppId = (intent.metadata?.applicationId || intent.metadata?.application_id) as string | undefined;
-    if (intentAppId && intentAppId !== body.application_id) {
+    if (!intentAppId || intentAppId !== body.application_id) {
       return error('Payment reference does not match this application', 400);
     }
 
-    // Amount guard: verified gateway amount must match the DB deposit amount.
-    // Accept main-unit or subunit (kobo/cents) representations.
+    // Amount guard: all adapters normalize to MAJOR units before returning
+    // (Paystack/Stripe divide subunits by 100; memory echoes major). Compare
+    // in that single unit — never accept raw-or-/100, which would let a
+    // subunit amount match a 100x smaller deposit.
     const expected = Number(decision.deposit_amount || 0);
     const receivedRaw = Number(intent.amount);
-    const receivedUnits = [receivedRaw, receivedRaw / 100];
-    const matched = receivedUnits.some(
-      (v) => Number.isFinite(v) && Number.isFinite(expected) && Math.abs(v - expected) < 0.01
-    );
+    const matched =
+      Number.isFinite(receivedRaw) &&
+      Number.isFinite(expected) &&
+      Math.abs(receivedRaw - expected) < 0.01;
     if (!matched) {
       return error(`Deposit amount mismatch: expected ${expected}, gateway verified ${receivedRaw}`, 402);
     }
