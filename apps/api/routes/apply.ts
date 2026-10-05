@@ -459,8 +459,8 @@ export async function handleUpdateStatus(
   // Canonical lifecycle: formal admissions decisions (POST /api/admissions/decide)
   // are the SOLE authority for offers. This legacy status endpoint must never
   // create an "accepted" student state or trigger provisioning.
-  // Allowed here: triage only (under_review / rejected / waitlisted).
-  const validStatuses = ['under_review', 'rejected', 'waitlisted'];
+  // Allowed here: triage only (submitted / under_review / rejected / waitlisted).
+  const validStatuses = ['submitted', 'under_review', 'rejected', 'waitlisted'];
   if (!validStatuses.includes(status)) {
     if (status === 'accepted') {
       return error(
@@ -540,7 +540,7 @@ export async function handleUpdateStatus(
   try {
     await db.transaction(async (tx) => {
       await tx.prepare(
-        `UPDATE applications SET status = ?, reviewer_id = ?, reviewer_notes = ?, reviewed_at = datetime('now'), updated_at = datetime('now')
+        `UPDATE applications SET status = ?, reviewer_id = ?, reviewer_notes = ?, reviewed_at = datetime('now'), updated_at = datetime('now'), submitted_at = COALESCE(submitted_at, datetime('now'))
          WHERE id = ?`
       ).bind(status, trimmedAdminId, sanitizedNotes, appId).run();
 

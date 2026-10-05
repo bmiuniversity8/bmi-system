@@ -86,6 +86,39 @@ describe('lifecycle regression matrix', () => {
     expect(body.error || body.success === false).toBeTruthy();
   });
 
+  it('1b. handleUpdateStatus allows triage transition to submitted', async () => {
+    let updatedStatus = '';
+    const db = makeDb((sql: string) => {
+      if (sql.includes('FROM applications a JOIN users u')) {
+        return stmt({ id: 'app-1', status: 'draft', program: 'Theology', user_id: 'u-1', email: 'a@b.c', first_name: 'A' });
+      }
+      if (sql.includes('FROM users WHERE id')) {
+        return stmt({ id: 'admin-1', role: 'admin', first_name: 'Admin', email: 'admin@bmi.edu' });
+      }
+      if (sql.includes('UPDATE applications SET')) {
+        return {
+          bind: (...args: any[]) => {
+            updatedStatus = args[0];
+            return { run: async () => ({}) };
+          }
+        };
+      }
+      return stmt();
+    });
+    const env: any = { PLATFORM_CONTEXT: { db } };
+    const req = new Request('http://x/api/admin/applications/app-1/status', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'submitted', notes: 'Verified docs offline' }),
+    });
+    const res = await handleUpdateStatus(req, env, 'app-1', 'admin-1');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+    expect(body.success).toBe(true);
+    expect(body.data.new_status).toBe('submitted');
+    expect(updatedStatus).toBe('submitted');
+  });
+
   it('2. finalize from OFFER_EXTENDED without eligibility → 403, never REGISTERED', async () => {
     const db = makeDb((sql: string) => {
       if (sql.includes('enrollment_status_logs')) {

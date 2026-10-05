@@ -39,7 +39,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const NEXT_STATUSES: Record<string, string[]> = {
-  draft: ["submitted"],
+  draft: ["submitted", "under_review"],
   submitted: ["under_review", "rejected"],
   // NOTE: "accepted" is intentionally absent. Offers are issued ONLY via the
   // formal decision flow (POST /api/admissions/decide → OFFER_EXTENDED) and
