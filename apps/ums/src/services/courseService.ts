@@ -42,14 +42,35 @@ export async function getCourses(filters?: {
     const response = await authFetch(url);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let data = await parseJsonSafe<any>(response);
-    if (data?.success && !data.data?.items) {
-      // Make sure data has the paginated structure
+    if (data?.success) {
       if (!data.data) {
         data.data = { items: [], page: 1, perPage: 20, total: 0 };
       } else if (Array.isArray(data.data)) {
         data.data = { items: data.data, page: 1, perPage: data.data.length, total: data.data.length };
       } else if (!data.data.items) {
         data.data.items = [];
+      }
+
+      if (Array.isArray(data.data.items)) {
+        data.data.items = data.data.items.map((item: any) => {
+          const rawLvl = String(item.level || '');
+          const lvlNum = parseInt(rawLvl, 10);
+          let displayLevel = item.level || 'Undergraduate';
+          if (!isNaN(lvlNum)) {
+            if (lvlNum >= 800) displayLevel = 'PhD';
+            else if (lvlNum >= 500) displayLevel = 'Masters';
+            else if (lvlNum >= 100) displayLevel = 'Undergraduate';
+          }
+          return {
+            ...item,
+            title: item.title || item.name || '',
+            credit_hours: item.credit_hours ?? item.credits ?? 3,
+            credits: item.credits ?? item.credit_hours ?? 3,
+            department: item.department || item.department_name || '',
+            status: item.status || (item.is_active === 0 ? 'Draft' : 'Published'),
+            level: displayLevel,
+          };
+        });
       }
     }
     return data ?? { success: false, error: 'Failed to parse courses response' };

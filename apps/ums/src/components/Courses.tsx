@@ -57,7 +57,6 @@ const Courses: React.FC = () => {
   const {
     data: courseResponse,
     refetch: refetchCourses,
-    isFetching,
   } = useCoursesQuery({
     page,
     perPage,
@@ -80,49 +79,49 @@ const Courses: React.FC = () => {
     setPage(1);
   }, [searchTerm, facultyFilter, activeLevel, setPage]);
 
+  const sourceCourses = useMemo(
+    () => (pagedCourses.length > 0 ? pagedCourses : courses),
+    [pagedCourses, courses],
+  );
+
   const facultyOptions = useMemo(() => {
     const fromData = [
-      ...new Set(courses.map((c) => c.faculty).filter(Boolean)),
+      ...new Set(sourceCourses.map((c: any) => c.faculty || c.department).filter(Boolean)),
     ];
     return ["All Faculty", ...fromData.sort()];
-  }, [courses]);
+  }, [sourceCourses]);
 
   const filteredCourses = useMemo(() => {
-    if ((pagedCourses && pagedCourses.length > 0) || isFetching)
-      return pagedCourses || [];
-    return courses.filter((course) => {
+    return sourceCourses.filter((course: any) => {
       const matchesSearch =
-        course.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        course.code.toLowerCase().includes(searchTerm.toLowerCase());
+        !searchTerm ||
+        (course.title || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (course.code || "").toLowerCase().includes(searchTerm.toLowerCase());
+      const deptOrFac = course.faculty || course.department || "";
       const matchesFaculty =
-        facultyFilter === "All Faculty" ||
-        (course.faculty ?? "") === facultyFilter;
+        facultyFilter === "All Faculty" || deptOrFac === facultyFilter;
 
       let matchesLevel = true;
       if (activeLevel !== "All Levels") {
-        if (activeLevel === "Undergraduate")
-          matchesLevel = (course as any).level === "Undergraduate";
-        else if (activeLevel === "Postgraduate")
-          matchesLevel = (course as any).level === "Postgraduate";
-        else if (activeLevel === "Diploma")
-          matchesLevel = (course as any).level === "Diploma";
-        else if (activeLevel === "Certificate")
-          matchesLevel = (course as any).level === "Certificate";
-        else if (activeLevel === "Masters")
-          matchesLevel =
-            course.title.includes("Master") ||
-            course.title.includes("MA") ||
-            course.title.includes("MDiv");
-        else if (activeLevel === "PhD")
-          matchesLevel =
-            course.title.includes("Doctor") ||
-            course.title.includes("PhD") ||
-            course.code.startsWith("D");
+        const lvl = String(course.level || "").toLowerCase();
+        const title = (course.title || "").toLowerCase();
+        const code = (course.code || "").toUpperCase();
+        if (activeLevel === "Undergraduate") {
+          matchesLevel = lvl.includes("undergrad") || lvl === "100" || lvl === "200" || lvl === "300" || lvl === "400";
+        } else if (activeLevel === "Postgraduate" || activeLevel === "Masters") {
+          matchesLevel = lvl.includes("master") || lvl.includes("postgrad") || lvl === "500" || lvl === "600" || title.includes("master") || title.includes("mdiv");
+        } else if (activeLevel === "PhD") {
+          matchesLevel = lvl.includes("phd") || lvl.includes("doct") || lvl === "700" || lvl === "800" || title.includes("doctor") || code.startsWith("D");
+        } else if (activeLevel === "Diploma") {
+          matchesLevel = lvl.includes("diploma") || title.includes("diploma");
+        } else if (activeLevel === "Certificate") {
+          matchesLevel = lvl.includes("cert") || title.includes("certificate");
+        }
       }
 
       return matchesSearch && matchesFaculty && matchesLevel;
     });
-  }, [courses, searchTerm, facultyFilter, activeLevel]);
+  }, [sourceCourses, searchTerm, facultyFilter, activeLevel]);
 
   const handleSave = async (courseData: Partial<Course>) => {
     if (editingCourse) {
@@ -411,7 +410,7 @@ const Courses: React.FC = () => {
                     {course.title}
                   </h3>
                   <p className="text-[9px] font-bold text-[#4B0082] dark:text-purple-300 uppercase tracking-widest mt-1.5">
-                    {(course as any).category ?? ""} • {(course as any).department}
+                    {(course as any).category ? `${(course as any).category} • ` : ""}{(course as any).department || (course as any).department_name || "Academic Department"}
                   </p>
                   <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 line-clamp-2">
                     {(course as any).description}
@@ -420,7 +419,7 @@ const Courses: React.FC = () => {
 
                 <div className="mt-auto pl-3 pt-3 border-t border-gray-50 dark:border-gray-700 flex justify-between items-center">
                   <span className="text-[10px] font-bold text-gray-500 bg-gray-50 dark:bg-gray-700/50 px-2 py-1 rounded">
-                    {course.credit_hours} Credits
+                    {course.credit_hours ?? (course as any).credits ?? 3} Credits
                   </span>
                   <div className="flex gap-1">
                     <button
@@ -488,26 +487,26 @@ const Courses: React.FC = () => {
                     </div>
                     <div className="px-5 py-4">
                       <p className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase truncate">
-                        {(course as any).department}
+                        {(course as any).department || (course as any).department_name || "General"}
                       </p>
                       <p className="text-[9px] font-black text-[#4B0082] dark:text-purple-300 uppercase tracking-widest mt-0.5 truncate">
                         {(course as any).category ?? ""}
                       </p>
                     </div>
                     <div className="px-5 py-4 text-center font-bold text-gray-600 dark:text-gray-400 text-xs">
-                      {course.credit_hours}
+                      {course.credit_hours ?? (course as any).credits ?? 3}
                     </div>
                     <div className="px-5 py-4 text-center">
                       <span
                         className={`px-2 py-0.5 text-[9px] font-black uppercase tracking-widest border whitespace-nowrap rounded-md ${
-                          (course as any).status === "Published"
+                          ((course as any).status === "Published" || (course as any).is_active === 1)
                             ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                            : (course as any).status === "Draft"
+                            : ((course as any).status === "Draft" || (course as any).is_active === 0)
                               ? "bg-amber-50 text-amber-700 border-amber-200"
                               : "bg-gray-50 text-gray-500 border-gray-200"
                         }`}
                       >
-                        {(course as any).status}
+                        {(course as any).status || ((course as any).is_active === 0 ? "Draft" : "Published")}
                       </span>
                     </div>
                     <div className="px-5 py-4 text-right">

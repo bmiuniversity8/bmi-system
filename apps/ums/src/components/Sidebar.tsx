@@ -145,13 +145,21 @@ const Sidebar: React.FC<SidebarProps> = ({
       label: "Academic",
       icon: MonitorPlay,
       items: [
+        { id: "programs", label: `Degree ${t("academic.programs")}`, icon: GraduationCap },
         { id: "courses", label: "Courses", icon: MonitorPlay },
         { id: "terms", label: "Academic Terms", icon: Calendar },
-        { id: "programs", label: `Degree ${t("academic.programs")}`, icon: GraduationCap },
         { id: "grades", label: "Assessments & Grades", icon: FileSpreadsheet },
         { id: "rubrics", label: "Marking Rubrics", icon: FileText },
         { id: "transcripts", label: "Transcripts", icon: FileText },
         { id: "certificates", label: "Certificates", icon: Scroll },
+      ],
+    },
+    {
+      id: "faculty_staff",
+      label: "Faculty & Staff",
+      icon: Briefcase,
+      items: [
+        { id: "staff", label: "Staff & Faculty", icon: Briefcase },
       ],
     },
     {
@@ -162,7 +170,6 @@ const Sidebar: React.FC<SidebarProps> = ({
         { id: "attendance", label: "Attendance", icon: CalendarCheck },
         { id: "timetable", label: "Timetable", icon: Calendar },
         { id: "finance", label: "Finance", icon: CreditCard },
-        { id: "staff", label: "Staff & Faculty", icon: Briefcase },
       ],
     },
     {

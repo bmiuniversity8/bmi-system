@@ -104,6 +104,18 @@ const Programs: React.FC = () => {
     loadData();
   }, []);
 
+// Normalize diverse level formats (undergraduate/bachelor, postgraduate/master, doctoral/doctorate, certificate, diploma)
+const normalizeProgramLevel = (p: Partial<Program>): keyof typeof LEVEL_CONFIG => {
+  const lvl = (p.level || "").toLowerCase();
+  const deg = (p.degree_type || "").toLowerCase();
+  if (lvl.includes("diploma") || deg.includes("diploma")) return "diploma";
+  if (lvl.includes("cert") || deg.includes("cert")) return "certificate";
+  if (lvl.includes("bach") || lvl.includes("undergrad") || deg.includes("bach")) return "bachelor";
+  if (lvl.includes("doct") || deg.includes("doct") || lvl.includes("phd")) return "doctorate";
+  if (lvl.includes("mast") || lvl.includes("postgrad") || lvl.includes("grad") || deg.includes("mast")) return "master";
+  return "bachelor";
+};
+
   // Filtered Programs
   const filteredPrograms = useMemo(() => {
     return programs.filter((p) => {
@@ -119,7 +131,7 @@ const Programs: React.FC = () => {
         selectedDepartment === "All" || p.department_id === selectedDepartment;
 
       const matchesLevel =
-        activeLevel === "All" || p.level === activeLevel;
+        activeLevel === "All" || normalizeProgramLevel(p) === activeLevel;
 
       return matchesSearch && matchesFaculty && matchesDepartment && matchesLevel;
     });
@@ -127,7 +139,7 @@ const Programs: React.FC = () => {
 
   // Grouped Programs by level
   const groupedPrograms = useMemo(() => {
-    const groups: Record<string, Program[]> = {
+    const groups: Record<keyof typeof LEVEL_CONFIG, Program[]> = {
       certificate: [],
       diploma: [],
       bachelor: [],
@@ -136,8 +148,9 @@ const Programs: React.FC = () => {
     };
 
     filteredPrograms.forEach((p) => {
-      if (groups[p.level]) {
-        groups[p.level].push(p);
+      const norm = normalizeProgramLevel(p);
+      if (groups[norm]) {
+        groups[norm].push(p);
       }
     });
 
@@ -390,7 +403,7 @@ const Programs: React.FC = () => {
       {/* Main Grid View */}
       <div className="flex-1 overflow-y-auto p-6 space-y-8">
         {Object.entries(LEVEL_CONFIG).map(([levelKey, config]) => {
-          const progs = groupedPrograms[levelKey] || [];
+          const progs = groupedPrograms[levelKey as keyof typeof LEVEL_CONFIG] || [];
           if (progs.length === 0) return null;
 
           const IconComponent = config.icon;
@@ -412,7 +425,7 @@ const Programs: React.FC = () => {
 
               {/* Grid of Programs */}
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                {progs.map((prog) => (
+                {progs.map((prog: Program) => (
                   <div
                     key={prog.id}
                     onClick={() => navigate(`/programs/${prog.id}`)}
