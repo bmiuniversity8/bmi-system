@@ -13,6 +13,8 @@ import {
   List,
   Award,
   Library,
+  AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 import { Course } from "../types";
 import CourseModal from "./CourseModal";
@@ -57,11 +59,22 @@ const Courses: React.FC = () => {
   const {
     data: courseResponse,
     refetch: refetchCourses,
+    isFetching: coursesFetching,
+    isError: coursesQueryError,
   } = useCoursesQuery({
     page,
     perPage,
     search: searchTerm,
   });
+
+  // Distinguish "no courses match" from "the request failed". Services return
+  // { success: false } on network/auth failures instead of throwing, so an
+  // explicit flag is required — otherwise an outage renders the exact same
+  // "not found" message as a genuinely empty catalog.
+  const coursesLoadFailed =
+    !coursesFetching &&
+    (coursesQueryError ||
+      (courseResponse != null && courseResponse.success === false));
 
   const pagedCourses = useMemo(
     () => (courseResponse?.success ? courseResponse.data?.items ?? [] : []),
@@ -440,7 +453,7 @@ const Courses: React.FC = () => {
                 </div>
               </div>
             ))}
-            {filteredCourses.length === 0 && (
+            {filteredCourses.length === 0 && !coursesLoadFailed && (
               <div className="col-span-full py-20 text-center flex flex-col items-center justify-center">
                 <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-2xl flex items-center justify-center text-gray-400 mb-4">
                   <Layers size={32} />
@@ -451,6 +464,25 @@ const Courses: React.FC = () => {
                 <p className="text-xs text-gray-400 mt-1 max-w-sm">
                   Try adjusting your search criteria or program level filter.
                 </p>
+              </div>
+            )}
+            {coursesLoadFailed && (
+              <div className="col-span-full py-20 text-center flex flex-col items-center justify-center">
+                <div className="w-16 h-16 bg-red-50 dark:bg-red-950/20 rounded-2xl flex items-center justify-center text-red-400 mb-4">
+                  <AlertTriangle size={32} />
+                </div>
+                <h3 className="text-base font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                  Could not load courses
+                </h3>
+                <p className="text-xs text-gray-400 mt-1 max-w-sm">
+                  The server could not be reached or your session expired. Your data is safe — try again or log in afresh.
+                </p>
+                <button
+                  onClick={() => refetchCourses()}
+                  className="mt-4 flex items-center gap-1.5 px-4 py-2 bg-[#4B0082] text-white hover:bg-black transition-all font-bold text-[10px] uppercase tracking-wider rounded-lg shadow-md cursor-pointer"
+                >
+                  <RefreshCw size={12} /> Retry
+                </button>
               </div>
             )}
           </div>
@@ -529,9 +561,26 @@ const Courses: React.FC = () => {
                     </div>
                   </div>
                 ))}
-                {filteredCourses.length === 0 && (
+                {filteredCourses.length === 0 && !coursesLoadFailed && (
                   <div className="py-20 text-center text-gray-400 font-bold uppercase tracking-widest text-xs">
                     No curriculum modules found
+                  </div>
+                )}
+                {coursesLoadFailed && (
+                  <div className="py-20 text-center flex flex-col items-center justify-center">
+                    <AlertTriangle size={32} className="mb-3 text-red-400" />
+                    <p className="font-bold uppercase tracking-widest text-xs text-gray-500">
+                      Could not load courses
+                    </p>
+                    <p className="text-[10px] text-gray-400 mt-1 font-medium normal-case tracking-normal">
+                      The server could not be reached or your session expired. Your data is safe.
+                    </p>
+                    <button
+                      onClick={() => refetchCourses()}
+                      className="mt-4 flex items-center gap-1.5 px-4 py-2 bg-[#4B0082] text-white hover:bg-black transition-all font-bold text-[10px] uppercase tracking-wider rounded-lg shadow-md cursor-pointer"
+                    >
+                      <RefreshCw size={12} /> Retry
+                    </button>
                   </div>
                 )}
               </div>

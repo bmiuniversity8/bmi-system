@@ -28,11 +28,26 @@ export async function handleCatalogDepartments(request: Request, env: Env): Prom
 export async function handleCatalogPrograms(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const deptId = url.searchParams.get('deptId') || url.searchParams.get('department_id');
-  const level = url.searchParams.get('level');
+  let level = url.searchParams.get('level');
+  // Accept legacy UI aliases ('bachelor'/'master') and match canonical rows too:
+  // rows may predate the taxonomy backfill, so match either spelling.
+  let levelValues: string[] | null = null;
+  if (level) {
+    const v = level.trim().toLowerCase();
+    const canonical =
+      v === 'bachelor' || v === 'bachelors' || v === 'undergraduate' ? 'undergraduate'
+      : v === 'master' || v === 'masters' || v === 'graduate' || v === 'postgraduate' ? 'graduate'
+      : v;
+    const legacy =
+      canonical === 'undergraduate' ? 'bachelor'
+      : canonical === 'graduate' ? 'master'
+      : null;
+    levelValues = legacy ? [canonical, legacy] : [canonical];
+  }
   let query = `SELECT id, name, code, degree_type, level, department_id, duration_years, total_credit_hours, mode_of_study, description, icon, is_active FROM programs WHERE is_active=1`;
   const bindings: unknown[] = [];
   if (deptId) { query += ` AND department_id = ?`; bindings.push(deptId); }
-  if (level)  { query += ` AND level = ?`; bindings.push(level); }
+  if (levelValues) { query += ` AND level IN (${levelValues.map(() => '?').join(', ')})`; bindings.push(...levelValues); }
   query += ` ORDER BY name`;
   const { results } = await env.PLATFORM_CONTEXT!.db.prepare(query).bind(...bindings).all();
   return ok(results);

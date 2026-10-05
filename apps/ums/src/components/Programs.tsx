@@ -16,6 +16,8 @@ import {
   Download,
   X,
   CheckCircle2,
+  AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 import { Program, Faculty, Department } from "../types";
 import { getPrograms, getFaculties, getDepartments, createProgram, updateProgram, deleteProgram } from "../services/programService";
@@ -74,6 +76,9 @@ const Programs: React.FC = () => {
   const [faculties, setFaculties] = useState<Faculty[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
+  // Distinct from "loaded but empty": a failed fetch must not masquerade as
+  // "No programs found", otherwise outages look like wiped data.
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Filters
   const [searchTerm, setSearchTerm] = useState("");
@@ -82,26 +87,38 @@ const Programs: React.FC = () => {
   const [activeLevel, setActiveLevel] = useState<string>("All");
 
   // Load programs, faculties, and departments
-  useEffect(() => {
-    async function loadData() {
-      setLoading(true);
-      try {
-        const [progRes, facRes, deptRes] = await Promise.all([
-          getPrograms(),
-          getFaculties(),
-          getDepartments(),
-        ]);
+  async function loadData() {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const [progRes, facRes, deptRes] = await Promise.all([
+        getPrograms(),
+        getFaculties(),
+        getDepartments(),
+      ]);
 
-        if (progRes.success && progRes.data) setPrograms(progRes.data);
-        if (facRes.success && facRes.data) setFaculties(facRes.data);
-        if (deptRes.success && deptRes.data) setDepartments(deptRes.data);
-      } catch (error) { // eslint-disable-next-line no-console
-        console.error("Failed to load academic catalog", error);
-       } finally {
-        setLoading(false);
+      if (progRes.success && progRes.data) {
+        setPrograms(progRes.data);
+      } else {
+        throw new Error(
+          typeof progRes.error === 'string'
+            ? progRes.error
+            : (progRes.error as { message?: string } | undefined)?.message || 'Failed to load programs',
+        );
       }
+      if (facRes.success && facRes.data) setFaculties(facRes.data);
+      if (deptRes.success && deptRes.data) setDepartments(deptRes.data);
+    } catch (error) { // eslint-disable-next-line no-console
+      console.error("Failed to load academic catalog", error);
+      setLoadError(error instanceof Error ? error.message : 'Failed to load academic catalog');
+    } finally {
+      setLoading(false);
     }
+  }
+
+  useEffect(() => {
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
 // Normalize diverse level formats (undergraduate/bachelor, postgraduate/master, doctoral/doctorate, certificate, diploma)
@@ -516,7 +533,7 @@ const normalizeProgramLevel = (p: Partial<Program>): keyof typeof LEVEL_CONFIG =
           );
         })}
 
-        {filteredPrograms.length === 0 && (
+        {filteredPrograms.length === 0 && !loadError && (
           <div className="py-24 flex flex-col items-center justify-center text-gray-400">
             <GraduationCap size={64} className="mb-4 opacity-20 text-[#4B0082]" />
             <h4 className="font-black uppercase tracking-widest text-base">
@@ -525,6 +542,24 @@ const normalizeProgramLevel = (p: Partial<Program>): keyof typeof LEVEL_CONFIG =
             <p className="text-xs text-gray-500 mt-2 font-medium">
               Try adjusting your search criteria or catalog filters.
             </p>
+          </div>
+        )}
+
+        {loadError && (
+          <div className="py-24 flex flex-col items-center justify-center text-gray-400">
+            <AlertTriangle size={56} className="mb-4 text-red-400" />
+            <h4 className="font-black uppercase tracking-widest text-base text-gray-600 dark:text-gray-300">
+              Could not load programs
+            </h4>
+            <p className="text-xs text-gray-500 mt-2 font-medium max-w-sm text-center">
+              {loadError}. Your data is safe — the server could not be reached or your session expired.
+            </p>
+            <button
+              onClick={() => loadData()}
+              className="mt-5 flex items-center gap-1.5 px-4 py-2 bg-[#4B0082] text-white hover:bg-black transition-all font-bold text-[10px] uppercase tracking-wider rounded-lg shadow-md cursor-pointer"
+            >
+              <RefreshCw size={12} /> Retry
+            </button>
           </div>
         )}
       </div>

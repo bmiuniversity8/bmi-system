@@ -115,6 +115,17 @@ export async function handleUpdateCourse(request: Request, env: Env, courseId: s
 
 // ─── create / update / delete program (admin writes — UI calls these) ─────
 
+// Canonical programs.level values (see packages/shared VALID_LEVELS + all seeds).
+// Legacy UI forms submit 'bachelor' / 'master'; normalize on write so the DB
+// never drifts from the canonical taxonomy (readers tolerate both spellings,
+// but filters, seat maps and reports assume canonical values).
+function normalizeProgramLevelInput(raw: unknown): string {
+  const v = String(raw ?? '').trim().toLowerCase();
+  if (v === 'bachelor' || v === 'bachelors' || v === 'undergrad' || v === 'ug') return 'undergraduate';
+  if (v === 'master' || v === 'masters' || v === 'postgraduate' || v === 'grad' || v === 'pg') return 'graduate';
+  return v;
+}
+
 export async function handleCreateProgram(request: Request, env: Env): Promise<Response> {
   const body = await request.json() as Record<string, unknown>;
   const name = String(body.name || '').trim();
@@ -122,14 +133,16 @@ export async function handleCreateProgram(request: Request, env: Env): Promise<R
   if (!name || !code) return error('name and code are required', 400);
   const id = String(body.id || crypto.randomUUID());
   const department_id = (body.department_id as string) || (body as any).departmentId || null;
+  const level = normalizeProgramLevelInput((body.level as string) || (body.degree_type as string) || 'undergraduate') || 'undergraduate';
+  const degreeType = String((body.degree_type as string) || level);
   try {
     await env.PLATFORM_CONTEXT!.db.prepare(
       `INSERT INTO programs (id, name, code, degree_type, level, department_id, duration_years, total_credit_hours, mode_of_study, is_active)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`
     ).bind(
       id, name, code,
-      (body.degree_type as string) || (body.level as string) || 'bachelor',
-      (body.level as string) || 'bachelor',
+      degreeType,
+      level,
       department_id,
       Number((body as any).duration_years ?? 4),
       Number((body as any).total_credit_hours ?? 120),
@@ -150,6 +163,10 @@ export async function handleUpdateProgram(request: Request, env: Env, programId:
   const allowed = ['name', 'code', 'degree_type', 'level', 'department_id', 'duration_years', 'total_credit_hours', 'mode_of_study', 'description', 'is_active'];
   const updates: string[] = [];
   const vals: unknown[] = [];
+  // Normalize legacy level aliases on write (see normalizeProgramLevelInput).
+  if (typeof (body as any).level === 'string') {
+    (body as any).level = normalizeProgramLevelInput((body as any).level) || (body as any).level;
+  }
   for (const key of allowed) {
     if ((body as any)[key] !== undefined) { updates.push(`${key} = ?`); vals.push((body as any)[key]); }
   }
