@@ -21,10 +21,16 @@ export async function handleListUmsCourses(request: Request, env: Env): Promise<
 
   const search = url.searchParams.get('search') || '';
   const departmentId = url.searchParams.get('department_id') || '';
+  const noCache = url.searchParams.get('no_cache') === '1';
   const cacheKey = `catalog:courses:p${page}:pp${perPage}:s_${search}:d_${departmentId}`;
 
+  // Force-bust the cache for this key family when requested (e.g. after seeding)
+  if (noCache) {
+    await invalidateCachePrefix(env.PLATFORM_CONTEXT?.kv, 'catalog:courses:');
+  }
+
   const { data, hit } = await cacheAside(
-    env.PLATFORM_CONTEXT?.kv,
+    noCache ? null : env.PLATFORM_CONTEXT?.kv,
     cacheKey,
     async () => {
       const filters: string[] = [];
@@ -190,10 +196,15 @@ export async function handleDeleteCourse(_request: Request, env: Env, courseId: 
 export async function handleListPrograms(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const { page, perPage, offset } = paginate(url);
+  const noCache = url.searchParams.get('no_cache') === '1';
   const cacheKey = `catalog:programs:p${page}:pp${perPage}`;
 
+  if (noCache) {
+    await invalidateCachePrefix(env.PLATFORM_CONTEXT?.kv, 'catalog:programs');
+  }
+
   const { data, hit } = await cacheAside(
-    env.PLATFORM_CONTEXT?.kv,
+    noCache ? null : env.PLATFORM_CONTEXT?.kv,
     cacheKey,
     async () => {
       const rows = await env.PLATFORM_CONTEXT!.db.prepare(

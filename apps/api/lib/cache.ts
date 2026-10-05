@@ -51,7 +51,17 @@ export async function cacheAside<T>(
   const data = await fetcher();
 
   try {
-    if (data !== undefined && data !== null) {
+    // Do not cache empty results (empty arrays, or paginated objects with 0 total
+    // or empty items array). This prevents a cold-start or pre-seed empty response
+    // from being served stale for the entire TTL window after data is populated.
+    const isEmptyArray = Array.isArray(data) && data.length === 0;
+    const isEmptyPage = (() => {
+      if (data === null || typeof data !== 'object' || Array.isArray(data)) return false;
+      const d = data as unknown as { items?: unknown[] };
+      return Array.isArray(d.items) && d.items.length === 0;
+    })();
+
+    if (data !== undefined && data !== null && !isEmptyArray && !isEmptyPage) {
       await kv.put(key, JSON.stringify(data), { expirationTtl: ttlSeconds });
     }
   } catch {
