@@ -15,7 +15,8 @@ import {
   FolderOpen,
   ShieldCheck,
   FilePlus,
-  Filter
+  Filter,
+  ExternalLink,
 } from "lucide-react";
 import { listDocuments, downloadDocument, uploadDocument, updateDocumentVerification, type Document } from "../services/adminDocumentService";
 import { usePagination } from "../hooks/usePagination";
@@ -87,7 +88,10 @@ const AdminDocuments: React.FC = () => {
       if (!response.ok) {
         throw new Error(`Server returned ${response.status}`);
       }
-      const blob = await response.blob();
+      const rawBlob = await response.blob();
+      const isPdfDoc = doc.file_name.toLowerCase().endsWith('.pdf') || doc.mime_type === 'application/pdf';
+      const resolvedMime = isPdfDoc ? 'application/pdf' : (doc.mime_type || rawBlob.type || 'application/octet-stream');
+      const blob = rawBlob.type === resolvedMime ? rawBlob : new Blob([rawBlob], { type: resolvedMime });
       const objectUrl = URL.createObjectURL(blob);
       setViewingDocUrl(objectUrl);
     } catch {
@@ -504,30 +508,84 @@ const AdminDocuments: React.FC = () => {
                   </p>
                 </div>
               </div>
-              <button
-                onClick={closePreview}
-                className="p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full transition-colors ml-4"
-              >
-                <X size={20} />
-              </button>
+              <div className="flex items-center gap-2 ml-4">
+                {viewingDocUrl && (
+                  <a
+                    href={viewingDocUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="p-2 text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-gray-800 rounded-lg transition-colors inline-flex items-center gap-1.5 text-xs font-semibold"
+                    title="Open in new tab"
+                  >
+                    <ExternalLink size={16} />
+                    <span className="hidden sm:inline">Open in Tab</span>
+                  </a>
+                )}
+                <button
+                  onClick={closePreview}
+                  className="p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full transition-colors text-gray-500 hover:text-gray-900 dark:hover:text-white"
+                  title="Close"
+                >
+                  <X size={20} />
+                </button>
+              </div>
             </div>
 
-            <div className="flex-1 bg-gray-100 dark:bg-gray-950 relative flex items-center justify-center p-4 overflow-hidden">
+            <div className="flex-1 bg-gray-100 dark:bg-gray-950 relative flex items-center justify-center p-2 sm:p-4 overflow-hidden">
               {isPreviewLoading ? (
                 <div className="flex flex-col items-center gap-3">
                   <div className="w-10 h-10 border-4 border-gray-200 border-t-[#FFD700] rounded-full animate-spin"></div>
                   <p className="text-xs font-bold text-gray-500">Decrypting & loading document...</p>
                 </div>
               ) : viewingDocUrl ? (
-                <img
-                  src={viewingDocUrl}
-                  alt={viewingDoc.file_name}
-                  className="max-h-full max-w-full object-contain shadow-lg rounded"
-                />
+                (() => {
+                  const isPdf = viewingDoc.file_name.toLowerCase().endsWith('.pdf') || viewingDoc.mime_type === 'application/pdf';
+                  const isImage = !isPdf && (
+                    ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml'].includes(viewingDoc.mime_type || '') ||
+                    /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(viewingDoc.file_name)
+                  );
+
+                  if (isPdf) {
+                    return (
+                      <iframe
+                        src={`${viewingDocUrl}#toolbar=1`}
+                        title={viewingDoc.file_name}
+                        className="w-full h-full border-0 rounded-lg shadow-sm bg-white"
+                      />
+                    );
+                  }
+
+                  if (isImage) {
+                    return (
+                      <img
+                        src={viewingDocUrl}
+                        alt={viewingDoc.file_name}
+                        className="max-h-full max-w-full object-contain shadow-lg rounded"
+                      />
+                    );
+                  }
+
+                  return (
+                    <div className="text-center p-8 max-w-md bg-white dark:bg-gray-900 rounded-xl shadow-lg border border-gray-200 dark:border-gray-800">
+                      <FileText size={48} className="mx-auto mb-3 text-[#2E004F] dark:text-[#FFD700]" />
+                      <h4 className="font-bold text-base text-gray-900 dark:text-white mb-1">{viewingDoc.file_name}</h4>
+                      <p className="text-xs text-gray-500 mb-4">
+                        This document type cannot be displayed directly inside the browser. You can download it to view.
+                      </p>
+                      <button
+                        onClick={() => handleDownload(viewingDoc.id)}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-[#2E004F] text-[#FFD700] hover:bg-purple-950 text-xs font-bold uppercase rounded-lg shadow-sm"
+                      >
+                        <Download size={14} /> Download File
+                      </button>
+                    </div>
+                  );
+                })()
               ) : (
                 <div className="text-center p-6 text-gray-500">
                   <AlertCircle size={36} className="mx-auto mb-2 text-rose-500" />
-                  <p className="font-bold text-sm">Preview unavailable for this document type.</p>
+                  <p className="font-bold text-sm">Preview unavailable for this document.</p>
+                  <p className="text-xs text-gray-400 mt-1">Try downloading the file directly below.</p>
                 </div>
               )}
             </div>
