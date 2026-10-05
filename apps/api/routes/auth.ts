@@ -567,13 +567,16 @@ export async function handleMe(request: Request, env: Env, userId: string): Prom
     role: users.role,
     created_at: users.created_at,
     is_verified: users.is_verified,
+    session_version: users.session_version,
   }).from(users).where(eq(users.id, ctx.userId)).execute())[0];
 
   if (!user) return error('User not found', 404);
 
+  const token = await signJWT({ sub: user.id, email: user.email, role: user.role, sv: user.session_version ?? 1 }, env.JWT_SECRET);
   const csrfToken = generateCsrfToken();
-  const response = ok({ ...user, csrf_token: csrfToken });
+  const response = ok({ ...user, token, csrf_token: csrfToken });
   const headers = new Headers(response.headers);
+  headers.append('Set-Cookie', `bmi_token=${token}; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=${60 * 60 * 24 * 7}`);
   headers.append('Set-Cookie', `csrf_token=${csrfToken}; Path=/; Secure; SameSite=None; Max-Age=${60 * 60 * 24 * 7}`);
   headers.append('X-Trace-Id', ctx.traceId);
 

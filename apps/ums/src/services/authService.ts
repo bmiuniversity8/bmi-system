@@ -40,13 +40,48 @@ export interface AuthResponse {
 const USER_KEY = 'bmi_user';
 const REMEMBER_KEY = 'bmi_remember_me';
 const TOKEN_EXPIRY_KEY = 'bmi_token_expiry';
+const JWT_KEY = 'bmi_jwt_token';
+const UMS_AUTH_KEY = 'bmi_ums_auth_token';
+
+function getStoredJwt(): string | null {
+  try {
+    return (typeof window !== 'undefined')
+      ? (sessionStorage.getItem(JWT_KEY)
+        || sessionStorage.getItem(UMS_AUTH_KEY)
+        || localStorage.getItem(JWT_KEY)
+        || null)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function setStoredJwt(token: string | null, rememberMe: boolean = false): void {
+  _jwtToken = token;
+  try {
+    if (typeof window === 'undefined') return;
+    if (token) {
+      sessionStorage.setItem(JWT_KEY, token);
+      sessionStorage.setItem(UMS_AUTH_KEY, token);
+      if (rememberMe) {
+        localStorage.setItem(JWT_KEY, token);
+      }
+    } else {
+      sessionStorage.removeItem(JWT_KEY);
+      sessionStorage.removeItem(UMS_AUTH_KEY);
+      localStorage.removeItem(JWT_KEY);
+    }
+  } catch {
+    // Ignore storage quota / security exceptions
+  }
+}
 
 // CSRF token stored in memory only — sent as X-CSRF-Token on state-changing requests
 let _memoryToken: string | null = null;
 
-// JWT bearer token stored in memory — sent as Authorization: Bearer on all authenticated requests
+// JWT bearer token initialized from storage — sent as Authorization: Bearer on all authenticated requests
 // This handles cross-origin Pages deployments where SameSite=None cookies may be blocked
-let _jwtToken: string | null = null;
+let _jwtToken: string | null = getStoredJwt();
 
 // Session timeout constants
 const TOKEN_EXPIRY_BUFFER_MS = 5 * 60 * 1000;  // 5 minute buffer before expiry
@@ -136,7 +171,8 @@ export async function login(email: string, password: string, rememberMe: boolean
       const expiryTime = Date.now() + (7 * 24 * 60 * 60 * 1000); // 7 days (matches backend cookie)
       localStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.toString());
       _memoryToken = data.data?.csrf_token || data.csrf_token; // Store CSRF token in memory
-      _jwtToken = data.data?.token || data.token || null; // Store JWT bearer token
+      const jwt = data.data?.token || data.token || null;
+      setStoredJwt(jwt, rememberMe);
 
       // eslint-disable-next-line no-console
       console.log('[authService] Returning success with user role:', user.role);
@@ -188,7 +224,7 @@ export async function logout(): Promise<void> {
   } finally {
     // Clear memory token
     _memoryToken = null;
-    _jwtToken = null;
+    setStoredJwt(null);
     // Clear localStorage
     localStorage.removeItem(USER_KEY);
     localStorage.removeItem(TOKEN_EXPIRY_KEY);
@@ -268,15 +304,27 @@ export function isAuthenticated(): boolean {
  */
 export async function refreshAccessToken(): Promise<string | null> {
   try {
+    const existingJwt = getStoredJwt();
+    const headers: Record<string, string> = {};
+    if (existingJwt) {
+      headers['Authorization'] = `Bearer ${existingJwt}`;
+    }
     const response = await fetchWithTimeout(
       `${API_URL.replace('/v1', '')}/auth/me`,
-      { method: 'GET' },
+      { method: 'GET', headers },
       5000,
     );
     if (!response.ok) return null;
     const data = await response.json();
-    if (data.success && data.data?.csrf_token) {
-      _memoryToken = data.data.csrf_token;
+    if (data.success) {
+      if (data.data?.csrf_token || data.csrf_token) {
+        _memoryToken = data.data?.csrf_token || data.csrf_token;
+      }
+      const refreshedJwt = data.data?.token || data.token;
+      if (refreshedJwt) {
+        setStoredJwt(refreshedJwt, wasRememberMeSelected());
+        return refreshedJwt;
+      }
       return _memoryToken;
     }
     return null;
@@ -288,9 +336,10 @@ export async function refreshAccessToken(): Promise<string | null> {
 /**
  * Fetch with authentication and automatic retry on 401 (Token Refresh)
  */
-export async function authFetch(url: string, options: RequestInit = {}, timeoutMs: number = 5000): Promise<Response> {
+export async function authFetch(url: string, options: RequestInit = {}, timeoutMs: number = 8000): Promise<Response> {
   const csrfToken = _memoryToken;
   const isFormData = options.body instanceof FormData;
+  const activeJwt = _jwtToken || getStoredJwt();
 
   const headers: Record<string, string> = {
     // Don't force JSON when the caller is sending multipart FormData (authFetch must not
@@ -299,7 +348,7 @@ export async function authFetch(url: string, options: RequestInit = {}, timeoutM
     ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
     // Send JWT as Authorization header so cross-origin Pages requests authenticate
     // even when the SameSite=None cookie doesn't flow correctly
-    ...(_jwtToken ? { 'Authorization': `Bearer ${_jwtToken}` } : {}),
+    ...(activeJwt ? { 'Authorization': `Bearer ${activeJwt}` } : {}),
     ...(options.headers as Record<string, string>),
   };
 
@@ -410,6 +459,12 @@ export async function verifySession(): Promise<boolean> {
       localStorage.setItem(USER_KEY, JSON.stringify(user));
       if (data.csrf_token || data.data?.csrf_token) {
         _memoryToken = data.data?.csrf_token || data.csrf_token;
+      }
+      const refreshedJwt = data.token || data.data?.token;
+      if (refreshedJwt) {
+        setStoredJwt(refreshedJwt, wasRememberMeSelected());
+      } else if (!_jwtToken) {
+        _jwtToken = getStoredJwt();
       }
       return true;
     }
