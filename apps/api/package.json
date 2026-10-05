@@ -18,6 +18,7 @@
     "db:push:hr": "drizzle-kit push --config drizzle-hr.config.ts",
     "db:push:library": "drizzle-kit push --config drizzle-library.config.ts",
     "db:migrate-to-neon": "tsx scripts/migrate-d1-to-neon.ts",
+    "db:normalize-taxonomy": "tsx scripts/normalize-taxonomy.ts",
     "db:verify-migration": "tsx scripts/verify-data-migration.ts",
     "type-check": "tsc --noEmit",
     "secrets:set": "node ../../scripts/upload-worker-secrets.mjs",
