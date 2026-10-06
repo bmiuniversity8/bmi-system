@@ -425,16 +425,16 @@ export default function Status() {
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
                   <div style={{ background: 'white', padding: '0.75rem 1rem', borderRadius: 8, border: '1px solid #bbf7d0' }}>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Permanent System UID</span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Registration Number</span>
                     <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--navy)', fontFamily: 'monospace', marginTop: '0.25rem' }}>
-                      {provisioningData?.uid || user?.id || 'BMI-ISSUED'}
+                      {provisioningData?.regNo || 'Pending Issuance'}
                     </div>
                   </div>
 
                   <div style={{ background: 'white', padding: '0.75rem 1rem', borderRadius: 8, border: '1px solid #bbf7d0' }}>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Registration Number</span>
-                    <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--navy)', fontFamily: 'monospace', marginTop: '0.25rem' }}>
-                      {provisioningData?.regNo || 'REG-PENDING'}
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Enrolment Status</span>
+                    <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#166534', marginTop: '0.25rem' }}>
+                      {provisioningData?.status === 'ready' ? 'Active / Provisioned' : 'In Progress'}
                     </div>
                   </div>
 

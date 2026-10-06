@@ -58,7 +58,7 @@ export function StudentSidebar({ user }: StudentSidebarProps) {
               {user?.first_name ? `${user.first_name} ${user.last_name || ''}` : 'Student Account'}
             </div>
             <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
-              UID: {user?.uid || 'STD-2026-ACTIVE'}
+              Reg No: {user?.reg_no || user?.registration_number || 'Pending Issuance'}
             </div>
           </div>
         </div>

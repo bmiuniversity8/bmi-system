@@ -45,11 +45,12 @@ export default function Documents() {
   const rawLastName = authUser?.last_name || dashboardData?.user?.last_name || dashboardData?.last_name || '';
   const studentName = (rawFirstName || rawLastName) ? `${rawFirstName} ${rawLastName}`.trim() : (authUser?.email ? authUser.email.split('@')[0] : 'Enrolled Student');
   const programName = dashboardData?.program_name || dashboardData?.user?.program_name || 'Bachelor of Science in Biblical Studies';
-  const studentIdNumber = (dashboardData?.id || authUser?.id || 'STD-2026-8801').substring(0, 12).toUpperCase();
   const regNo = dashboardData?.reg_no || dashboardData?.user?.reg_no || 'BMI/UG-CS/226/001';
+  // studentIdNumber is the official registration number shown to students — the internal UID is never exposed
+  const studentIdNumber = regNo;
   const termName = 'Fall Academic Term 2026';
   const currentDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-  const verificationCode = `BMI-VER-${studentIdNumber.slice(-4)}${Math.floor(1000 + Math.random() * 9000)}`;
+  const verificationCode = `BMI-VER-${regNo.replace(/[^A-Z0-9]/gi, '').slice(-6).toUpperCase()}`;
 
   return (
     <div style={{ maxWidth: 1140, margin: '0 auto', paddingBottom: '3rem' }}>
@@ -214,7 +215,7 @@ export default function Documents() {
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '0.2rem 0.5rem', marginTop: '0.35rem', fontSize: '0.75rem' }}>
-                      <span style={{ color: '#94a3b8', fontWeight: 600 }}>UID:</span>
+                      <span style={{ color: '#94a3b8', fontWeight: 600 }}>Student ID:</span>
                       <strong style={{ color: 'var(--gold)', fontFamily: 'monospace' }}>{studentIdNumber}</strong>
 
                       <span style={{ color: '#94a3b8', fontWeight: 600 }}>Reg No:</span>
@@ -478,7 +479,7 @@ export default function Documents() {
 
                 <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '1rem 1.25rem', marginBottom: '1.5rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', fontSize: '0.85rem' }}>
                   <div><strong>Student Name:</strong> {studentName}</div>
-                  <div><strong>Student ID (UID):</strong> {studentIdNumber}</div>
+                  <div><strong>Registration No:</strong> {studentIdNumber}</div>
                   <div><strong>Registration Number:</strong> {regNo}</div>
                   <div><strong>Admitted Program:</strong> {programName}</div>
                   <div><strong>Academic Level:</strong> Undergraduate / Degree</div>
@@ -546,7 +547,7 @@ export default function Documents() {
 
                 <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '1rem', marginBottom: '1.25rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', fontSize: '0.85rem' }}>
                   <div><strong>Student:</strong> {studentName}</div>
-                  <div><strong>UID:</strong> {studentIdNumber}</div>
+                  <div><strong>Reg No:</strong> {studentIdNumber}</div>
                   <div><strong>Registration:</strong> {regNo}</div>
                   <div><strong>Cumulative GPA:</strong> 3.85 / 4.00</div>
                 </div>

@@ -209,12 +209,13 @@ export async function acceptOfferAndProvision(
   document?: IDocumentGenerator
 ): Promise<{ success: boolean; provisioningResult: OrchestratorResult }> {
   const app = await db.prepare(
-    `SELECT a.id, a.user_id, a.program, a.degree_level, a.status
+    `SELECT a.id, a.user_id, a.program, a.program_id, a.degree_level, a.status
      FROM applications a WHERE a.id = ? AND a.user_id = ?`
   ).bind(params.applicationId, params.userId).first<{
     id: string;
     user_id: string;
     program: string;
+    program_id?: string | null;
     degree_level: string;
     status: string;
   }>();
@@ -265,6 +266,7 @@ export async function acceptOfferAndProvision(
       applicationId: params.applicationId,
       actorId: params.userId,
       programName: app.program,
+      programId: app.program_id || undefined,
     },
     document
   );

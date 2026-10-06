@@ -217,6 +217,10 @@ async function executeJob(env: Env, job: ProvisioningJob): Promise<void> {
       const period1Installment = tuitionInfo.installments[0] || { amount_base: 89, period_number: 1 };
       const invoiceDesc = `Tuition Installment (Period ${period1Installment.period_number}) — ${studentRow.program || 'Academic Program'}`;
 
+      const activeTerm = await ctx.db.prepare(
+        `SELECT id, academic_year FROM academic_terms WHERE status IN ('active', 'registration') ORDER BY start_date DESC LIMIT 1`
+      ).first<{ id: string; academic_year: string }>().catch(() => null);
+
       const createdInv = await createInvoice(ctx.db, {
         studentId: studentRow.user_id,
         uid,
@@ -224,6 +228,8 @@ async function executeJob(env: Env, job: ProvisioningJob): Promise<void> {
         degreeLevel: tuitionInfo.feeItem.degree_level || 'undergraduate',
         feeScheduleId: tuitionInfo.feeItem.fee_schedule_id,
         periodNumber: period1Installment.period_number,
+        termId: activeTerm?.id || undefined,
+        academicYear: activeTerm?.academic_year || undefined,
         lines: [
           {
             feeItemId: tuitionInfo.feeItem.id,

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api';
 import ScheduleVisualizer from './ScheduleVisualizer';
 import type { ScheduleConflict } from './ScheduleVisualizer';
@@ -46,12 +46,14 @@ interface CourseItem {
 
 export default function RegistrationWizard() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [currentStep, setCurrentStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [checkingEligibility, setCheckingEligibility] = useState(true);
   const [eligibility, setEligibility] = useState<EligibilityState | null>(null);
   const [error, setError] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
   const [completed, setCompleted] = useState(false);
   const [hasScheduleConflict, setHasScheduleConflict] = useState(false);
   const [scheduleConflicts, setScheduleConflicts] = useState<ScheduleConflict[]>([]);
@@ -60,6 +62,30 @@ export default function RegistrationWizard() {
     setHasScheduleConflict(conflict);
     setScheduleConflicts(conflictsList);
   }, []);
+
+  // Detect and verify return from Paystack checkout (?reference= or ?trxref=)
+  useEffect(() => {
+    const ref = searchParams.get('reference') || searchParams.get('trxref');
+    if (!ref) return;
+    (async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const verifyRes = await api.payments.verify(ref);
+        if (verifyRes?.verified || verifyRes?.status === 'success' || (verifyRes as any)?.status === 'succeeded') {
+          setAcceptedFeeStructure(true);
+          setCurrentStep(3);
+          setSuccessMsg('✅ Tuition payment verified successfully via Paystack! You may now review and proceed to Step 5 (Terms of Enrollment).');
+        } else {
+          setError('Payment was not completed or could not be verified by the gateway.');
+        }
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Failed to verify return payment with the gateway.');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [searchParams]);
 
   // Form State
   const [profile, setProfile] = useState<PersonalDetails>({
@@ -140,10 +166,14 @@ export default function RegistrationWizard() {
         // Do NOT auto-select courses: mandatory enrolment must come from the
         // canonical curriculum endpoint (POST /student/enroll/mandatory), and
         // electives require explicit student choice with section selection.
-        // Attempt mandatory auto-enrol in the background (best-effort).
-        try {
-          await (api.student as any).autoEnrollMandatory?.()?.catch?.(() => null);
-        } catch { /* endpoint may not exist in older mocks — non-fatal */ }
+        // Attempt mandatory auto-enrol in the background only if course_selection hold is active.
+        const hasCourseHold = eligRes?.activeHolds?.some((h: any) => h.hold_type === 'course_selection') ||
+                              (eligRes as any)?.unresolved_holds?.some((h: any) => h.hold_type === 'course_selection');
+        if (hasCourseHold) {
+          try {
+            await (api.student as any).autoEnrollMandatory?.()?.catch?.(() => null);
+          } catch { /* endpoint may not exist in older mocks — non-fatal */ }
+        }
       }
     } catch (err: unknown) {
       console.warn('Initial data load warning:', err);
@@ -437,6 +467,11 @@ export default function RegistrationWizard() {
         </div>
 
         {error && <div className="alert alert-danger" style={{ marginBottom: '1.5rem' }}>{error}</div>}
+        {successMsg && (
+          <div style={{ marginBottom: '1.5rem', background: '#f0fdf4', border: '1.5px solid #86efac', color: '#166534', padding: '0.85rem 1.25rem', borderRadius: 8, fontSize: '0.9rem', fontWeight: 600 }}>
+            {successMsg}
+          </div>
+        )}
 
         {/* ─── Step Content ─── */}
         <div className="card" style={{ minHeight: 380, padding: '2rem' }}>
@@ -572,52 +607,150 @@ export default function RegistrationWizard() {
                 selectedCourseIds={selectedCourseIds}
                 onConflictDetected={handleConflictDetected}
               />
+
+              {hasScheduleConflict && scheduleConflicts.length > 0 && (
+                <div style={{ marginTop: '1.25rem', padding: '1rem', background: '#fef2f2', border: '1.5px solid #fecaca', borderRadius: 8, color: '#991b1b', fontSize: '0.85rem' }}>
+                  <div style={{ fontWeight: 700, marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    ⚠️ Timetable Conflict Detected ({scheduleConflicts.length})
+                  </div>
+                  <p style={{ margin: '0 0 0.5rem 0', color: '#7f1d1d' }}>
+                    The following course sections overlap. Please adjust your section selections to resolve timetable conflicts before continuing:
+                  </p>
+                  <ul style={{ margin: 0, paddingLeft: '1.25rem' }}>
+                    {scheduleConflicts.map((c, i) => (
+                      <li key={i} style={{ marginBottom: '0.25rem' }}>
+                        <strong>{c.courseA.code}</strong> ({c.courseA.title}) overlaps with <strong>{c.courseB.code}</strong> ({c.courseB.title}) on {c.day} at {c.timeSlot}.
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
 
           {/* Step 3: Financial Aid & Fee Agreement */}
           {currentStep === 3 && (
             <div>
-              <div style={{ background: '#f8fafc', padding: '1.25rem', borderRadius: 8, border: '1px solid var(--border)', marginBottom: '1.5rem' }}>
-                <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem', color: 'var(--navy)' }}>Net Tuition & Financial Aid Breakdown</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.9rem' }}>
+              {/* Tuition Summary Card */}
+              <div style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)', padding: '1.5rem', borderRadius: 10, marginBottom: '1.5rem', color: 'white' }}>
+                <div style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--gold)', marginBottom: '0.5rem' }}>
+                  📋 TUITION STATEMENT — {feeAgreement?.catalog_year_id || 'Academic Year 2026-2027'}
+                </div>
+                <div style={{ fontSize: '0.9rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Gross Program Tuition:</span>
-                    <strong>${feeAgreement?.gross_tuition.toFixed(2) || '1,500.00'}</strong>
+                    <span style={{ color: '#cbd5e1' }}>Programme:</span>
+                    <strong>{feeAgreement?.program_name || 'Enrolled Programme'}</strong>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--success)' }}>
-                    <span>Financial Aid / Scholarship Award:</span>
-                    <strong>-${feeAgreement?.financial_aid_discount.toFixed(2) || '0.00'}</strong>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#cbd5e1' }}>Gross Tuition:</span>
+                    <strong>${feeAgreement?.gross_tuition?.toFixed(2) || '1,500.00'} USD</strong>
                   </div>
-                  <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '0.5rem 0' }} />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.1rem', fontWeight: 800, color: 'var(--navy)' }}>
+                  {(feeAgreement?.financial_aid_discount ?? 0) > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#4ade80' }}>
+                      <span>Financial Aid / Scholarship:</span>
+                      <strong>− ${feeAgreement!.financial_aid_discount.toFixed(2)} USD</strong>
+                    </div>
+                  )}
+                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.15)', marginTop: '0.5rem', paddingTop: '0.5rem', display: 'flex', justifyContent: 'space-between', fontSize: '1.15rem', fontWeight: 900 }}>
                     <span>Net Balance Due:</span>
-                    <span>${feeAgreement?.net_balance_due.toFixed(2) || '1,500.00'}</span>
+                    <span style={{ color: 'var(--gold)' }}>${feeAgreement?.net_balance_due?.toFixed(2) || '1,500.00'} USD</span>
                   </div>
                 </div>
               </div>
 
+              {/* Payment Arrangement */}
               <div style={{ marginBottom: '1.5rem' }}>
-                <label className="form-label">Select Payment Arrangement</label>
+                <label className="form-label" style={{ marginBottom: '0.75rem', display: 'block' }}>
+                  💳 Select Payment Arrangement
+                </label>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   {(feeAgreement?.payment_plans || [
-                    { id: 'full', name: 'Single Full Payment' },
-                    { id: 'installments_2', name: 'Two Installments (50% now, 50% midterm)' },
+                    { id: 'full', name: 'Single Full Payment — Pay entire balance now', discount: '5% Early Payment Discount' },
+                    { id: 'installments_2', name: 'Two Instalments — 50% now, 50% before midterms' },
+                    { id: 'installments_3', name: 'Three Instalments — 33% now, 33% midterm, 34% final' },
                   ]).map(p => (
-                    <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', background: 'white', borderRadius: 6, border: '1px solid var(--border)', cursor: 'pointer' }}>
-                      <input type="radio" name="payment_plan" value={p.id} checked={selectedPlan === p.id} onChange={() => setSelectedPlan(p.id)} />
-                      <span style={{ fontSize: '0.9rem', color: 'var(--navy)', fontWeight: 600 }}>{p.name}</span>
+                    <label key={p.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', padding: '0.75rem 1rem', background: selectedPlan === p.id ? '#eff6ff' : 'white', borderRadius: 8, border: `1.5px solid ${selectedPlan === p.id ? 'var(--gold)' : 'var(--border)'}`, cursor: 'pointer', transition: 'all 0.15s' }}>
+                      <input type="radio" name="payment_plan" value={p.id} checked={selectedPlan === p.id} onChange={() => setSelectedPlan(p.id)} style={{ marginTop: 2 }} />
+                      <div>
+                        <div style={{ fontSize: '0.9rem', color: 'var(--navy)', fontWeight: 600 }}>{p.name}</div>
+                        {(p as any).discount && <div style={{ fontSize: '0.75rem', color: 'var(--success)', fontWeight: 600 }}>✓ {(p as any).discount}</div>}
+                      </div>
                     </label>
                   ))}
                 </div>
               </div>
 
-              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', cursor: 'pointer' }}>
+              {/* Pay Now CTA */}
+              {!acceptedFeeStructure && (
+                <div style={{ background: '#fffbeb', border: '1.5px solid var(--gold)', borderRadius: 10, padding: '1.25rem', marginBottom: '1.25rem' }}>
+                  <div style={{ fontWeight: 700, color: 'var(--navy)', marginBottom: '0.5rem', fontSize: '0.95rem' }}>
+                    ⚡ Action Required: Pay Your First Instalment to Proceed
+                  </div>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+                    Secure your place by completing your initial tuition payment. You will be redirected to Paystack's secure payment gateway.
+                    After a successful payment you will be automatically returned here to continue.
+                  </p>
+                  <button
+                    id="btn-pay-now"
+                    className="btn btn-gold"
+                    style={{ width: '100%', fontWeight: 800, fontSize: '1rem', letterSpacing: '0.02em' }}
+                    disabled={loading}
+                    onClick={async () => {
+                      setLoading(true);
+                      setError('');
+                      try {
+                        const firstInstalment = feeAgreement?.net_balance_due
+                          ? (selectedPlan === 'full' ? feeAgreement.net_balance_due
+                            : selectedPlan === 'installments_2' ? Math.ceil(feeAgreement.net_balance_due * 0.5 * 100) / 100
+                            : Math.ceil(feeAgreement.net_balance_due * 0.334 * 100) / 100)
+                          : 500;
+                        const intent = await api.payments.createIntent({
+                          amount: firstInstalment,
+                          reason: `Tuition — ${feeAgreement?.program_name || 'BMI Programme'} (${selectedPlan})`,
+                          purpose: 'tuition',
+                          currency: 'USD',
+                        });
+                        if (intent?.authorizationUrl) {
+                          window.location.href = intent.authorizationUrl;
+                        } else {
+                          throw new Error('Payment gateway did not return a redirect URL. Please contact the bursar\'s office.');
+                        }
+                      } catch (err: unknown) {
+                        setError(err instanceof Error ? err.message : 'Payment initiation failed. Please try again.');
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                  >
+                    {loading ? '⏳ Initiating Payment...' : `💳 Pay Now via Paystack — $${
+                      feeAgreement?.net_balance_due
+                        ? (selectedPlan === 'full' ? feeAgreement.net_balance_due.toFixed(2)
+                          : selectedPlan === 'installments_2' ? (feeAgreement.net_balance_due * 0.5).toFixed(2)
+                          : (feeAgreement.net_balance_due * 0.334).toFixed(2))
+                        : '500.00'
+                    } USD`}
+                  </button>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.6rem', textAlign: 'center' }}>
+                    Already paid? Click "I have completed payment" below ↓
+                  </p>
+                </div>
+              )}
+
+              {/* Manual confirm once payment is done (e.g. returning from Paystack) */}
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', cursor: 'pointer', padding: '0.75rem', background: acceptedFeeStructure ? '#f0fdf4' : 'white', borderRadius: 8, border: `1.5px solid ${acceptedFeeStructure ? '#86efac' : 'var(--border)'}`, transition: 'all 0.15s' }}>
                 <input type="checkbox" checked={acceptedFeeStructure} onChange={e => setAcceptedFeeStructure(e.target.checked)} style={{ accentColor: 'var(--gold)', width: 18, height: 18, marginTop: 2 }} />
                 <span style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
-                  I accept the fee schedule and agree to pay all applicable net tuition according to the chosen installment plan.
+                  {acceptedFeeStructure
+                    ? '✅ I have completed my initial tuition payment and accept the fee schedule.'
+                    : 'I have completed my initial tuition payment and accept the fee schedule and payment plan above.'}
                 </span>
               </label>
+
+              {acceptedFeeStructure && (
+                <div style={{ marginTop: '1rem', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: '0.85rem 1rem', display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.875rem', color: '#166534' }}>
+                  ✅ <strong>Payment acknowledged.</strong> You may now proceed to sign the enrollment agreement.
+                </div>
+              )}
             </div>
           )}
 

@@ -8,6 +8,7 @@ import {
   programCourses,
   enrollments,
   programFees,
+  students,
 } from '../schema/academic';
 import {
   studentPrograms,
@@ -18,6 +19,7 @@ import {
   documents,
   invoices,
   courses,
+  applications,
 } from '../schema/core';
 import { eq, and, count, lte, gte } from 'drizzle-orm';
 
@@ -62,7 +64,7 @@ export async function handleGetProgramCurriculum(req: Request, env: Env, userId:
   const termId = url.searchParams.get('term_id');
   const db = createCoreDb(env);
 
-  const studentProg = (await db.select({
+  let studentProg = (await db.select({
     program_id: studentPrograms.program_id,
     program_name: programs.name,
     program_code: programs.code,
@@ -74,6 +76,43 @@ export async function handleGetProgramCurriculum(req: Request, env: Env, userId:
     .leftJoin(users, eq(users.person_id, persons.id))
     .where(and(eq(users.id, userId), eq(studentPrograms.current_flag, 1)))
     .execute())[0];
+
+  if (!studentProg || !studentProg.program_id) {
+    // Fallback: check students table directly
+    const stu = (await db.select({
+      program_id: students.program_id,
+      program: students.program,
+      uid: students.uid,
+    })
+      .from(students)
+      .where(eq(students.user_id, userId))
+      .execute())[0];
+
+    if (stu) {
+      let resolvedProgId = stu.program_id;
+      if (!resolvedProgId || resolvedProgId === 'general') {
+        const app = (await db.select({ program_id: applications.program_id })
+          .from(applications)
+          .where(and(eq(applications.user_id, userId), eq(applications.status, 'accepted')))
+          .execute())[0];
+        if (app?.program_id) resolvedProgId = app.program_id;
+      }
+
+      const progInfo = resolvedProgId ? (await db.select({ id: programs.id, name: programs.name, code: programs.code })
+        .from(programs)
+        .where(eq(programs.id, resolvedProgId))
+        .execute())[0] : null;
+
+      if (progInfo) {
+        studentProg = {
+          program_id: progInfo.id,
+          program_name: progInfo.name,
+          program_code: progInfo.code,
+          uid: stu.uid ?? '',
+        };
+      }
+    }
+  }
 
   if (!studentProg) return error('No active program found. Please contact admissions.', 404);
 
@@ -95,7 +134,46 @@ export async function handleGetProgramCurriculum(req: Request, env: Env, userId:
 
   const curriculumRows = await curriculumQuery;
 
-  if (curriculumRows.length === 0) return error('No curriculum defined for this program.', 404);
+  if (curriculumRows.length === 0) {
+    // Fall back to listing courses mapped to this program from courses table
+    const progCourses = await db.select({
+      id: courses.id,
+      code: courses.code,
+      title: courses.title,
+      credits: courses.credits,
+    })
+      .from(courses)
+      .where(eq(courses.program_id, studentProg.program_id))
+      .execute();
+
+    if (progCourses.length > 0) {
+      return ok({
+        program_id: studentProg.program_id,
+        program_name: studentProg.program_name,
+        program_code: studentProg.program_code,
+        terms: [
+          {
+            id: 'term-default',
+            term_id: null,
+            term_name: 'Core Curriculum',
+            term_number: 1,
+            academic_year: '2026-2027',
+            courses: progCourses.map(c => ({
+              id: c.id,
+              course_id: c.id,
+              code: c.code,
+              title: c.title,
+              credits: c.credits,
+              is_mandatory: 1,
+              elective_group: null,
+            })),
+          }
+        ],
+      });
+    }
+
+    return error('No curriculum defined for this program.', 404);
+  }
 
   const curriculumWithCourses = await Promise.all(curriculumRows.map(async (term) => {
     const termCourses = await db.select({
@@ -152,7 +230,7 @@ export async function handleAutoEnrollMandatory(_req: Request, env: Env, userId:
     ))
     .execute())[0];
 
-  if (!hold) return error('Course selection hold is already resolved.', 400);
+  if (!hold) return ok({ message: 'No active course selection hold — auto-enrollment skipped.', enrolled: [], enrolled_count: 0 });
 
   const studentProg = (await db.select({ program_id: studentPrograms.program_id })
     .from(studentPrograms)

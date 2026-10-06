@@ -259,7 +259,7 @@ export default function Finances() {
                               onClick={() => setSelectedReceipt({
                                 invoiceNumber: inv.invoice_number || inv.id,
                                 studentName: dashboardData?.user?.first_name ? `${dashboardData.user.first_name} ${dashboardData.user.last_name || ''}` : 'Enrolled Student',
-                                uid: inv.uid || dashboardData?.id || 'STD-2026',
+                                regNo: inv.reg_no || dashboardData?.reg_no || dashboardData?.user?.reg_no || 'Pending',
                                 amountBilling: Number(inv.total_billing ?? inv.amount),
                                 amountBase: baseAmt,
                                 exchangeRate: fxRate,
@@ -300,6 +300,16 @@ export default function Finances() {
               <div style={{ fontSize: '0.9rem', color: 'var(--slate)', marginTop: '0.2rem' }}>
                 Payable in KES: <strong>KES {totalOutstandingBilling.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
               </div>
+              {financialAid.total_awarded > 0 && (
+                <div style={{ fontSize: '0.85rem', color: '#166534', marginTop: '0.4rem', fontWeight: 600 }}>
+                  🎁 Financial Aid Applied: ${financialAid.total_awarded.toLocaleString(undefined, { minimumFractionDigits: 2 })} USD
+                </div>
+              )}
+              {payments.length > 0 && (
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
+                  ✓ {payments.length} verified transaction{payments.length > 1 ? 's' : ''} on record
+                </div>
+              )}
             </div>
             <div style={{ padding: '0.85rem', background: 'var(--bg)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
               🔒 Secured by <strong>Paystack</strong>. Payee on checkout &amp; bank statement: <strong>BEMI TRAINING INSTITUTE</strong> (trading as BMI University).
@@ -364,7 +374,7 @@ export default function Finances() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.25rem', fontSize: '0.85rem' }}>
               <div>
                 <span style={{ color: 'var(--slate)' }}>Student:</span> <strong>{selectedReceipt.studentName}</strong><br />
-                <span style={{ color: 'var(--slate)' }}>UID:</span> <strong>{selectedReceipt.uid}</strong><br />
+                <span style={{ color: 'var(--slate)' }}>Reg No:</span> <strong>{selectedReceipt.regNo || 'Pending'}</strong><br />
                 <span style={{ color: 'var(--slate)' }}>Receipt Date:</span> {new Date(selectedReceipt.date || Date.now()).toLocaleDateString()}
               </div>
               <div style={{ textAlign: 'right' }}>

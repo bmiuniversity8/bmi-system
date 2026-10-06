@@ -121,15 +121,15 @@ describe('Enrollment Flow', () => {
   });
 
   describe('handleAutoEnrollMandatory', () => {
-    it('requires active course_selection hold', async () => {
+    it('returns ok when no active course_selection hold exists', async () => {
       const drizzle = makeDrizzleMock([null]);
       vi.mocked(createCoreDb).mockReturnValue(drizzle);
       const req = new Request('http://localhost/api/student/enroll/mandatory', { method: 'POST' });
       const res = await handleAutoEnrollMandatory(req, makeEnv(), userId);
 
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(200);
       const body = await res.json() as any;
-      expect(body.error).toContain('already resolved');
+      expect(body.data.enrolled_count).toBe(0);
     });
 
     it('enrolls in mandatory courses when hold exists', async () => {

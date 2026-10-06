@@ -257,6 +257,29 @@ export async function runProvisioningOrchestration(
       await tx.prepare(
         `UPDATE users SET role = 'student', updated_at = ? WHERE id = ?`
       ).bind(now, input.userId).run();
+
+      // Upsert student_programs so curriculum & holds resolution can rely on it
+      if (programId && programId !== 'general') {
+        const spId = `sp-${input.userId.replace(/-/g, '').slice(0, 8)}-${Date.now().toString(36)}`;
+        await tx.prepare(
+          `INSERT INTO student_programs (id, uid, registration_number, program_id, admission_year, enrollment_date, status, current_flag, graduated_flag, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, 'active', 1, 0, ?, ?)
+           ON CONFLICT (uid) DO UPDATE SET
+             program_id = excluded.program_id,
+             current_flag = 1,
+             status = 'active',
+             updated_at = excluded.updated_at`
+        ).bind(
+          spId,
+          uid,
+          regNo || `REG-${uid}`,
+          programId,
+          year,
+          now,
+          now,
+          now
+        ).run().catch((e: unknown) => console.warn('[orchestrator] student_programs upsert warning:', e));
+      }
     });
 
     stepsMap.registrar_record.status = 'completed';
