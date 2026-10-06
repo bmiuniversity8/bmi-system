@@ -39,6 +39,35 @@
  */
 import { Pool } from '@neondatabase/serverless';
 import { pathToFileURL } from 'node:url';
+import fs from 'node:fs';
+import path from 'node:path';
+
+// Fallback: load .dev.vars (same pattern as migrate-d1-to-neon.ts) so the
+// script works out of the box in a dev checkout without exporting secrets.
+// Explicit environment variables always win over .dev.vars values.
+try {
+  const devVarsPath = path.resolve(process.cwd(), '.dev.vars');
+  if (fs.existsSync(devVarsPath)) {
+    for (const line of fs.readFileSync(devVarsPath, 'utf-8').split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const idx = trimmed.indexOf('=');
+      if (idx > 0) {
+        const key = trimmed.slice(0, idx).trim();
+        let val = trimmed.slice(idx + 1).trim();
+        if (
+          (val.startsWith('"') && val.endsWith('"')) ||
+          (val.startsWith("'") && val.endsWith("'"))
+        ) {
+          val = val.slice(1, -1);
+        }
+        if (key && !process.env[key]) process.env[key] = val;
+      }
+    }
+  }
+} catch {
+  // Ignore — DATABASE_URL_CORE from the real environment is preferred anyway.
+}
 
 export type ProgramCanonical =
   | 'undergraduate'
@@ -111,8 +140,9 @@ const COURSE_ALIAS_FALLBACK: Record<string, CourseCanonical> = {
  * Map a raw courses.level value to canonical form.
  *
  * Precedence (first match wins):
- *  1. Already canonical — numeric band 100–700 kept verbatim; named values
- *     fixed to canonical capitalisation.
+ *  1. Already canonical — numeric band 100–800 kept verbatim (800 is the PhD
+ *     band the UMS tabs match on); named values fixed to canonical
+ *     capitalisation.
  *  2. Certificate/diploma code prefixes (GC*, CERT*, DIM*, DIP*, DCMT*) — these
  *     categories have no numeric band in the canonical catalogue, so the honest
  *     repair is the named category, not an invented band.
@@ -132,7 +162,7 @@ export function canonicalCourseLevel(
   const low = t.toLowerCase();
 
   // 1. Canonical bands + named values (fix capitalisation drift).
-  if (/^[1-7]00$/.test(t)) return t as CourseCanonical;
+  if (/^[1-8]00$/.test(t)) return t as CourseCanonical;
   if (COURSE_NAMED_FIX[low]) return COURSE_NAMED_FIX[low];
 
   const upperCode = code === null || code === undefined ? '' : String(code).trim().toUpperCase();
@@ -141,7 +171,7 @@ export function canonicalCourseLevel(
   if (/^(GC|CERT)[A-Z]*\d/.test(upperCode)) return 'Certificate';
   if (/^(DIM|DIP|DCMT)/.test(upperCode)) return 'Diploma';
 
-  // 3. Course-number band.
+  // 3. Course-number band (1–7; 8 is kept verbatim by rule 1, 0/9 have no band).
   const digit = (upperCode.match(/\d/) ?? [])[0];
   if (digit && digit >= '1' && digit <= '7') return `${digit}00` as CourseCanonical;
 

@@ -40,7 +40,7 @@ describe('canonicalProgramLevel', () => {
 
 describe('canonicalCourseLevel', () => {
   it('keeps canonical numeric bands verbatim', () => {
-    for (const band of ['100', '200', '300', '400', '500', '600', '700']) {
+    for (const band of ['100', '200', '300', '400', '500', '600', '700', '800']) {
       expect(canonicalCourseLevel(band, 'ANY101', 'undergraduate')).toBe(band);
     }
   });
