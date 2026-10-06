@@ -20,9 +20,21 @@ export class CloudflareKVAdapter implements IKVStore, IHealthCheck {
     await this.kv.delete(key);
   }
 
-  async list(prefix?: string): Promise<string[]> {
-    const result = await this.kv.list({ prefix });
-    return result.keys.map(k => k.name);
+  async list(options?: { prefix?: string; limit?: number; cursor?: string }): Promise<{
+    keys: Array<{ name: string }>;
+    list_complete: boolean;
+    cursor?: string;
+  }> {
+    const result = await this.kv.list({
+      prefix: options?.prefix,
+      limit: options?.limit,
+      cursor: options?.cursor,
+    });
+    return {
+      keys: result.keys.map((k) => ({ name: k.name })),
+      list_complete: result.list_complete,
+      cursor: (result as { cursor?: string }).cursor,
+    };
   }
 
   async health(): Promise<boolean> {

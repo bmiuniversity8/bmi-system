@@ -5,7 +5,7 @@
 import { ok, error, json } from '../lib/types';
 import type { Env } from '../lib/types';
 import { generateRegNo } from '../lib/reg_number';
-import { cacheAside, invalidateCachePrefix } from '../lib/cache';
+import { cacheAside, invalidateCachePrefix, CATALOG_CACHE_NS } from '../lib/cache';
 
 function paginate(url: URL) {
   const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'));
@@ -22,11 +22,11 @@ export async function handleListUmsCourses(request: Request, env: Env): Promise<
   const search = url.searchParams.get('search') || '';
   const departmentId = url.searchParams.get('department_id') || '';
   const noCache = url.searchParams.get('no_cache') === '1';
-  const cacheKey = `catalog:courses:p${page}:pp${perPage}:s_${search}:d_${departmentId}`;
+  const cacheKey = `${CATALOG_CACHE_NS}:courses:p${page}:pp${perPage}:s_${search}:d_${departmentId}`;
 
   // Force-bust the cache for this key family when requested (e.g. after seeding)
   if (noCache) {
-    await invalidateCachePrefix(env.PLATFORM_CONTEXT?.kv, 'catalog:courses:');
+    await invalidateCachePrefix(env.PLATFORM_CONTEXT?.kv, CATALOG_CACHE_NS + ':courses:');
   }
 
   const { data, hit } = await cacheAside(
@@ -83,7 +83,7 @@ export async function handleCreateCourse(request: Request, env: Env): Promise<Re
 
   // Writes go straight to Neon; invalidate the cached course catalog so the
   // next read re-populates it (cache-aside invalidation).
-  await invalidateCachePrefix(env.PLATFORM_CONTEXT?.kv, 'catalog:courses:');
+  await invalidateCachePrefix(env.PLATFORM_CONTEXT?.kv, CATALOG_CACHE_NS + ':courses:');
 
   const created = await env.PLATFORM_CONTEXT!.db.prepare(`SELECT * FROM courses WHERE id = ?`).bind(id).first();
   return json({ success: true, data: created }, 201);
@@ -106,7 +106,7 @@ export async function handleUpdateCourse(request: Request, env: Env, courseId: s
     `UPDATE courses SET ${updates.join(', ')} WHERE id = ?`
   ).bind(...vals, courseId).run();
 
-  await invalidateCachePrefix(env.PLATFORM_CONTEXT?.kv, 'catalog:courses:');
+  await invalidateCachePrefix(env.PLATFORM_CONTEXT?.kv, CATALOG_CACHE_NS + ':courses:');
 
   const updated = await env.PLATFORM_CONTEXT!.db.prepare(`SELECT * FROM courses WHERE id = ?`).bind(courseId).first();
   if (!updated) return error('Course not found', 404);
@@ -153,7 +153,7 @@ export async function handleCreateProgram(request: Request, env: Env): Promise<R
     if (/UNIQUE|unique|duplicate/i.test(msg)) return error('Program code already exists', 409);
     throw e;
   }
-  await invalidateCachePrefix(env.PLATFORM_CONTEXT?.kv, 'catalog:programs');
+  await invalidateCachePrefix(env.PLATFORM_CONTEXT?.kv, CATALOG_CACHE_NS + ':programs');
   const created = await env.PLATFORM_CONTEXT!.db.prepare(`SELECT * FROM programs WHERE id = ?`).bind(id).first();
   return json({ success: true, data: created }, 201);
 }
@@ -187,7 +187,7 @@ export async function handleUpdateProgram(request: Request, env: Env, programId:
       await env.PLATFORM_CONTEXT!.db.prepare(`UPDATE programs SET ${u2.join(', ')} WHERE id = ?`).bind(...v2, programId).run();
     } else throw e;
   }
-  await invalidateCachePrefix(env.PLATFORM_CONTEXT?.kv, 'catalog:programs');
+  await invalidateCachePrefix(env.PLATFORM_CONTEXT?.kv, CATALOG_CACHE_NS + ':programs');
   const updated = await env.PLATFORM_CONTEXT!.db.prepare(`SELECT * FROM programs WHERE id = ?`).bind(programId).first();
   if (!updated) return error('Program not found', 404);
   return ok(updated);
@@ -195,7 +195,7 @@ export async function handleUpdateProgram(request: Request, env: Env, programId:
 
 export async function handleDeleteProgram(_request: Request, env: Env, programId: string): Promise<Response> {
   await env.PLATFORM_CONTEXT!.db.prepare(`DELETE FROM programs WHERE id = ?`).bind(programId).run();
-  await invalidateCachePrefix(env.PLATFORM_CONTEXT?.kv, 'catalog:programs');
+  await invalidateCachePrefix(env.PLATFORM_CONTEXT?.kv, CATALOG_CACHE_NS + ':programs');
   return ok({ deleted: true, id: programId });
 }
 
@@ -204,7 +204,7 @@ export async function handleDeleteProgram(_request: Request, env: Env, programId
 export async function handleDeleteCourse(_request: Request, env: Env, courseId: string): Promise<Response> {
   const result = await env.PLATFORM_CONTEXT!.db.prepare(`DELETE FROM courses WHERE id = ?`).bind(courseId).run();
   if (!result.meta.changes) return error('Course not found', 404);
-  await invalidateCachePrefix(env.PLATFORM_CONTEXT?.kv, 'catalog:courses:');
+  await invalidateCachePrefix(env.PLATFORM_CONTEXT?.kv, CATALOG_CACHE_NS + ':courses:');
   return ok({ deleted: true });
 }
 
@@ -214,10 +214,10 @@ export async function handleListPrograms(request: Request, env: Env): Promise<Re
   const url = new URL(request.url);
   const { page, perPage, offset } = paginate(url);
   const noCache = url.searchParams.get('no_cache') === '1';
-  const cacheKey = `catalog:programs:p${page}:pp${perPage}`;
+  const cacheKey = `${CATALOG_CACHE_NS}:programs:p${page}:pp${perPage}`;
 
   if (noCache) {
-    await invalidateCachePrefix(env.PLATFORM_CONTEXT?.kv, 'catalog:programs');
+    await invalidateCachePrefix(env.PLATFORM_CONTEXT?.kv, CATALOG_CACHE_NS + ':programs');
   }
 
   const { data, hit } = await cacheAside(
@@ -246,7 +246,7 @@ export async function handleListPrograms(request: Request, env: Env): Promise<Re
 // ─── list faculties ───────────────────────────────────────────────────────────
 
 export async function handleListFaculties(_request: Request, env: Env): Promise<Response> {
-  const cacheKey = `catalog:faculties:all`;
+  const cacheKey = CATALOG_CACHE_NS + ':faculties:all';
 
   const { data, hit } = await cacheAside(
     env.PLATFORM_CONTEXT?.kv,
@@ -268,7 +268,7 @@ export async function handleListFaculties(_request: Request, env: Env): Promise<
 export async function handleListDepartments(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const facultyId = url.searchParams.get('faculty_id') || 'all';
-  const cacheKey = `catalog:departments:f_${facultyId}`;
+  const cacheKey = CATALOG_CACHE_NS + ':departments:f_' + facultyId;
 
   const { data, hit } = await cacheAside(
     env.PLATFORM_CONTEXT?.kv,
@@ -295,7 +295,7 @@ export async function handleListDepartments(request: Request, env: Env): Promise
 // ─── list academic terms ──────────────────────────────────────────────────────
 
 export async function handleListTerms(_request: Request, env: Env): Promise<Response> {
-  const cacheKey = `catalog:terms:all`;
+  const cacheKey = CATALOG_CACHE_NS + ':terms:all';
 
   const { data, hit } = await cacheAside(
     env.PLATFORM_CONTEXT?.kv,
@@ -409,7 +409,7 @@ export async function handleCreateTerm(request: Request, env: Env): Promise<Resp
       if (/UNIQUE|unique|duplicate/i.test(msg)) return error('Term code already exists', 409);
       throw e;
     }
-    await invalidateCachePrefix(env.PLATFORM_CONTEXT?.kv, 'catalog:terms');
+    await invalidateCachePrefix(env.PLATFORM_CONTEXT?.kv, CATALOG_CACHE_NS + ':terms');
     const created = await env.PLATFORM_CONTEXT!.db.prepare(`SELECT * FROM academic_terms WHERE id = ?`).bind(id).first().catch(() => ({ id }));
     return json({ success: true, data: created }, 201);
   } catch (e: unknown) {
@@ -473,7 +473,7 @@ export async function handleUpdateTerm(request: Request, env: Env, termId: strin
       if (/UNIQUE|unique|duplicate/i.test(msg)) return error('Term code already exists', 409);
       throw e;
     }
-    await invalidateCachePrefix(env.PLATFORM_CONTEXT?.kv, 'catalog:terms');
+    await invalidateCachePrefix(env.PLATFORM_CONTEXT?.kv, CATALOG_CACHE_NS + ':terms');
     const updated = await db.prepare(`SELECT * FROM academic_terms WHERE id = ?`).bind(termId).first().catch(() => null);
     return ok(updated);
   } catch (e: unknown) {
@@ -522,7 +522,7 @@ export async function handleCloseTermWithCompletions(_request: Request, env: Env
     const result = await finalizeTermCompletions(db, termId);
     // Mark the term closed only after completions are written.
     await db.prepare(`UPDATE academic_terms SET status = 'closed' WHERE id = ?`).bind(termId).run().catch(() => null);
-    await invalidateCachePrefix(env.PLATFORM_CONTEXT?.kv, 'catalog:terms');
+    await invalidateCachePrefix(env.PLATFORM_CONTEXT?.kv, CATALOG_CACHE_NS + ':terms');
     return ok(result);
   } catch (e: unknown) {
     return error(e instanceof Error ? e.message : 'Failed to close term', 500);

@@ -51,13 +51,25 @@ export class FileSystemKVAdapter implements IKVStore, IHealthCheck {
     this.saveStore(store);
   }
 
-  async list(prefix?: string): Promise<string[]> {
+  async list(options?: { prefix?: string; limit?: number; cursor?: string }): Promise<{
+    keys: Array<{ name: string }>;
+    list_complete: boolean;
+    cursor?: string;
+  }> {
     const store = this.loadStore();
-    const keys = Object.keys(store);
-    if (prefix) {
-      return keys.filter(k => k.startsWith(prefix));
-    }
-    return keys;
+    const prefix = options?.prefix;
+    const limit = options?.limit ?? 1000;
+    const names = Object.keys(store)
+      .filter((k) => !prefix || k.startsWith(prefix))
+      .sort();
+    const start = Math.max(0, parseInt(options?.cursor ?? '0', 10) || 0);
+    const slice = names.slice(start, start + limit);
+    const next = start + slice.length;
+    return {
+      keys: slice.map((name) => ({ name })),
+      list_complete: next >= names.length,
+      cursor: next < names.length ? String(next) : undefined,
+    };
   }
 
   async health(): Promise<boolean> {

@@ -7,6 +7,7 @@
  * 3. On miss -> execute DB query (Neon/D1), populate KV cache with TTL, return data.
  * 4. On write -> invalidate cache key(s).
  */
+import type { IKVStore } from '@bmi/ports';
 
 export interface CacheAsideOptions {
   ttlSeconds?: number;
@@ -16,6 +17,14 @@ export interface CacheResult<T> {
   data: T;
   hit: boolean;
 }
+
+/**
+ * Namespace for all catalog cache keys (courses, programs, faculties,
+ * departments, terms). BUMP THIS whenever cached shapes change or stale
+ * entries must be abandoned: old keys stop being read and expire naturally,
+ * which instantly busts poisoned/stale cache without KV admin access.
+ */
+export const CATALOG_CACHE_NS = 'catalog:v2';
 
 /**
  * Execute cache-aside lookup against KV storage.
@@ -98,21 +107,30 @@ export async function invalidateCacheKeys(
 }
 
 /**
- * Invalidate all cached keys sharing a prefix (e.g. `catalog:courses:`).
+ * Invalidate all cached keys sharing a prefix (e.g. `catalog:v2:courses:`).
+ * Uses the REAL Cloudflare KV list API — list({ prefix, cursor }) resolving
+ * { keys: [{ name }], list_complete, cursor } with pagination — so prefix
+ * eviction actually works on writes instead of silently doing nothing.
  * KV list() supports prefix listing; used on writes so page/query variants
  * of a catalog entry are evicted together instead of waiting for TTL.
  */
 export async function invalidateCachePrefix(
-  kv: { list?: (prefix?: string) => Promise<string[]>; delete: (key: string) => Promise<void> } | null | undefined,
+  kv: Pick<IKVStore, 'list' | 'delete'> | null | undefined,
   prefix: string
 ): Promise<void> {
   if (!kv || typeof kv.list !== 'function') return;
   try {
-    const keys = await kv.list(prefix);
-    if (keys.length > 0) {
-      await Promise.all(keys.map((k) => invalidateCacheKey(kv, k)));
+    let cursor: string | undefined = undefined;
+    for (;;) {
+      const page = await kv.list({ prefix, cursor, limit: 1000 });
+      const names = Array.isArray(page?.keys) ? page.keys.map((k) => k?.name).filter(Boolean) : [];
+      if (names.length > 0) {
+        await Promise.all(names.map((name) => invalidateCacheKey(kv, name as string)));
+      }
+      if (page?.list_complete || !page?.cursor) break;
+      cursor = page.cursor;
     }
   } catch {
-    // Non-blocking catch
+    // Non-blocking catch — a failed eviction only costs staleness until TTL.
   }
 }

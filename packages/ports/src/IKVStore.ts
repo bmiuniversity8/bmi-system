@@ -16,6 +16,14 @@ export interface IKVStore {
 
   /**
    * Lists keys, optionally filtered by a prefix.
+   *
+   * Mirrors the real Cloudflare KV list API (options object in, paginated
+   * `{ keys, list_complete, cursor }` out) so prefix invalidation actually
+   * works in production instead of silently doing nothing.
    */
-  list(prefix?: string): Promise<string[]>;
+  list(options?: { prefix?: string; limit?: number; cursor?: string }): Promise<{
+    keys: Array<{ name: string }>;
+    list_complete: boolean;
+    cursor?: string;
+  }>;
 }

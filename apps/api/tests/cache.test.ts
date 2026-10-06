@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { cacheAside, invalidateCacheKey, invalidateCacheKeys } from '../lib/cache';
+import {
+  cacheAside,
+  invalidateCacheKey,
+  invalidateCacheKeys,
+  invalidateCachePrefix,
+  CATALOG_CACHE_NS,
+} from '../lib/cache';
 
 describe('KV Cache-Aside Utility', () => {
   let mockKv: {
@@ -71,5 +77,59 @@ describe('KV Cache-Aside Utility', () => {
     await invalidateCacheKeys(mockKv, ['key1', 'key2']);
     expect(mockKv.delete).toHaveBeenCalledWith('key1');
     expect(mockKv.delete).toHaveBeenCalledWith('key2');
+  });
+
+  it('exposes a versioned catalog namespace so stale entries can be abandoned', () => {
+    expect(CATALOG_CACHE_NS).toMatch(/^catalog:v\d+$/);
+    expect(CATALOG_CACHE_NS).not.toBe('catalog');
+  });
+
+  describe('invalidateCachePrefix (real Cloudflare KV list API)', () => {
+    // Real KV: list({ prefix, cursor? }) -> { keys: [{ name }], list_complete, cursor? }
+    function realKv(pages: Array<{ names: string[]; cursor?: string }>) {
+      const calls: unknown[] = [];
+      let i = 0;
+      return {
+        calls,
+        delete: vi.fn().mockResolvedValue(undefined),
+        list: vi.fn().mockImplementation(async (options?: { prefix?: string; cursor?: string }) => {
+          calls.push(options?.prefix);
+          const page = pages[Math.min(i++, pages.length - 1)];
+          return {
+            keys: page.names.map((name) => ({ name })),
+            list_complete: i >= pages.length,
+            cursor: page.cursor,
+          };
+        }),
+      };
+    }
+
+    it('deletes every key under the prefix across paginated list results', async () => {
+      const kv = realKv([
+        { names: ['catalog:v2:programs:p1', 'catalog:v2:programs:p2'], cursor: 'c1' },
+        { names: ['catalog:v2:programs:p3'] },
+      ]);
+
+      await invalidateCachePrefix(kv, 'catalog:v2:programs');
+
+      expect(kv.list).toHaveBeenCalledWith({ prefix: 'catalog:v2:programs', cursor: undefined, limit: 1000 });
+      expect(kv.list).toHaveBeenCalledWith({ prefix: 'catalog:v2:programs', cursor: 'c1', limit: 1000 });
+      expect(kv.delete).toHaveBeenCalledWith('catalog:v2:programs:p1');
+      expect(kv.delete).toHaveBeenCalledWith('catalog:v2:programs:p2');
+      expect(kv.delete).toHaveBeenCalledWith('catalog:v2:programs:p3');
+    });
+
+    it('is a safe no-op when kv is null, list is missing, or list throws', async () => {
+      await expect(invalidateCachePrefix(null, 'x')).resolves.toBeUndefined();
+      await expect(
+        invalidateCachePrefix({ delete: vi.fn() } as never, 'x'),
+      ).resolves.toBeUndefined();
+      const broken = {
+        delete: vi.fn(),
+        list: vi.fn().mockRejectedValue(new Error('KV down')),
+      };
+      await expect(invalidateCachePrefix(broken, 'x')).resolves.toBeUndefined();
+      expect(broken.delete).not.toHaveBeenCalled();
+    });
   });
 });
