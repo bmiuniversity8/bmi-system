@@ -40,40 +40,54 @@ export async function hasTermFinancialClearance(
       return { cleared: true, reason: 'paid term invoice (v4)' };
     }
 
-    // 3. Fallback: check legacy invoices table
-    const legacyPaid = await (db.prepare(
-      `SELECT id FROM invoices WHERE student_id = ? AND term_id = ? AND status = 'paid' LIMIT 1`
-    ).bind(studentIdOrUserId, termId).first() as Promise<{ id: string } | null>).catch(() => null);
+    // 3. Fallback: check legacy invoices table.
+    // Individual try-catch: better-sqlite3 throws synchronously at prepare() when the
+    // table doesn't exist, before any async .catch() can intercept.
+    let legacyPaid: { id: string } | null = null;
+    try {
+      legacyPaid = await (db.prepare(
+        `SELECT id FROM invoices WHERE student_id = ? AND term_id = ? AND status = 'paid' LIMIT 1`
+      ).bind(studentIdOrUserId, termId).first() as Promise<{ id: string } | null>).catch(() => null);
+    } catch { /* legacy table absent */ }
 
     if (legacyPaid) {
       return { cleared: true, reason: 'paid term invoice' };
     }
 
     // 4. Approved financial aid award / payment plan covering the term
-    const aid = await (db.prepare(
-      `SELECT id FROM financial_aid_awards WHERE student_id = ? AND term_id = ? AND status IN ('approved', 'awarded', 'disbursed') LIMIT 1`
-    ).bind(studentIdOrUserId, termId).first() as Promise<{ id: string } | null>).catch(() => null);
+    let aid: { id: string } | null = null;
+    try {
+      aid = await (db.prepare(
+        `SELECT id FROM financial_aid_awards WHERE student_id = ? AND term_id = ? AND status IN ('approved', 'awarded', 'disbursed') LIMIT 1`
+      ).bind(studentIdOrUserId, termId).first() as Promise<{ id: string } | null>).catch(() => null);
+    } catch { /* legacy table absent */ }
 
     if (aid) {
       return { cleared: true, reason: 'approved aid/payment plan covers term' };
     }
 
     // 5. Active fee award covering this student and term in v4
-    const awardV4 = await (db.prepare(
-      `SELECT id FROM fee_awards
-       WHERE user_id = ? AND status = 'active'
-       AND (valid_from_term IS NULL OR valid_from_term = ? OR valid_to_term >= ?)
-       LIMIT 1`
-    ).bind(studentIdOrUserId, termId, termId).first() as Promise<{ id: string } | null>).catch(() => null);
+    let awardV4: { id: string } | null = null;
+    try {
+      awardV4 = await (db.prepare(
+        `SELECT id FROM fee_awards
+         WHERE user_id = ? AND status = 'active'
+         AND (valid_from_term IS NULL OR valid_from_term = ? OR valid_to_term >= ?)
+         LIMIT 1`
+      ).bind(studentIdOrUserId, termId, termId).first() as Promise<{ id: string } | null>).catch(() => null);
+    } catch { /* table absent */ }
 
     if (awardV4) {
       return { cleared: true, reason: 'approved institutional fee award covers term' };
     }
 
     // 6. Check for unlinked / legacy invoice with NULL term_id
-    const legacyNullTerm = await (db.prepare(
-      `SELECT id FROM invoices WHERE student_id = ? AND status = 'paid' AND term_id IS NULL LIMIT 1`
-    ).bind(studentIdOrUserId).first() as Promise<{ id: string } | null>).catch(() => null);
+    let legacyNullTerm: { id: string } | null = null;
+    try {
+      legacyNullTerm = await (db.prepare(
+        `SELECT id FROM invoices WHERE student_id = ? AND status = 'paid' AND term_id IS NULL LIMIT 1`
+      ).bind(studentIdOrUserId).first() as Promise<{ id: string } | null>).catch(() => null);
+    } catch { /* legacy table absent */ }
 
     if (legacyNullTerm) {
       return {

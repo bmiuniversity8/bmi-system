@@ -44,12 +44,14 @@ export async function getApprovedExchangeRate(
     };
   }
 
-  const row = await (db.prepare(
-    `SELECT id, base_currency, quote_currency, rate_micros, status, source, effective_from, effective_to
-     FROM fx_rates_v4
-     WHERE base_currency = ? AND quote_currency = ? AND status IN ('approved', 'active')
-     ORDER BY created_at DESC LIMIT 1`
-  ).bind(baseCurrency.toUpperCase(), quoteCurrency.toUpperCase()).first() as Promise<{
+  const row = await Promise.resolve(
+    db.prepare(
+      `SELECT id, base_currency, quote_currency, rate_micros, status, source, effective_from, effective_to
+       FROM fx_rates_v4
+       WHERE base_currency = ? AND quote_currency = ? AND status IN ('approved', 'active')
+       ORDER BY created_at DESC LIMIT 1`
+    ).bind(baseCurrency.toUpperCase(), quoteCurrency.toUpperCase()).first()
+  ).catch(() => null) as {
     id: string;
     base_currency: string;
     quote_currency: string;
@@ -58,16 +60,18 @@ export async function getApprovedExchangeRate(
     source: string;
     effective_from: string | null;
     effective_to: string | null;
-  } | null>).catch(() => null);
+  } | null;
 
   if (!row) {
     // Check if draft rate exists for informative messaging or testing fallback
-    const draft = await (db.prepare(
-      `SELECT id, base_currency, quote_currency, rate_micros, status, source, effective_from, effective_to
-       FROM fx_rates_v4
-       WHERE base_currency = ? AND quote_currency = ?
-       ORDER BY created_at DESC LIMIT 1`
-    ).bind(baseCurrency.toUpperCase(), quoteCurrency.toUpperCase()).first() as Promise<{
+    const draft = await Promise.resolve(
+      db.prepare(
+        `SELECT id, base_currency, quote_currency, rate_micros, status, source, effective_from, effective_to
+         FROM fx_rates_v4
+         WHERE base_currency = ? AND quote_currency = ?
+         ORDER BY created_at DESC LIMIT 1`
+      ).bind(baseCurrency.toUpperCase(), quoteCurrency.toUpperCase()).first()
+    ).catch(() => null) as {
       id: string;
       base_currency: string;
       quote_currency: string;
@@ -76,7 +80,7 @@ export async function getApprovedExchangeRate(
       source: string;
       effective_from: string | null;
       effective_to: string | null;
-    } | null>).catch(() => null);
+    } | null;
 
     if (draft && draft.status === 'draft') {
       return {

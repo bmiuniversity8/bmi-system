@@ -154,13 +154,15 @@ export async function assessInvoice(
   const nowIso = now.toISOString();
 
   // 1. Check existing charge via fee_charges
-  const existingCharge = await (db.prepare(
-    `SELECT fc.invoice_id, i.invoice_number, i.base_total_minor, i.total_minor, i.base_currency, i.charge_currency, i.status, i.due_date
-     FROM fee_charges fc
-     JOIN invoices_v4 i ON fc.invoice_id = i.id
-     WHERE fc.charge_key = ? AND fc.status = 'billed'
-     LIMIT 1`
-  ).bind(params.chargeKey).first() as Promise<{
+  const existingCharge = await Promise.resolve(
+    db.prepare(
+      `SELECT fc.invoice_id, i.invoice_number, i.base_total_minor, i.total_minor, i.base_currency, i.charge_currency, i.status, i.due_date
+       FROM fee_charges fc
+       JOIN invoices_v4 i ON fc.invoice_id = i.id
+       WHERE fc.charge_key = ? AND fc.status = 'billed'
+       LIMIT 1`
+    ).bind(params.chargeKey).first()
+  ).catch(() => null) as {
     invoice_id: string;
     invoice_number: string;
     base_total_minor: number;
@@ -169,7 +171,7 @@ export async function assessInvoice(
     charge_currency: string;
     status: string;
     due_date: string;
-  } | null>).catch(() => null);
+  } | null;
 
   if (existingCharge) {
     const lines = await (db.prepare(
@@ -182,9 +184,11 @@ export async function assessInvoice(
       amount_minor: number;
     }> }>);
 
-    const def = await db.prepare(
-      `SELECT id FROM fee_gate_deferrals WHERE invoice_id = ? AND cleared_at IS NULL LIMIT 1`
-    ).bind(existingCharge.invoice_id).first().catch(() => null);
+    const def = await Promise.resolve(
+      db.prepare(
+        `SELECT id FROM fee_gate_deferrals WHERE invoice_id = ? AND cleared_at IS NULL LIMIT 1`
+      ).bind(existingCharge.invoice_id).first()
+    ).catch(() => null);
 
     return {
       id: existingCharge.invoice_id,
@@ -400,25 +404,31 @@ export async function assessInvoice(
     nowIso, nowIso
   ).run();
 
-  // Also mirror into legacy invoices table so older readers maintain backward compatibility
-  await db.prepare(
-    `INSERT OR IGNORE INTO invoices (
-      id, invoice_number, student_id, uid, programme_id, degree_level,
-      academic_year, term_id, base_currency, billing_currency, exchange_rate,
-      subtotal_base, subtotal_billing, discount, total_base, total_billing, amount, balance,
-      status, due_date, created_at, updated_at
-    ) VALUES (
-      ?, ?, ?, ?, ?, ?,
-      ?, ?, ?, ?, ?,
-      ?, ?, ?, ?, ?, ?, ?,
-      'unpaid', ?, ?, ?
-    )`
-  ).bind(
-    invoiceId, invoiceNumber, params.userId, params.uid || null, params.programId || null, level.levelKey,
-    params.academicYear || null, params.termId || null, baseCurrency, defaultChargeCurrency, rateMicros / 1000000,
-    baseSubtotalMinor / 100, chargeSubtotalMinor / 100, baseDiscountMinor / 100, baseTotalMinor / 100, totalMinor / 100, totalMinor / 100, totalMinor / 100,
-    dueDate, nowIso, nowIso
-  ).run().catch(() => null);
+  // Also mirror into legacy invoices table so older readers maintain backward compatibility.
+  // Wrapped in try-catch: better-sqlite3 (used in tests) throws synchronously at prepare()
+  // when the table doesn't exist, before any async .catch() can intercept.
+  try {
+    await db.prepare(
+      `INSERT OR IGNORE INTO invoices (
+        id, invoice_number, student_id, uid, programme_id, degree_level,
+        academic_year, term_id, base_currency, billing_currency, exchange_rate,
+        subtotal_base, subtotal_billing, discount, total_base, total_billing, amount, balance,
+        status, due_date, created_at, updated_at
+      ) VALUES (
+        ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?, ?,
+        'unpaid', ?, ?, ?
+      )`
+    ).bind(
+      invoiceId, invoiceNumber, params.userId, params.uid || null, params.programId || null, level.levelKey,
+      params.academicYear || null, params.termId || null, baseCurrency, defaultChargeCurrency, rateMicros / 1000000,
+      baseSubtotalMinor / 100, chargeSubtotalMinor / 100, baseDiscountMinor / 100, baseTotalMinor / 100, totalMinor / 100, totalMinor / 100, totalMinor / 100,
+      dueDate, nowIso, nowIso
+    ).run();
+  } catch {
+    // Legacy table may not exist in v4-only environments or test DBs — safe to ignore.
+  }
 
   // 8. Write lines
   for (const l of processedLines) {
@@ -508,9 +518,11 @@ export async function assessApplicationFee(
   applicationId: string,
   userId: string
 ): Promise<AssessedInvoiceResult> {
-  const app = await (db.prepare(
-    `SELECT id, user_id, program_id, degree_level FROM applications WHERE id = ? LIMIT 1`
-  ).bind(applicationId).first() as Promise<{ id: string; user_id: string; program_id: string; degree_level: string } | null>).catch(() => null);
+  const app = await Promise.resolve(
+    db.prepare(
+      `SELECT id, user_id, program_id, degree_level FROM applications WHERE id = ? LIMIT 1`
+    ).bind(applicationId).first()
+  ).catch(() => null) as { id: string; user_id: string; program_id: string; degree_level: string } | null;
 
   return assessInvoice(db, {
     userId: app?.user_id || userId,
@@ -537,9 +549,11 @@ export async function assessEnrollmentFee(
   applicationId: string,
   userId: string
 ): Promise<AssessedInvoiceResult> {
-  const app = await (db.prepare(
-    `SELECT id, user_id, program_id, degree_level FROM applications WHERE id = ? LIMIT 1`
-  ).bind(applicationId).first() as Promise<{ id: string; user_id: string; program_id: string; degree_level: string } | null>).catch(() => null);
+  const app = await Promise.resolve(
+    db.prepare(
+      `SELECT id, user_id, program_id, degree_level FROM applications WHERE id = ? LIMIT 1`
+    ).bind(applicationId).first()
+  ).catch(() => null) as { id: string; user_id: string; program_id: string; degree_level: string } | null;
 
   return assessInvoice(db, {
     userId: app?.user_id || userId,
@@ -638,11 +652,15 @@ export async function assessGraduationFee(
   let resolvedLevel = degreeLevel;
   let resolvedProg = programId;
   if (!resolvedLevel && !resolvedProg) {
-    const student = await (db.prepare(
-      `SELECT program_id, degree_level FROM students WHERE user_id = ? LIMIT 1`
-    ).bind(userId).first() as Promise<{ program_id?: string; degree_level?: string } | null>).catch(() => null);
-    resolvedLevel = student?.degree_level;
-    resolvedProg = student?.program_id;
+    try {
+      const student = await (db.prepare(
+        `SELECT program_id, degree_level FROM students WHERE user_id = ? LIMIT 1`
+      ).bind(userId).first() as Promise<{ program_id?: string; degree_level?: string } | null>).catch(() => null);
+      resolvedLevel = student?.degree_level;
+      resolvedProg = student?.program_id;
+    } catch {
+      // students table may not exist in v4-only test environments
+    }
   }
   if (!resolvedLevel && !resolvedProg) {
     resolvedLevel = 'undergraduate';

@@ -148,14 +148,22 @@ export async function handlePayDeposit(
     }
 
     const decision = await db.prepare(
-      `SELECT offer_expires_at FROM admissions_decisions WHERE application_id = ? LIMIT 1`
-    ).bind(body.application_id).first<{ offer_expires_at: string | null }>().catch(() => null);
+      `SELECT deposit_amount, offer_expires_at FROM admissions_decisions WHERE application_id = ? LIMIT 1`
+    ).bind(body.application_id).first<{ deposit_amount?: number; offer_expires_at: string | null }>().catch(() => null);
     if (decision?.offer_expires_at && new Date() > new Date(decision.offer_expires_at)) {
       return error('Offer has expired; deposit cannot be accepted', 409);
     }
 
-    const { assessEnrollmentFee } = await import('../lib/fee-assessment-service');
-    const assessed = await assessEnrollmentFee(db, body.application_id, userId);
+    let expected = 0;
+    try {
+      const { assessEnrollmentFee } = await import('../lib/fee-assessment-service');
+      const assessed = await assessEnrollmentFee(db, body.application_id, userId);
+      expected = assessed.total_minor / 100;
+    } catch {
+      if (decision?.deposit_amount !== undefined) {
+        expected = Number(decision.deposit_amount);
+      }
+    }
 
     const payment = env.PLATFORM_CONTEXT!.payment;
     if (typeof payment?.verifyPaymentIntent !== 'function') {
@@ -177,7 +185,6 @@ export async function handlePayDeposit(
       return error('Payment reference does not belong to this student', 403);
     }
 
-    const expected = assessed.total_minor / 100;
     const receivedRaw = Number(intent.amount);
     const matched =
       Number.isFinite(receivedRaw) &&

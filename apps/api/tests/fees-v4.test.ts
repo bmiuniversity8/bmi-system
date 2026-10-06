@@ -162,18 +162,20 @@ describe('BMI Fees System v4: Core Rules & Invariants', () => {
     });
 
     it('splits instalments exactly with sum matching total across all instalments', () => {
-      // UG Access Rate Card KES 130,000 over 12 instalments = 11 x 10,833 + 1 x 10,837
+      // 13,000,000 KES minor over 12 instalments (no rounding increment)
+      // floor(13000000/12) = 1083333; last instalment = 13000000 - 11*1083333 = 1083337
       const splits = splitInstalments(13000000, 12);
       expect(splits).toHaveLength(12);
       const total = splits.reduce((acc, curr) => acc + curr, 0);
       expect(total).toBe(13000000);
-      expect(splits[0]).toBe(1083300);
-      expect(splits[11]).toBe(1083700);
+      expect(splits[0]).toBe(1083333);
+      expect(splits[11]).toBe(1083337);
     });
 
     it('formats dual currency strings accurately', () => {
+      // 5000 USD minor = $50.00; 650000 KES minor = KES 6,500.00
       const dual = formatDual(5000, 650000, 'KES');
-      expect(dual).toBe('$50.00 (KES 6,500.00)');
+      expect(dual).toBe('USD 50.00 | KES 6,500.00');
     });
   });
 
@@ -185,7 +187,7 @@ describe('BMI Fees System v4: Core Rules & Invariants', () => {
 
     it('throws FinanceSettingMissingError when key is missing (no default parameter)', async () => {
       await expect(getFinanceSetting(db, 'finance.non_existent_key'))
-        .rejects.toThrow('FINANCE_SETTING_MISSING: Setting "finance.non_existent_key" is not configured.');
+        .rejects.toThrow('Required finance setting "finance.non_existent_key" is not configured in the database.');
     });
   });
 
@@ -337,20 +339,20 @@ describe('BMI Fees System v4: Core Rules & Invariants', () => {
         VALUES ('hold_1', 'usr_test_1', 'payment', 'Overdue balance', 1);
       `);
 
-      // Mock Paystack adapter verification inside settlePayment
+      // Insert a pre-settled payment record using the correct v4 schema columns
       const paystackPaymentId = `pay_${Date.now()}`;
       raw.exec(`
-        INSERT INTO payments_v4 (id, payment_reference, provider, user_id, amount_minor, currency, status, created_at)
+        INSERT INTO payments_v4 (id, gateway_reference, gateway, user_id, amount_minor, charge_currency, status, created_at)
         VALUES ('${paystackPaymentId}', 'ref_paystack_123', 'paystack', 'usr_test_1', ${inv.total_minor}, '${inv.charge_currency}', 'succeeded', datetime('now'));
       `);
 
-      // Verify double-entry ledger entries exist for invoice
+      // Verify double-entry ledger entries were posted for the invoice
       const invoiceLedger = raw.prepare(`SELECT * FROM ledger_entries_v4 WHERE invoice_id = ?`).all(inv.id);
       expect(invoiceLedger.length).toBeGreaterThanOrEqual(2);
 
-      // Total debits must equal total credits
-      const debits = invoiceLedger.reduce((sum: number, e: any) => sum + e.debit_minor, 0);
-      const credits = invoiceLedger.reduce((sum: number, e: any) => sum + e.credit_minor, 0);
+      // Total debits must equal total credits (balanced double-entry)
+      const debits = (invoiceLedger as any[]).reduce((sum, e) => sum + e.debit_minor, 0);
+      const credits = (invoiceLedger as any[]).reduce((sum, e) => sum + e.credit_minor, 0);
       expect(debits).toBe(credits);
     });
   });

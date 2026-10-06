@@ -939,48 +939,56 @@ export async function handleFinalizeRegistration(
     // 4. Financial clearance (Two-Phase Finalize: Phase 1 ASSESS, Phase 2 CONFIRM)
     let finance = await hasTermFinancialClearance(db, userId, termId);
     if (!finance.cleared) {
-      // Phase 1: Build the term invoice via fee-assessment-service
-      const courseRows = await db.prepare(
-        `SELECT scr.course_id, c.code, c.name as title, c.credits, scr.registration_mode
-         FROM student_course_registrations scr
-         JOIN courses c ON scr.course_id = c.id
-         WHERE scr.student_id = ? AND scr.term_id = ? AND scr.status = 'registered'`
-      ).bind(userId, termId).all<{ course_id: string; code: string; title: string; credits: number; registration_mode?: string }>();
-
-      const student = await db.prepare(
-        `SELECT program, program_id, degree_level FROM students WHERE user_id = ? LIMIT 1`
-      ).bind(userId).first<{ program: string; program_id: string; degree_level: string }>().catch(() => null);
-
-      const { assessCourseTuition } = await import('../lib/fee-assessment-service');
-      const assessed = await assessCourseTuition(db, {
-        userId,
-        termId,
-        programId: student?.program_id,
-        degreeLevel: student?.degree_level,
-        courses: (courseRows?.results || []).map(c => ({
-          courseId: c.course_id,
-          code: c.code,
-          title: c.title,
-          credits: c.credits || 3,
-          isAudit: c.registration_mode === 'audit',
-        })),
-      });
-
-      if (!assessed.deferred && assessed.total_minor > 0) {
-        return new Response(JSON.stringify({
-          success: false,
-          error: 'Financial clearance required: tuition invoice pending settlement',
-          invoice: assessed,
-        }), {
-          status: 402,
-          headers: { 'Content-Type': 'application/json' },
-        });
+      if (finance.reason && finance.reason.includes('NULL term_id')) {
+        return error(finance.reason, 402);
       }
 
-      // If deferred or waived, re-evaluate clearance
-      finance = await hasTermFinancialClearance(db, userId, termId);
-      if (!finance.cleared) {
-        return error(finance.reason, 402);
+      try {
+        // Phase 1: Build the term invoice via fee-assessment-service
+        const courseRows = await db.prepare(
+          `SELECT scr.course_id, c.code, c.name as title, c.credits, scr.registration_mode
+           FROM student_course_registrations scr
+           JOIN courses c ON scr.course_id = c.id
+           WHERE scr.student_id = ? AND scr.term_id = ? AND scr.status = 'registered'`
+        ).bind(userId, termId).all<{ course_id: string; code: string; title: string; credits: number; registration_mode?: string }>();
+
+        const student = await db.prepare(
+          `SELECT program, program_id, degree_level FROM students WHERE user_id = ? LIMIT 1`
+        ).bind(userId).first<{ program: string; program_id: string; degree_level: string }>().catch(() => null);
+
+        const { assessCourseTuition } = await import('../lib/fee-assessment-service');
+        const assessed = await assessCourseTuition(db, {
+          userId,
+          termId,
+          programId: student?.program_id,
+          degreeLevel: student?.degree_level,
+          courses: (courseRows?.results || []).map(c => ({
+            courseId: c.course_id,
+            code: c.code,
+            title: c.title,
+            credits: c.credits || 3,
+            isAudit: c.registration_mode === 'audit',
+          })),
+        });
+
+        if (!assessed.deferred && assessed.total_minor > 0) {
+          return new Response(JSON.stringify({
+            success: false,
+            error: 'Financial clearance required: tuition invoice pending settlement',
+            invoice: assessed,
+          }), {
+            status: 402,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+
+        // If deferred or waived, re-evaluate clearance
+        finance = await hasTermFinancialClearance(db, userId, termId);
+        if (!finance.cleared) {
+          return error(finance.reason, 402);
+        }
+      } catch (err: unknown) {
+        return error(finance.reason || (err instanceof Error ? err.message : 'Financial clearance required'), 402);
       }
     }
 
