@@ -7,6 +7,18 @@ import { VitePWA } from "vite-plugin-pwa";
 // Backend API (dev proxy): http://127.0.0.1:8787 (start with `npm run dev` in apps/api)
 
 export default defineConfig({
+  // Baked-in build marker so anyone can verify which commit is actually
+  // running in production (footer shows "build <sha>"). Read at runtime via
+  // the __BMI_BUILD_SHA__ global. CI provides GITHUB_SHA; Cloudflare Pages
+  // provides CF_PAGES_COMMIT_SHA.
+  define: {
+    __BMI_BUILD_SHA__: JSON.stringify(
+      (typeof process !== 'undefined' &&
+        (process.env.GITHUB_SHA?.slice(0, 7) ||
+          process.env.CF_PAGES_COMMIT_SHA?.slice(0, 7))) ||
+        'dev',
+    ),
+  },
   preview: {
     port: 5174,
     host: "0.0.0.0",

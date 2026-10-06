@@ -578,6 +578,16 @@ const Sidebar: React.FC<SidebarProps> = ({
               <LogOut size={18} />
             </button>
           )}
+
+          {/* Build marker — identifies the running deployment (see vite.config.ts) */}
+          {!isCollapsed && (
+            <div
+              className="text-center text-[9px] text-purple-400/40 font-mono select-none"
+              title={`Deployed UMS build ${__BMI_BUILD_SHA__}`}
+            >
+              build {__BMI_BUILD_SHA__}
+            </div>
+          )}
         </div>
       </div>
     </>

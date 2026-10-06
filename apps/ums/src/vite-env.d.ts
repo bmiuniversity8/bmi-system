@@ -15,6 +15,9 @@ declare module 'virtual:pwa-register' {
   export function registerSW(options?: RegisterSWOptions): (reloadPage?: boolean) => Promise<void>;
 }
 
+// Build marker injected by vite.config.ts `define` (shows in the sidebar footer
+// so the running deployment is always identifiable).
+declare const __BMI_BUILD_SHA__: string;
 // Declare CDN modules
 declare module 'https://esm.sh/html2pdf.js@0.10.1?bundle' {
   const html2pdf: any;
