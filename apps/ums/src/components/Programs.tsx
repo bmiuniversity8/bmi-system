@@ -22,6 +22,8 @@ import {
 import { Program, Faculty, Department } from "../types";
 import { getPrograms, getFaculties, getDepartments, createProgram, updateProgram, deleteProgram } from "../services/programService";
 import { useQueryClient } from "@tanstack/react-query";
+import { useAuthStore } from "../stores/authStore";
+import { useDataStore } from "../stores/dataStore";
 
 
 // Beautiful mapping of program levels to distinct, premium aesthetics
@@ -77,8 +79,9 @@ const Programs: React.FC = () => {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
   // Distinct from "loaded but empty": a failed fetch must not masquerade as
-  // "No programs found", otherwise outages look like wiped data.
-  const [loadError, setLoadError] = useState<string | null>(null);
+  // "No programs found", otherwise outages look like wiped data. The HTTP
+  // status is kept so a dead session (401) offers log-in-again.
+  const [loadError, setLoadError] = useState<{ message: string; status?: number } | null>(null);
 
   // Filters
   const [searchTerm, setSearchTerm] = useState("");
@@ -100,21 +103,39 @@ const Programs: React.FC = () => {
       if (progRes.success && progRes.data) {
         setPrograms(progRes.data);
       } else {
-        throw new Error(
+        const status =
+          typeof (progRes as { status?: unknown }).status === 'number'
+            ? (progRes as { status?: number }).status
+            : undefined;
+        const err = new Error(
           typeof progRes.error === 'string'
             ? progRes.error
             : (progRes.error as { message?: string } | undefined)?.message || 'Failed to load programs',
         );
+        (err as { status?: number }).status = status;
+        throw err;
       }
       if (facRes.success && facRes.data) setFaculties(facRes.data);
       if (deptRes.success && deptRes.data) setDepartments(deptRes.data);
     } catch (error) { // eslint-disable-next-line no-console
       console.error("Failed to load academic catalog", error);
-      setLoadError(error instanceof Error ? error.message : 'Failed to load academic catalog');
+      setLoadError({
+        message: error instanceof Error ? error.message : 'Failed to load academic catalog',
+        status: typeof (error as { status?: unknown }).status === 'number'
+          ? (error as { status?: number }).status as number
+          : undefined,
+      });
     } finally {
       setLoading(false);
     }
   }
+
+  const programsSessionExpired = loadError?.status === 401;
+
+  const handleProgramsSessionExpired = async () => {
+    await useAuthStore.getState().logout();
+    useDataStore.getState().clearAll();
+  };
 
   useEffect(() => {
     loadData();
@@ -552,14 +573,30 @@ const normalizeProgramLevel = (p: Partial<Program>): keyof typeof LEVEL_CONFIG =
               Could not load programs
             </h4>
             <p className="text-xs text-gray-500 mt-2 font-medium max-w-sm text-center">
-              {loadError}. Your data is safe — the server could not be reached or your session expired.
+              {programsSessionExpired
+                ? 'Your session expired — please log in again. Your data is safe.'
+                : 'The server could not be reached. Your data is safe.'}
             </p>
-            <button
-              onClick={() => loadData()}
-              className="mt-5 flex items-center gap-1.5 px-4 py-2 bg-[#4B0082] text-white hover:bg-black transition-all font-bold text-[10px] uppercase tracking-wider rounded-lg shadow-md cursor-pointer"
-            >
-              <RefreshCw size={12} /> Retry
-            </button>
+            {loadError.status !== undefined && (
+              <p className="mt-1 font-mono text-[10px] text-gray-400">
+                HTTP {loadError.status}{loadError.message ? ` · ${loadError.message.slice(0, 120)}` : ''}
+              </p>
+            )}
+            {programsSessionExpired ? (
+              <button
+                onClick={() => handleProgramsSessionExpired()}
+                className="mt-5 px-4 py-2 bg-[#4B0082] text-white hover:bg-black transition-all font-bold text-[10px] uppercase tracking-wider rounded-lg shadow-md cursor-pointer"
+              >
+                Log in again
+              </button>
+            ) : (
+              <button
+                onClick={() => loadData()}
+                className="mt-5 flex items-center gap-1.5 px-4 py-2 bg-[#4B0082] text-white hover:bg-black transition-all font-bold text-[10px] uppercase tracking-wider rounded-lg shadow-md cursor-pointer"
+              >
+                <RefreshCw size={12} /> Retry
+              </button>
+            )}
           </div>
         )}
       </div>

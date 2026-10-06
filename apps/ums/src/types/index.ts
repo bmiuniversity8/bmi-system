@@ -322,6 +322,9 @@ export interface ApiResponse<T> {
     message: string;
     details?: Record<string, string[]>;
   };
+  /** HTTP status of the underlying request (0 = network failure). Lets UI
+   *  distinguish expired sessions (401) from server outages. */
+  status?: number;
   message?: string;
   meta?: {
     page?: number;

@@ -1006,3 +1006,511 @@ export const transcriptJobs = pgTable('transcript_jobs', {
 }, (t) => [
   index('idx_transcript_jobs_student_id').on(t.student_id),
 ]);
+
+// ─── Fees System v4 ─────────────────────────────────────────────────────────
+
+export const currenciesV4 = pgTable('currencies_v4', {
+  code: text('code').primaryKey(),
+  name: text('name').notNull(),
+  symbol: text('symbol').notNull(),
+  minor_unit_exponent: integer('minor_unit_exponent').notNull().default(2),
+  fx_rounding_increment_minor: integer('fx_rounding_increment_minor').notNull().default(1),
+  instalment_rounding_minor: integer('instalment_rounding_minor').notNull().default(1),
+  gateway_enabled: integer('gateway_enabled').notNull().default(0),
+  is_base: integer('is_base').notNull().default(0),
+  is_active: integer('is_active').notNull().default(1),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+});
+
+export const fxRatesV4 = pgTable('fx_rates_v4', {
+  id: text('id').primaryKey(),
+  base_currency: text('base_currency').notNull(),
+  quote_currency: text('quote_currency').notNull(),
+  rate_micros: integer('rate_micros').notNull(),
+  effective_from: timestamp('effective_from'),
+  effective_to: timestamp('effective_to'),
+  status: text('status').notNull().default('draft'),
+  source: text('source').notNull().default('CBK'),
+  set_by: text('set_by'),
+  approved_by: text('approved_by'),
+  approved_at: timestamp('approved_at'),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+}, (t) => [
+  index('idx_fx_rates_v4_pair').on(t.base_currency, t.quote_currency),
+  index('idx_fx_rates_v4_status').on(t.status),
+]);
+
+export const feeLevels = pgTable('fee_levels', {
+  id: text('id').primaryKey(),
+  level_key: text('level_key').notNull(),
+  label: text('label').notNull(),
+  public_label: text('public_label').notNull(),
+  is_billable: integer('is_billable').notNull().default(1),
+  sort_order: integer('sort_order').notNull().default(0),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('idx_fee_levels_key_unique').on(t.level_key),
+]);
+
+export const feeItemsV4 = pgTable('fee_items_v4', {
+  id: text('id').primaryKey(),
+  code: text('code').notNull(),
+  name: text('name').notNull(),
+  category: text('category').notNull(),
+  charge_event: text('charge_event').notNull(),
+  charge_scope: text('charge_scope').notNull(),
+  applies_to_levels: text('applies_to_levels').notNull().default('[]'),
+  is_optional: integer('is_optional').notNull().default(0),
+  is_refundable: integer('is_refundable'),
+  is_active: integer('is_active').notNull().default(1),
+  published: integer('published').notNull().default(1),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('idx_fee_items_v4_code_unique').on(t.code),
+]);
+
+export const feePlansV4 = pgTable('fee_plans_v4', {
+  id: text('id').primaryKey(),
+  fee_level_id: text('fee_level_id').notNull(),
+  code: text('code').notNull(),
+  version: text('version').notNull().default('v1'),
+  status: text('status').notNull().default('draft'),
+  effective_from: timestamp('effective_from'),
+  effective_to: timestamp('effective_to'),
+  duration_months: integer('duration_months'),
+  instalment_cadence: text('instalment_cadence'),
+  instalment_count: integer('instalment_count'),
+  created_by: text('created_by'),
+  approved_by: text('approved_by'),
+  approved_at: timestamp('approved_at'),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+});
+
+export const feePlanLinesV4 = pgTable('fee_plan_lines_v4', {
+  id: text('id').primaryKey(),
+  fee_plan_id: text('fee_plan_id').notNull(),
+  fee_item_id: text('fee_item_id').notNull(),
+  charge_basis: text('charge_basis').notNull(),
+  amount_minor: integer('amount_minor').notNull(),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+});
+
+export const feeTiersV4 = pgTable('fee_tiers_v4', {
+  id: text('id').primaryKey(),
+  fee_plan_line_id: text('fee_plan_line_id').notNull(),
+  label: text('label').notNull(),
+  min_credits: real('min_credits').notNull(),
+  max_credits: real('max_credits'),
+  amount_minor: integer('amount_minor').notNull(),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+});
+
+export const paymentPlanOptionsV4 = pgTable('payment_plan_options_v4', {
+  id: text('id').primaryKey(),
+  code: text('code').notNull(),
+  name: text('name').notNull(),
+  schedule_json: text('schedule_json').notNull(),
+  is_active: integer('is_active').notNull().default(1),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('idx_payment_plan_options_v4_code').on(t.code),
+]);
+
+export const feePins = pgTable('fee_pins', {
+  id: text('id').primaryKey(),
+  user_id: text('user_id').notNull(),
+  application_id: text('application_id'),
+  fee_plan_id: text('fee_plan_id').notNull(),
+  fee_plan_version: text('fee_plan_version').notNull(),
+  fx_rate_id: text('fx_rate_id'),
+  pinned_at: timestamp('pinned_at').notNull().defaultNow(),
+}, (t) => [
+  index('idx_fee_pins_user').on(t.user_id),
+  index('idx_fee_pins_app').on(t.application_id),
+]);
+
+export const financeSettings = pgTable('finance_settings', {
+  key: text('key').primaryKey(),
+  value_json: text('value_json').notNull(),
+  value_type: text('value_type').notNull(),
+  description: text('description'),
+  updated_by: text('updated_by'),
+  updated_at: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const institutionSettings = pgTable('institution_settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  description: text('description'),
+  updated_at: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const refundRules = pgTable('refund_rules', {
+  id: text('id').primaryKey(),
+  fee_item_id: text('fee_item_id'),
+  category: text('category'),
+  days_from_start_min: integer('days_from_start_min'),
+  days_from_start_max: integer('days_from_start_max'),
+  percent: integer('percent').notNull(),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+});
+
+export const invoicesV4 = pgTable('invoices_v4', {
+  id: text('id').primaryKey(),
+  invoice_number: text('invoice_number').notNull(),
+  idempotency_key: text('idempotency_key').notNull(),
+  kind: text('kind').notNull(),
+  source_event: text('source_event').notNull(),
+  legacy: integer('legacy').notNull().default(0),
+  user_id: text('user_id').notNull(),
+  student_id: text('student_id'),
+  uid: text('uid'),
+  application_id: text('application_id'),
+  enrollment_key: text('enrollment_key'),
+  term_id: text('term_id'),
+  academic_year: text('academic_year'),
+  fee_level_id: text('fee_level_id'),
+  fee_plan_id: text('fee_plan_id'),
+  fee_plan_version: text('fee_plan_version'),
+  instalment_no: integer('instalment_no'),
+  instalment_of: integer('instalment_of'),
+  plan_group_id: text('plan_group_id'),
+
+  base_currency: text('base_currency').notNull(),
+  base_subtotal_minor: integer('base_subtotal_minor').notNull(),
+  base_discount_minor: integer('base_discount_minor').notNull().default(0),
+  base_tax_minor: integer('base_tax_minor').notNull().default(0),
+  base_total_minor: integer('base_total_minor').notNull(),
+  base_paid_minor: integer('base_paid_minor').notNull().default(0),
+
+  charge_currency: text('charge_currency').notNull(),
+  subtotal_minor: integer('subtotal_minor').notNull(),
+  discount_minor: integer('discount_minor').notNull().default(0),
+  tax_minor: integer('tax_minor').notNull().default(0),
+  total_minor: integer('total_minor').notNull(),
+  paid_minor: integer('paid_minor').notNull().default(0),
+  balance_minor: integer('balance_minor').notNull(),
+
+  fx_rate_id: text('fx_rate_id'),
+  fx_rate_micros: integer('fx_rate_micros').notNull(),
+  fx_rounding_increment_minor: integer('fx_rounding_increment_minor').notNull().default(1),
+  tax_rate_bps: integer('tax_rate_bps'),
+
+  status: text('status').notNull().default('issued'),
+  due_date: timestamp('due_date').notNull(),
+  issued_at: timestamp('issued_at').notNull().defaultNow(),
+  paid_at: timestamp('paid_at'),
+  voided_at: timestamp('voided_at'),
+  void_reason: text('void_reason'),
+
+  billing_name: text('billing_name'),
+  billing_email: text('billing_email'),
+  billing_address: text('billing_address'),
+  student_number: text('student_number'),
+  programme_name: text('programme_name'),
+  level_key: text('level_key'),
+  level_label: text('level_label'),
+  notes: text('notes'),
+
+  created_by: text('created_by').notNull(),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+  updated_at: timestamp('updated_at').notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('idx_invoices_v4_number_unique').on(t.invoice_number),
+  uniqueIndex('idx_invoices_v4_idempotency_unique').on(t.idempotency_key),
+  index('idx_invoices_v4_user').on(t.user_id),
+  index('idx_invoices_v4_term').on(t.term_id),
+  index('idx_invoices_v4_status').on(t.status),
+  index('idx_invoices_v4_enrollment').on(t.enrollment_key),
+]);
+
+export const invoiceLinesV4 = pgTable('invoice_lines_v4', {
+  id: text('id').primaryKey(),
+  invoice_id: text('invoice_id').notNull(),
+  line_no: integer('line_no').notNull(),
+  fee_item_id: text('fee_item_id').notNull(),
+  kind: text('kind').notNull(),
+  description: text('description').notNull(),
+  quantity: real('quantity').notNull().default(1),
+  course_id: text('course_id'),
+  base_unit_minor: integer('base_unit_minor').notNull(),
+  base_amount_minor: integer('base_amount_minor').notNull(),
+  unit_minor: integer('unit_minor').notNull(),
+  amount_minor: integer('amount_minor').notNull(),
+  award_id: text('award_id'),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+}, (t) => [
+  index('idx_invoice_lines_v4_invoice').on(t.invoice_id),
+]);
+
+export const feeCharges = pgTable('fee_charges', {
+  id: text('id').primaryKey(),
+  charge_key: text('charge_key').notNull(),
+  fee_item_id: text('fee_item_id').notNull(),
+  invoice_id: text('invoice_id').notNull(),
+  status: text('status').notNull().default('billed'),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+});
+
+export const paymentsV4 = pgTable('payments_v4', {
+  id: text('id').primaryKey(),
+  user_id: text('user_id').notNull(),
+  gateway: text('gateway').notNull().default('paystack'),
+  gateway_reference: text('gateway_reference').notNull(),
+  gateway_event_id: text('gateway_event_id'),
+  charge_currency: text('charge_currency').notNull(),
+  amount_minor: integer('amount_minor').notNull(),
+  channel: text('channel'),
+  gateway_fee_minor: integer('gateway_fee_minor'),
+  status: text('status').notNull().default('pending'),
+  paid_at: timestamp('paid_at'),
+  raw_payload_hash: text('raw_payload_hash'),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('idx_payments_v4_ref_unique').on(t.gateway_reference),
+  index('idx_payments_v4_user').on(t.user_id),
+  index('idx_payments_v4_status').on(t.status),
+]);
+
+export const paymentAllocationsV4 = pgTable('payment_allocations_v4', {
+  id: text('id').primaryKey(),
+  payment_id: text('payment_id').notNull(),
+  invoice_id: text('invoice_id').notNull(),
+  amount_minor: integer('amount_minor').notNull(),
+  base_amount_minor: integer('base_amount_minor').notNull(),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+}, (t) => [
+  index('idx_payment_alloc_v4_pay').on(t.payment_id),
+  index('idx_payment_alloc_v4_inv').on(t.invoice_id),
+]);
+
+export const accountCreditsV4 = pgTable('account_credits_v4', {
+  id: text('id').primaryKey(),
+  user_id: text('user_id').notNull(),
+  currency: text('currency').notNull(),
+  amount_minor: integer('amount_minor').notNull(),
+  source_payment_id: text('source_payment_id'),
+  status: text('status').notNull().default('available'),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+});
+
+export const receiptsV4 = pgTable('receipts_v4', {
+  id: text('id').primaryKey(),
+  receipt_number: text('receipt_number').notNull(),
+  payment_id: text('payment_id').notNull(),
+  issued_at: timestamp('issued_at').notNull().defaultNow(),
+  document_key: text('document_key'),
+}, (t) => [
+  uniqueIndex('idx_receipts_v4_num_unique').on(t.receipt_number),
+]);
+
+export const refundsV4 = pgTable('refunds_v4', {
+  id: text('id').primaryKey(),
+  invoice_id: text('invoice_id').notNull(),
+  payment_id: text('payment_id').notNull(),
+  amount_minor: integer('amount_minor').notNull(),
+  reason: text('reason').notNull(),
+  requested_by: text('requested_by').notNull(),
+  approved_by: text('approved_by'),
+  gateway_refund_reference: text('gateway_refund_reference'),
+  status: text('status').notNull().default('pending'),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+  approved_at: timestamp('approved_at'),
+});
+
+export const documentSequences = pgTable('document_sequences', {
+  name: text('name').notNull(),
+  year: integer('year').notNull(),
+  next_value: integer('next_value').notNull().default(1),
+}, (t) => [
+  primaryKey({ columns: [t.name, t.year] }),
+]);
+
+export const feeGateDeferrals = pgTable('fee_gate_deferrals', {
+  id: text('id').primaryKey(),
+  user_id: text('user_id').notNull(),
+  invoice_id: text('invoice_id').notNull(),
+  gate: text('gate').notNull(),
+  deferred_at: timestamp('deferred_at').notNull().defaultNow(),
+  policy: text('policy').notNull(),
+  cleared_at: timestamp('cleared_at'),
+}, (t) => [
+  index('idx_deferrals_user').on(t.user_id),
+  index('idx_deferrals_gate').on(t.gate),
+]);
+
+export const ledgerAccountsV4 = pgTable('ledger_accounts_v4', {
+  id: text('id').primaryKey(),
+  account_code: text('account_code').notNull(),
+  name: text('name').notNull(),
+  type: text('type').notNull(),
+  normal_balance: text('normal_balance').notNull(),
+  is_active: integer('is_active').notNull().default(1),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('idx_ledger_accounts_v4_code').on(t.account_code),
+]);
+
+export const ledgerEntriesV4 = pgTable('ledger_entries_v4', {
+  id: text('id').primaryKey(),
+  journal_id: text('journal_id').notNull(),
+  account_code: text('account_code').notNull(),
+  debit_minor: integer('debit_minor').notNull().default(0),
+  credit_minor: integer('credit_minor').notNull().default(0),
+  currency: text('currency').notNull(),
+  invoice_id: text('invoice_id'),
+  payment_id: text('payment_id'),
+  term_id: text('term_id'),
+  description: text('description').notNull(),
+  created_by: text('created_by').notNull(),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+}, (t) => [
+  index('idx_ledger_entries_v4_journal').on(t.journal_id),
+  index('idx_ledger_entries_v4_invoice').on(t.invoice_id),
+]);
+
+export const rateCards = pgTable('rate_cards', {
+  id: text('id').primaryKey(),
+  code: text('code').notNull(),
+  name: text('name').notNull(),
+  status: text('status').notNull().default('draft'),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('idx_rate_cards_code').on(t.code),
+]);
+
+export const rateCardLines = pgTable('rate_card_lines', {
+  id: text('id').primaryKey(),
+  rate_card_id: text('rate_card_id').notNull(),
+  fee_level_id: text('fee_level_id').notNull(),
+  fee_item_id: text('fee_item_id').notNull(),
+  amount_minor: integer('amount_minor').notNull(),
+  duration_months: integer('duration_months'),
+  instalment_count: integer('instalment_count'),
+  instalment_structure_json: text('instalment_structure_json'),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+});
+
+export const aidFunds = pgTable('aid_funds', {
+  id: text('id').primaryKey(),
+  code: text('code').notNull(),
+  name: text('name').notNull(),
+  budget_base_minor: integer('budget_base_minor').notNull().default(0),
+  period_from: text('period_from'),
+  period_to: text('period_to'),
+  restricted_to: text('restricted_to'),
+  is_active: integer('is_active').notNull().default(1),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('idx_aid_funds_code').on(t.code),
+]);
+
+export const aidProgrammes = pgTable('aid_programmes', {
+  id: text('id').primaryKey(),
+  code: text('code').notNull(),
+  name: text('name').notNull(),
+  kind: text('kind').notNull(),
+  method: text('method').notNull(),
+  invoice_label: text('invoice_label').notNull(),
+  public_criteria_text: text('public_criteria_text').notNull(),
+  stackable: integer('stackable').notNull().default(0),
+  renewable: integer('renewable').notNull().default(1),
+  requires_sap: integer('requires_sap').notNull().default(1),
+  status: text('status').notNull().default('draft'),
+  fund_id: text('fund_id'),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('idx_aid_programmes_code').on(t.code),
+]);
+
+export const aidBands = pgTable('aid_bands', {
+  id: text('id').primaryKey(),
+  aid_programme_id: text('aid_programme_id').notNull(),
+  band_label: text('band_label').notNull(),
+  sort_order: integer('sort_order').notNull(),
+  min_need_score: real('min_need_score').notNull(),
+  max_need_score: real('max_need_score').notNull(),
+  method: text('method').notNull(),
+  percent_bps: integer('percent_bps'),
+  rate_card_id: text('rate_card_id'),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+});
+
+export const aidCommitments = pgTable('aid_commitments', {
+  id: text('id').primaryKey(),
+  award_id: text('award_id').notNull(),
+  fund_id: text('fund_id').notNull(),
+  committed_base_minor: integer('committed_base_minor').notNull(),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+});
+
+export const aidApplications = pgTable('aid_applications', {
+  id: text('id').primaryKey(),
+  user_id: text('user_id').notNull(),
+  aid_programme_id: text('aid_programme_id').notNull(),
+  status: text('status').notNull().default('submitted'),
+  submitted_at: timestamp('submitted_at').notNull().defaultNow(),
+  need_score: real('need_score'),
+  verification_status: text('verification_status').notNull().default('pending'),
+  documents: text('documents'),
+  minimal_data_json: text('minimal_data_json'),
+  waitlist_rank: integer('waitlist_rank'),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+  updated_at: timestamp('updated_at').notNull().defaultNow(),
+}, (t) => [
+  index('idx_aid_app_user').on(t.user_id),
+]);
+
+export const feeAwards = pgTable('fee_awards', {
+  id: text('id').primaryKey(),
+  user_id: text('user_id').notNull(),
+  aid_programme_id: text('aid_programme_id').notNull(),
+  aid_application_id: text('aid_application_id'),
+  method: text('method').notNull(),
+  percent_bps: integer('percent_bps'),
+  fixed_base_minor: integer('fixed_base_minor'),
+  rate_card_id: text('rate_card_id'),
+  applies_to_json: text('applies_to_json').notNull(),
+  valid_from_term: text('valid_from_term'),
+  valid_to_term: text('valid_to_term'),
+  renewal_due: text('renewal_due'),
+  conditions_json: text('conditions_json'),
+  status: text('status').notNull().default('proposed'),
+  reason_code: text('reason_code'),
+  decided_by: text('decided_by').notNull(),
+  second_approver: text('second_approver'),
+  decided_at: timestamp('decided_at').notNull().defaultNow(),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+}, (t) => [
+  index('idx_fee_awards_user').on(t.user_id),
+]);
+
+export const aidAppeals = pgTable('aid_appeals', {
+  id: text('id').primaryKey(),
+  award_or_application_id: text('award_or_application_id').notNull(),
+  filed_at: timestamp('filed_at').notNull().defaultNow(),
+  reviewer_id: text('reviewer_id').notNull(),
+  outcome: text('outcome'),
+  written_reason: text('written_reason'),
+  resolved_at: timestamp('resolved_at'),
+});
+
+export const aidAccessLog = pgTable('aid_access_log', {
+  id: text('id').primaryKey(),
+  user_id: text('user_id').notNull(),
+  accessed_by: text('accessed_by').notNull(),
+  action: text('action').notNull(),
+  resource_id: text('resource_id').notNull(),
+  accessed_at: timestamp('accessed_at').notNull().defaultNow(),
+});
+
+export const aidCriteriaFields = pgTable('aid_criteria_fields', {
+  id: text('id').primaryKey(),
+  code: text('code').notNull(),
+  label: text('label').notNull(),
+  is_allowed: integer('is_allowed').notNull().default(1),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('idx_aid_criteria_fields_code').on(t.code),
+]);
+

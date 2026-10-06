@@ -23,6 +23,7 @@ export async function getPrograms(filters?: {
     const queryString = params.toString();
     const url = `${API_URL}/programs${queryString ? `?${queryString}` : ''}`;
     const response = await authFetch(url);
+    const status = response.status;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let data = await parseJsonSafe<any>(response);
     if (data?.success) {
@@ -32,8 +33,11 @@ export async function getPrograms(filters?: {
         data.data = [];
       }
     }
-    return data ?? { success: false, data: [], error: { code: 'PARSE_ERROR', message: 'Failed to parse programs response' } };
-  } catch { return { success: false, data: [], error: { code: 'FETCH_ERROR', message: 'Failed to fetch programs'  } };
+    if (data && typeof data === 'object' && (data as { status?: number }).status === undefined) {
+      (data as { status?: number }).status = status;
+    }
+    return data ?? { success: false, data: [], status, error: { code: 'PARSE_ERROR', message: 'Failed to parse programs response' } };
+  } catch { return { success: false, data: [], status: 0, error: { code: 'FETCH_ERROR', message: 'Failed to fetch programs'  } };
   }
 }
 

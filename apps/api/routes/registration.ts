@@ -235,21 +235,23 @@ export async function handleGetRegistrationStatus(_req: Request, env: Env, userI
     let programFeeInfo: { amount: number; description?: string } | null = null;
     const selectedLevel = currentData?.program?.level || appRow?.degree_level || 'undergraduate';
     try {
-      const { resolveTuitionForLevel } = await import('../lib/finance/fee-engine');
-      const tuition = await resolveTuitionForLevel(db, selectedLevel);
-      programFeeInfo = {
-        amount: tuition.totalUsd,
-        description: `${tuition.feeItem.name} ($${tuition.totalUsd} over ${tuition.feeItem.billing_periods} installments)`,
-      };
-    } catch {
-      if (selectedProgId) {
-        const feeRow = await db.prepare(
-          `SELECT amount, description FROM program_fees WHERE program_id = ? LIMIT 1`
-        ).bind(selectedProgId).first<{ amount: number; description?: string }>().catch(() => null);
-        if (feeRow) {
-          programFeeInfo = { amount: feeRow.amount, description: feeRow.description || undefined };
-        }
+      const { resolveFeeLevel } = await import('../lib/fee-assessment-service');
+      const level = await resolveFeeLevel(db, selectedProgId, selectedLevel);
+      const planLine = await db.prepare(
+        `SELECT fpl.amount_minor, fpl.charge_basis
+         FROM fee_plan_lines_v4 fpl
+         JOIN fee_plans_v4 fp ON fpl.fee_plan_id = fp.id
+         WHERE fp.fee_level_id = ? AND fp.status = 'active'
+         LIMIT 1`
+      ).bind(level.levelId).first<{ amount_minor: number; charge_basis: string }>().catch(() => null);
+      if (planLine) {
+        programFeeInfo = {
+          amount: planLine.amount_minor / 100,
+          description: `${level.publicLabel || level.label} Tuition (${planLine.charge_basis === 'per_credit' ? `$${(planLine.amount_minor / 100).toFixed(2)}/credit` : `$${(planLine.amount_minor / 100).toFixed(2)} total`})`,
+        };
       }
+    } catch {
+      // non-fatal
     }
 
     const completedSteps = STEP_ORDER.filter(s => savedData[s] !== undefined);
@@ -334,13 +336,7 @@ export async function handleCompleteRegistration(_req: Request, env: Env, userId
 
     const finalRegNo = result.regNo || userRow.reg_no;
 
-    // Section 18: Issue Registration Fee invoice ($16 USD / KES equivalent)
-    try {
-      const { createRegistrationFeeInvoice } = await import('../lib/finance/fee-engine');
-      await createRegistrationFeeInvoice(db, userId, userRow.uid || undefined, 'KE');
-    } catch (e) {
-      console.warn('[registration] Registration fee invoice creation skipped/failed:', e);
-    }
+    // Registration fee is assessed at offer acceptance in Fees System v4.
 
     const runPostRegistrationTasks = async () => {
       const tasks: Promise<unknown>[] = [];
@@ -497,31 +493,8 @@ export async function hasTermFinancialClearance(
   studentId: string,
   termId: string
 ): Promise<{ cleared: boolean; reason: string }> {
-  try {
-    const paid = await (db.prepare(
-      `SELECT id FROM invoices WHERE student_id = ? AND term_id = ? AND status = 'paid' LIMIT 1`
-    ).bind(studentId, termId).first() as Promise<{ id: string } | null>).catch(() => null);
-    if (paid) return { cleared: true, reason: 'paid term invoice' };
-
-    // Approved aid / payment-plan coverage for the term also clears finance.
-    const aid = await (db.prepare(
-      `SELECT id FROM financial_aid_awards WHERE student_id = ? AND term_id = ? AND status IN ('approved','awarded','disbursed') LIMIT 1`
-    ).bind(studentId, termId).first() as Promise<{ id: string } | null>).catch(() => null);
-    if (aid) return { cleared: true, reason: 'approved aid/payment plan covers term' };
-
-    const legacyPaid = await (db.prepare(
-      `SELECT id FROM invoices WHERE student_id = ? AND status = 'paid' AND term_id IS NULL LIMIT 1`
-    ).bind(studentId).first() as Promise<{ id: string } | null>).catch(() => null);
-    if (legacyPaid) {
-      return {
-        cleared: false,
-        reason: 'Financial clearance required: paid invoice has NULL term_id and does not satisfy current-term clearance; backfill term_id or pay the current-term invoice.',
-      };
-    }
-  } catch (e: unknown) {
-    return { cleared: false, reason: `Financial clearance check failed: ${e instanceof Error ? e.message : String(e)}` };
-  }
-  return { cleared: false, reason: 'Financial clearance required: no paid tuition invoice for the current term.' };
+  const { hasTermFinancialClearance: checkClearanceUnified } = await import('../lib/finance-clearance');
+  return checkClearanceUnified(db, studentId, termId);
 }
 
 export async function handleGetRegistrationEligibility(
@@ -725,18 +698,22 @@ export async function handleGetFeeAgreement(
       degreeLevel = prog?.level;
     }
 
-    let grossTuition = 1000; // default base tuition
+    let grossTuition = 0;
     try {
-      const { resolveTuitionForLevel } = await import('../lib/finance/fee-engine');
-      const tuition = await resolveTuitionForLevel(db, degreeLevel || 'undergraduate');
-      grossTuition = tuition.totalUsd;
-    } catch {
-      if (student?.program_id) {
-        const feeRow = await db.prepare(
-          `SELECT amount FROM program_fees WHERE program_id = ? LIMIT 1`
-        ).bind(student.program_id).first<{ amount: number }>().catch(() => null);
-        if (feeRow?.amount) grossTuition = feeRow.amount;
+      const { resolveFeeLevel } = await import('../lib/fee-assessment-service');
+      const level = await resolveFeeLevel(db, student?.program_id, degreeLevel);
+      const planLine = await db.prepare(
+        `SELECT fpl.amount_minor, fpl.charge_basis
+         FROM fee_plan_lines_v4 fpl
+         JOIN fee_plans_v4 fp ON fpl.fee_plan_id = fp.id
+         WHERE fp.fee_level_id = ? AND fp.status = 'active'
+         LIMIT 1`
+      ).bind(level.levelId).first<{ amount_minor: number; charge_basis: string }>().catch(() => null);
+      if (planLine) {
+        grossTuition = planLine.amount_minor / 100;
       }
+    } catch {
+      // non-fatal
     }
 
     // Query financial aid to calculate net balance
@@ -959,11 +936,52 @@ export async function handleFinalizeRegistration(
       return error('No registered courses for this term. Select sections before finalizing.', 400);
     }
 
-    // 4. Financial clearance: term-scoped paid invoice (or approved aid/plan).
-    //    Invoices with NULL term_id do not satisfy clearance.
-    const finance = await hasTermFinancialClearance(db, userId, termId);
+    // 4. Financial clearance (Two-Phase Finalize: Phase 1 ASSESS, Phase 2 CONFIRM)
+    let finance = await hasTermFinancialClearance(db, userId, termId);
     if (!finance.cleared) {
-      return error(finance.reason, 402);
+      // Phase 1: Build the term invoice via fee-assessment-service
+      const courseRows = await db.prepare(
+        `SELECT scr.course_id, c.code, c.name as title, c.credits, scr.registration_mode
+         FROM student_course_registrations scr
+         JOIN courses c ON scr.course_id = c.id
+         WHERE scr.student_id = ? AND scr.term_id = ? AND scr.status = 'registered'`
+      ).bind(userId, termId).all<{ course_id: string; code: string; title: string; credits: number; registration_mode?: string }>();
+
+      const student = await db.prepare(
+        `SELECT program, program_id, degree_level FROM students WHERE user_id = ? LIMIT 1`
+      ).bind(userId).first<{ program: string; program_id: string; degree_level: string }>().catch(() => null);
+
+      const { assessCourseTuition } = await import('../lib/fee-assessment-service');
+      const assessed = await assessCourseTuition(db, {
+        userId,
+        termId,
+        programId: student?.program_id,
+        degreeLevel: student?.degree_level,
+        courses: (courseRows?.results || []).map(c => ({
+          courseId: c.course_id,
+          code: c.code,
+          title: c.title,
+          credits: c.credits || 3,
+          isAudit: c.registration_mode === 'audit',
+        })),
+      });
+
+      if (!assessed.deferred && assessed.total_minor > 0) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: 'Financial clearance required: tuition invoice pending settlement',
+          invoice: assessed,
+        }), {
+          status: 402,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      // If deferred or waived, re-evaluate clearance
+      finance = await hasTermFinancialClearance(db, userId, termId);
+      if (!finance.cleared) {
+        return error(finance.reason, 402);
+      }
     }
 
     // 5. Agreement signature: must bind the CURRENT version and term.

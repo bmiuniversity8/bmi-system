@@ -1,37 +1,35 @@
 import Link from "next/link";
 import PageHero from "@/components/PageHero";
+import { API_WORKER_URL } from "@bmi/shared";
 
-export default function Admissions() {
-  const fees = [
-    { label: "Application Fee (Non-refundable)", amount: "$50.00" },
-    { label: "Registration Fee (Non-refundable)", amount: "$50.00" },
-    { label: "Graduation Fee", amount: "$150.00" },
-    { label: "Thesis Fee", amount: "$300.00" },
-    { label: "Dissertation Fee", amount: "$400.00" },
-    { label: "Audit Fee", amount: "$100.00 / course" },
-    { label: "Life Learning Credit Assessment", amount: "$70.00 / credit hour" },
-  ];
+async function getFees() {
+  try {
+    const res = await fetch(`${API_WORKER_URL}/api/public/fees`, {
+      next: { revalidate: 300 },
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json?.data || null;
+  } catch (e) {
+    console.warn("Could not fetch public fees from API:", e);
+    return null;
+  }
+}
 
-  const transferFees = [
-    { credits: "Less than 30 credits", fee: "$50.00" },
-    { credits: "30 to 60 credits", fee: "$100.00" },
-    { credits: "61 to 90 credits", fee: "$150.00" },
-    { credits: "More than 90 credits", fee: "$200.00" },
-  ];
+export default async function Admissions() {
+  const feeData = await getFees();
 
-  const tuitionRates = [
-    { program: "Undergraduate / Bachelor's Degrees", cost: "$250.00 / credit hour" },
-    { program: "Graduate / Master's Degrees", cost: "$350.00 / credit hour" },
-    { program: "Doctorate Degrees", cost: "$450.00 / credit hour" },
-    { program: "Graduate Certificates", cost: "$300.00 / credit hour" },
-  ];
+  const tuitionRates = feeData?.tuition || [];
+  const fees = feeData?.fees || [];
+  const transferFees = feeData?.transfer_fees || [];
+  const aidBands = feeData?.aid_bands || [];
 
   const steps = [
     { num: "01", title: "Create Your Account", body: "Fill out the initial form at /apply to create your applicant account. You will receive a verification email to confirm your email address." },
     { num: "02", title: "Complete the Application", body: "Log into the applicant portal and complete the multi-step application form, including program selection, educational background, and personal statement." },
     { num: "03", title: "Submit Transcripts & Documents", body: "Upload transcripts from all colleges and universities attended, along with ID documents and any additional materials through the secure applicant portal." },
     { num: "04", title: "Request Recommendations", body: "Use the portal to send secure recommendation requests to your referees. They will receive a unique link to upload their letters directly." },
-    { num: "05", title: "Pay Application Fee", body: "Submit the non-refundable Application Fee of $50.00 to finalize your submission. Your application is not complete until the fee is paid." },
+    { num: "05", title: "Pay Application Fee", body: "Submit the non-refundable Application Fee to finalize your submission. Your application is officially submitted once the fee is cleared or deferred." },
   ];
 
   return (
@@ -110,7 +108,7 @@ export default function Admissions() {
               Tuition Rates
             </h2>
             <p style={{ color: "#64748b", fontSize: "1.05rem" }}>
-              Affordable, transparent tuition rates for all degree levels.
+              Affordable, transparent standard tuition rates across academic levels.
             </p>
           </div>
 
@@ -124,7 +122,7 @@ export default function Admissions() {
               </thead>
               <tbody>
                 {tuitionRates.map((t, i) => (
-                  <tr key={t.program} style={{ background: i % 2 === 0 ? "#fff" : "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                  <tr key={t.code || t.program} style={{ background: i % 2 === 0 ? "#fff" : "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
                     <td style={{ padding: "1rem 1.5rem", fontWeight: 600, color: "#1e293b" }}>{t.program}</td>
                     <td style={{ padding: "1rem 1.5rem", color: "#d4af37", fontWeight: 700 }}>{t.cost}</td>
                   </tr>
@@ -152,7 +150,7 @@ export default function Admissions() {
               </h3>
               <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: "0.85rem" }}>
                 {fees.map((f) => (
-                  <li key={f.label} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.9rem", color: "#475569", borderBottom: "1px solid #f1f5f9", paddingBottom: "0.5rem" }}>
+                  <li key={f.code || f.label} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.9rem", color: "#475569", borderBottom: "1px solid #f1f5f9", paddingBottom: "0.5rem" }}>
                     <span>{f.label}</span>
                     <strong style={{ color: "#0f172a" }}>{f.amount}</strong>
                   </li>
@@ -176,6 +174,42 @@ export default function Admissions() {
           </div>
         </div>
       </section>
+
+      {/* Financial Aid Overview */}
+      {aidBands.length > 0 && (
+        <section style={{ background: "#fff", padding: "4rem 2rem", borderTop: "1px solid #e2e8f0" }}>
+          <div style={{ maxWidth: "1000px", margin: "0 auto" }}>
+            <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
+              <div className="gold-bar" style={{ margin: "0 auto 1.25rem" }} />
+              <h2 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: "clamp(1.6rem, 2.5vw, 2.2rem)", color: "#0f172a", marginBottom: "0.75rem" }}>
+                Institutional Financial Aid & Rate Cards
+              </h2>
+              <p style={{ color: "#64748b", fontSize: "1rem", maxWidth: "680px", margin: "0 auto" }}>
+                Need-based and regional subsidies are awarded as institutional fee credits against standard tuition.
+              </p>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1.25rem" }}>
+              {aidBands.map((band) => (
+                <div key={band.band_key} style={{ background: "#f8fafc", borderRadius: "12px", padding: "1.5rem", border: "1px solid #e2e8f0" }}>
+                  <div style={{ fontSize: "0.8rem", color: "#d4af37", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.25rem" }}>
+                    {band.band_key.toUpperCase()}
+                  </div>
+                  <h4 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: "1.05rem", color: "#0f172a", marginBottom: "0.5rem" }}>
+                    {band.name}
+                  </h4>
+                  <div style={{ fontSize: "1.25rem", fontWeight: 900, color: "#1e293b", marginBottom: "0.5rem" }}>
+                    {band.discount_bps ? `${(band.discount_bps / 100).toFixed(0)}% Subsidy` : 'Access Rate Card'}
+                  </div>
+                  <p style={{ fontSize: "0.82rem", color: "#64748b", lineHeight: 1.5 }}>
+                    Evaluated through confidential student financial aid applications.
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* CTA */}
       <section style={{ background: "#0f172a", padding: "5rem 2rem", textAlign: "center" }}>

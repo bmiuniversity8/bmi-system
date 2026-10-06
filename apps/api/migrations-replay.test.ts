@@ -59,6 +59,28 @@ describe('D1 migrations replay (Tasks 01-08)', () => {
     expect(scrCheck.sql).toContain('waitlisted');
     expect(scrCheck.sql).toContain('completed');
 
+    // 0051: Fees System v4 tables
+    const fl = columns(db, 'fee_levels');
+    expect(fl).toContain('level_key');
+    expect(fl).toContain('is_billable');
+
+    const fi = columns(db, 'fee_items_v4');
+    expect(fi).toContain('charge_event');
+    expect(fi).toContain('charge_scope');
+
+    const inv4 = columns(db, 'invoices_v4');
+    expect(inv4).toContain('base_total_minor');
+    expect(inv4).toContain('total_minor');
+    expect(inv4).toContain('idempotency_key');
+
+    const fc = columns(db, 'fee_charges');
+    expect(fc).toContain('charge_key');
+    const fcIdx = db.prepare(`SELECT sql FROM sqlite_master WHERE name = 'idx_fee_charges_billed'`).get() as any;
+    expect(fcIdx?.sql).toMatch(/UNIQUE/i);
+
+    const levelsCount = db.prepare(`SELECT count(*) as count FROM fee_levels`).get() as any;
+    expect(levelsCount.count).toBe(5);
+
     // Fixture preservation: withdrawn row survives the rebuild.
     db.exec(`INSERT INTO users (id, email, password_hash, first_name, last_name, role, is_verified) VALUES ('u-1','a@b.c','h','A','B','applicant',1);`);
     db.exec(`INSERT INTO applications (id, user_id, program, degree_level, status) VALUES ('app-1','u-1','Theology','undergraduate','withdrawn');`);

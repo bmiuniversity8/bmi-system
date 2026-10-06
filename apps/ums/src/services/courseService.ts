@@ -18,6 +18,9 @@ export interface CourseListResponse {
   success: boolean;
   data?: PaginatedData<Course>;
   error?: string;
+  /** HTTP status of the underlying request (0 = network failure). Surfaced so
+   *  UI can distinguish expired sessions (401) from server outages. */
+  status?: number;
 }
 
 export async function getCourses(filters?: {
@@ -40,6 +43,7 @@ export async function getCourses(filters?: {
     const queryString = params.toString();
     const url = `${API_URL}/courses${queryString ? `?${queryString}` : ''}`;
     const response = await authFetch(url);
+    const status = response.status;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let data = await parseJsonSafe<any>(response);
     if (data?.success) {
@@ -73,8 +77,11 @@ export async function getCourses(filters?: {
         });
       }
     }
-    return data ?? { success: false, error: 'Failed to parse courses response' };
-  } catch { return { success: false, error: 'Failed to fetch courses'  };
+    if (data && typeof data === 'object' && (data as { status?: number }).status === undefined) {
+      (data as { status?: number }).status = status;
+    }
+    return data ?? { success: false, status, error: 'Failed to parse courses response' };
+  } catch { return { success: false, status: 0, error: 'Failed to fetch courses'  };
   }
 }
 

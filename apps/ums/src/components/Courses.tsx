@@ -27,6 +27,7 @@ import {
 import { BulkEntryModal } from "./BulkEntryModal";
 import { postCourseBatch } from "../services/batchService";
 import { useDataStore } from "../stores/dataStore";
+import { useAuthStore } from "../stores/authStore";
 import { usePagination } from "../hooks/usePagination";
 import { useCoursesQuery } from "../hooks/useEntityQueries";
 import { useQueryClient } from "@tanstack/react-query";
@@ -70,11 +71,32 @@ const Courses: React.FC = () => {
   // Distinguish "no courses match" from "the request failed". Services return
   // { success: false } on network/auth failures instead of throwing, so an
   // explicit flag is required — otherwise an outage renders the exact same
-  // "not found" message as a genuinely empty catalog.
-  const coursesLoadFailed =
-    !coursesFetching &&
-    (coursesQueryError ||
-      (courseResponse != null && courseResponse.success === false));
+  // "not found" message as a genuinely empty catalog. The HTTP status is kept
+  // so a dead session (401) gets a log-in-again action instead of a retry.
+  const coursesFailure =
+    !coursesFetching
+      ? coursesQueryError
+        ? { status: 0, message: 'Request failed' }
+        : courseResponse != null && courseResponse.success === false
+          ? {
+              status:
+                typeof (courseResponse as { status?: unknown }).status === 'number'
+                  ? (courseResponse as { status?: number }).status
+                  : undefined,
+              message:
+                typeof courseResponse.error === 'string' && courseResponse.error
+                  ? courseResponse.error
+                  : 'Request failed',
+            }
+          : null
+      : null;
+  const coursesLoadFailed = coursesFailure != null;
+  const coursesSessionExpired = coursesFailure?.status === 401;
+
+  const handleCoursesSessionExpired = async () => {
+    await useAuthStore.getState().logout();
+    useDataStore.getState().clearAll();
+  };
 
   const pagedCourses = useMemo(
     () => (courseResponse?.success ? courseResponse.data?.items ?? [] : []),
@@ -475,14 +497,30 @@ const Courses: React.FC = () => {
                   Could not load courses
                 </h3>
                 <p className="text-xs text-gray-400 mt-1 max-w-sm">
-                  The server could not be reached or your session expired. Your data is safe — try again or log in afresh.
+                  {coursesSessionExpired
+                    ? 'Your session expired — please log in again. Your data is safe.'
+                    : 'The server could not be reached. Your data is safe — try again.'}
                 </p>
-                <button
-                  onClick={() => refetchCourses()}
-                  className="mt-4 flex items-center gap-1.5 px-4 py-2 bg-[#4B0082] text-white hover:bg-black transition-all font-bold text-[10px] uppercase tracking-wider rounded-lg shadow-md cursor-pointer"
-                >
-                  <RefreshCw size={12} /> Retry
-                </button>
+                {coursesFailure && coursesFailure.status !== undefined && (
+                  <p className="mt-1 font-mono text-[10px] text-gray-400">
+                    HTTP {coursesFailure.status}{coursesFailure.message ? ` · ${coursesFailure.message.slice(0, 120)}` : ''}
+                  </p>
+                )}
+                {coursesSessionExpired ? (
+                  <button
+                    onClick={() => handleCoursesSessionExpired()}
+                    className="mt-4 flex items-center gap-1.5 px-4 py-2 bg-[#4B0082] text-white hover:bg-black transition-all font-bold text-[10px] uppercase tracking-wider rounded-lg shadow-md cursor-pointer"
+                  >
+                    Log in again
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => refetchCourses()}
+                    className="mt-4 flex items-center gap-1.5 px-4 py-2 bg-[#4B0082] text-white hover:bg-black transition-all font-bold text-[10px] uppercase tracking-wider rounded-lg shadow-md cursor-pointer"
+                  >
+                    <RefreshCw size={12} /> Retry
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -573,14 +611,30 @@ const Courses: React.FC = () => {
                       Could not load courses
                     </p>
                     <p className="text-[10px] text-gray-400 mt-1 font-medium normal-case tracking-normal">
-                      The server could not be reached or your session expired. Your data is safe.
+                      {coursesSessionExpired
+                        ? 'Your session expired — please log in again. Your data is safe.'
+                        : 'The server could not be reached. Your data is safe.'}
                     </p>
-                    <button
-                      onClick={() => refetchCourses()}
-                      className="mt-4 flex items-center gap-1.5 px-4 py-2 bg-[#4B0082] text-white hover:bg-black transition-all font-bold text-[10px] uppercase tracking-wider rounded-lg shadow-md cursor-pointer"
-                    >
-                      <RefreshCw size={12} /> Retry
-                    </button>
+                    {coursesFailure && coursesFailure.status !== undefined && (
+                      <p className="mt-1 font-mono text-[10px] text-gray-400">
+                        HTTP {coursesFailure.status}{coursesFailure.message ? ` · ${coursesFailure.message.slice(0, 120)}` : ''}
+                      </p>
+                    )}
+                    {coursesSessionExpired ? (
+                      <button
+                        onClick={() => handleCoursesSessionExpired()}
+                        className="mt-4 px-4 py-2 bg-[#4B0082] text-white hover:bg-black transition-all font-bold text-[10px] uppercase tracking-wider rounded-lg shadow-md cursor-pointer"
+                      >
+                        Log in again
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => refetchCourses()}
+                        className="mt-4 flex items-center gap-1.5 px-4 py-2 bg-[#4B0082] text-white hover:bg-black transition-all font-bold text-[10px] uppercase tracking-wider rounded-lg shadow-md cursor-pointer"
+                      >
+                        <RefreshCw size={12} /> Retry
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

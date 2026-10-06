@@ -185,22 +185,45 @@ export async function handleSubmitApplication(request: Request, env: Env, userId
     console.warn(`Slow application submission detected: ${duration}ms for user ${userId}`);
   }
 
-    // Section 17: On application submission, issue idempotent Application Fee invoice ($4 USD / KES equivalent)
-    let applicationInvoice: any = null;
+    // Fees System v4: assess Application Fee ($50 USD standard / KES equivalent)
+    let assessedInvoice: any = null;
     try {
-      const { createApplicationFeeInvoice } = await import('../lib/finance/fee-engine');
-      applicationInvoice = await createApplicationFeeInvoice(db, userId, undefined, 'KE');
+      const { assessApplicationFee } = await import('../lib/fee-assessment-service');
+      assessedInvoice = await assessApplicationFee(db, appId, userId);
     } catch (e) {
-      console.warn('[apply] Application fee invoice generation skipped/failed:', e);
+      console.warn('[apply] assessApplicationFee warning:', e);
+    }
+
+    // Stage Gate: If fee is required (total > 0) and not deferred, application stays draft pending payment
+    if (assessedInvoice && !assessedInvoice.deferred && assessedInvoice.total_minor > 0) {
+      await db.prepare(
+        `UPDATE applications SET status = 'draft', updated_at = datetime('now') WHERE id = ?`
+      ).bind(appId).run().catch(() => null);
+
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Application fee payment required before submission',
+        application_id: appId,
+        application_number: applicationNumber,
+        status: 'draft',
+        invoice_id: assessedInvoice.id,
+        invoice_number: assessedInvoice.invoice_number,
+        invoice: assessedInvoice,
+        _perf: { duration_ms: Math.round(duration) },
+      }), {
+        status: 402,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
     return ok({
       application_id: appId,
       application_number: applicationNumber,
       status: 'submitted',
-      invoice_id: applicationInvoice?.id,
-      invoice_number: applicationInvoice?.invoice_number,
-      _perf: { duration_ms: Math.round(duration) }
+      invoice_id: assessedInvoice?.id,
+      invoice_number: assessedInvoice?.invoice_number,
+      deferred: assessedInvoice?.deferred ?? false,
+      _perf: { duration_ms: Math.round(duration) },
     });
   }
 

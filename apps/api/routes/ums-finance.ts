@@ -89,23 +89,25 @@ export async function handleCreateInvoice(request: Request, env: Env): Promise<R
   if (!student_id || !Number.isFinite(amount) || amount <= 0) {
     return error('student_id and a positive amount are required', 400);
   }
-  const id = crypto.randomUUID();
-  const due = ((body as any).due_date || (body as any).date || new Date(Date.now() + 30 * 86400000).toISOString()) as string;
   const term_id = ((body as any).term_id || (body as any).termId || null) as string | null;
-  try {
-    await env.PLATFORM_CONTEXT!.db.prepare(
-      `INSERT INTO invoices (id, student_id, amount, status, due_date, term_id) VALUES (?, ?, ?, 'unpaid', ?, ?)`
-    ).bind(id, student_id, Math.round(amount), due, term_id).run();
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (/no such column|undefined column/i.test(msg)) {
-      await env.PLATFORM_CONTEXT!.db.prepare(
-        `INSERT INTO invoices (id, student_id, amount, status, due_date) VALUES (?, ?, ?, 'unpaid', ?)`
-      ).bind(id, student_id, Math.round(amount), due).run();
-    } else throw e;
-  }
-  const row = await env.PLATFORM_CONTEXT!.db.prepare(`SELECT * FROM invoices WHERE id = ?`).bind(id).first();
-  return json({ success: true, data: row }, 201);
+
+  const { assessInvoice } = await import('../lib/fee-assessment-service');
+  const assessed = await assessInvoice(env.PLATFORM_CONTEXT!.db, {
+    userId: student_id,
+    kind: 'adjustment',
+    sourceEvent: 'manual_invoice_create',
+    termId: term_id || undefined,
+    chargeKey: `manual:${student_id}:${Date.now()}`,
+    lines: [
+      {
+        feeItemCode: 'TUI-CREDIT',
+        description: (body.description as string) || 'Tuition / Educational Fee Adjustment',
+        overrideAmountMinor: Math.round(amount * 100),
+      },
+    ],
+  });
+
+  return json({ success: true, data: assessed }, 201);
 }
 
 export async function handleUpdateInvoice(request: Request, env: Env, invoiceId: string): Promise<Response> {

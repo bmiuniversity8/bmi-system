@@ -37,49 +37,70 @@ export async function handleCreatePaymentIntent(req: Request, env: Env, userId: 
     const { reason, invoiceId, purpose, applicationId } = body;
     let { amount } = body;
 
-    // Deposit intent: the server is authoritative for amount, ownership and
-    // expiry. Client amount is ignored.
-    let depositApplicationId: string | undefined;
-    if (purpose === 'deposit') {
-      if (!applicationId) return error('applicationId is required for deposit payments', 400);
+    let targetInvoiceId = invoiceId;
+    if (purpose === 'deposit' || (applicationId && !invoiceId)) {
+      if (!applicationId) return error('applicationId is required for enrollment payments', 400);
       const db = env.PLATFORM_CONTEXT!.db;
       const app = await db.prepare(
         `SELECT id, user_id, status FROM applications WHERE id = ? LIMIT 1`
       ).bind(applicationId).first<{ id: string; user_id: string; status: string }>().catch(() => null);
       if (!app || app.user_id !== userId) return error('Application not found', 404);
+
       const decision = await db.prepare(
-        `SELECT deposit_required, deposit_amount, offer_expires_at FROM admissions_decisions WHERE application_id = ? LIMIT 1`
-      ).bind(applicationId).first<{ deposit_required: number; deposit_amount: number; offer_expires_at: string | null }>().catch(() => null);
-      if (!decision || Number(decision.deposit_required) !== 1) {
-        return error('No deposit is required for this application', 400);
+        `SELECT offer_expires_at FROM admissions_decisions WHERE application_id = ? LIMIT 1`
+      ).bind(applicationId).first<{ offer_expires_at: string | null }>().catch(() => null);
+      if (decision?.offer_expires_at && new Date() > new Date(decision.offer_expires_at)) {
+        return error('Offer has expired; payment cannot be taken', 409);
       }
-      if (decision.offer_expires_at && new Date() > new Date(decision.offer_expires_at)) {
-        return error('Offer has expired; deposit cannot be taken', 409);
-      }
-      amount = Number(decision.deposit_amount);
-      if (!amount || amount <= 0) return error('Deposit amount is not configured', 400);
-      depositApplicationId = applicationId;
+
+      const { assessEnrollmentFee } = await import('../lib/fee-assessment-service');
+      const assessed = await assessEnrollmentFee(db, applicationId, userId);
+      targetInvoiceId = assessed.id;
+    }
+
+    // Check gateway status
+    const db = env.PLATFORM_CONTEXT!.db;
+    const gwStatus = await db.prepare("SELECT value_json FROM finance_settings WHERE key = 'finance.gateway_status'").first<{ value_json: string }>().catch(() => null);
+    if (gwStatus) {
+      try {
+        const parsed = JSON.parse(gwStatus.value_json);
+        if (parsed === 'pending_approval' && env.ENVIRONMENT === 'production') {
+          return error('Payment gateway is currently under review by provider. Collections are operating in deferred mode.', 503);
+        }
+      } catch { /* proceed */ }
     }
 
     let currency = (body.currency || PAYSTACK_DEFAULT_CURRENCY).toUpperCase();
 
     // Server is authoritative for the amount: when an invoice is referenced,
     // resolve the charge from the invoice row and ignore any client-supplied amount.
-    if (invoiceId) {
-      const invoice = await env.PLATFORM_CONTEXT!.db
-        .prepare('SELECT id, amount, total_billing, billing_currency, status, student_id FROM invoices WHERE id = ?')
-        .bind(invoiceId)
-        .first<{ id: string; amount: number; total_billing: number | null; billing_currency: string | null; status: string; student_id: string }>()
+    if (targetInvoiceId) {
+      const invoiceV4 = await db
+        .prepare('SELECT id, total_minor, balance_minor, charge_currency, status, user_id FROM invoices_v4 WHERE id = ?')
+        .bind(targetInvoiceId)
+        .first<{ id: string; total_minor: number; balance_minor: number; charge_currency: string; status: string; user_id: string }>()
         .catch(() => null);
-      if (!invoice) return error('Invoice not found', 404);
-      if (invoice.status === 'paid') return error('Invoice is already paid', 409);
-      // Ownership: invoice must belong to the caller (when tracked).
-      if (invoice.student_id && invoice.student_id !== userId) {
-        return error('Invoice does not belong to this student', 403);
-      }
-      amount = Number(invoice.total_billing ?? invoice.amount);
-      if (invoice.billing_currency) {
-        currency = invoice.billing_currency.toUpperCase();
+
+      if (invoiceV4) {
+        if (invoiceV4.status === 'paid' || invoiceV4.balance_minor <= 0) return error('Invoice is already paid', 409);
+        if (invoiceV4.user_id && invoiceV4.user_id !== userId) return error('Invoice does not belong to this student', 403);
+        amount = invoiceV4.balance_minor / 100;
+        currency = invoiceV4.charge_currency.toUpperCase();
+      } else {
+        const invoice = await db
+          .prepare('SELECT id, amount, total_billing, billing_currency, status, student_id FROM invoices WHERE id = ?')
+          .bind(invoiceId)
+          .first<{ id: string; amount: number; total_billing: number | null; billing_currency: string | null; status: string; student_id: string }>()
+          .catch(() => null);
+        if (!invoice) return error('Invoice not found', 404);
+        if (invoice.status === 'paid') return error('Invoice is already paid', 409);
+        if (invoice.student_id && invoice.student_id !== userId) {
+          return error('Invoice does not belong to this student', 403);
+        }
+        amount = Number(invoice.total_billing ?? invoice.amount);
+        if (invoice.billing_currency) {
+          currency = invoice.billing_currency.toUpperCase();
+        }
       }
     }
 
@@ -110,13 +131,12 @@ export async function handleCreatePaymentIntent(req: Request, env: Env, userId: 
       currency,
       email,
       description: buildPaymentDescription(
-        reason || (depositApplicationId ? `Enrollment deposit ${depositApplicationId.slice(0, 8)}` : invoiceId ? `Tuition Invoice ${invoiceId.slice(0, 8)}` : 'Tuition payment'),
+        reason || (targetInvoiceId ? `Fee Invoice ${targetInvoiceId.slice(0, 8)}` : 'Tuition payment'),
       ),
       callbackUrl,
       metadata: {
         userId,
-        ...(invoiceId ? { invoiceId } : {}),
-        ...(depositApplicationId ? { purpose: 'deposit', applicationId: depositApplicationId } : {}),
+        ...(targetInvoiceId ? { invoiceId: targetInvoiceId } : {}),
         merchant: INSTITUTION_LEGAL_NAME,
         trading_as: INSTITUTION_TRADING_AS_LINE,
       },
@@ -226,48 +246,17 @@ export async function fulfillSuccessfulPayment(
   env: Env,
   intent: PaymentIntent,
   ctx?: ExecutionContext,
-): Promise<{ invoiceId?: string; amountMatched?: boolean; depositId?: string }> {
-  const metadata = intent.metadata || {};
-  const userId = metadata.userId as string | undefined;
-  const depositPurpose = metadata.purpose === 'deposit';
-  const depositApplicationId = (metadata.applicationId || metadata.application_id) as string | undefined;
+): Promise<{ invoiceId?: string; amountMatched?: boolean; settled?: boolean }> {
+  const reference = intent.reference || intent.id;
   const db = env.PLATFORM_CONTEXT!.db;
 
-  // Deposit fulfillment: verified gateway amount → confirmed enrollment_deposits row.
-  // Idempotent via UNIQUE(payment_reference) + ON CONFLICT DO NOTHING.
-  if (depositPurpose && depositApplicationId && userId) {
-    const { recordEnrollmentDeposit } = await import('../lib/admissions-decision-service');
-    const decision = await db.prepare(
-      `SELECT deposit_amount, offer_expires_at FROM admissions_decisions WHERE application_id = ? LIMIT 1`
-    ).bind(depositApplicationId).first<{ deposit_amount: number; offer_expires_at: string | null }>().catch(() => null);
-    if (decision) {
-      if (!decision.offer_expires_at || new Date() <= new Date(decision.offer_expires_at)) {
-        const expected = Number(decision.deposit_amount || 0);
-        const receivedRaw = Number(intent.amount);
-        // Single-unit comparison: adapters already normalize to major units.
-        const matched =
-          Number.isFinite(receivedRaw) &&
-          Number.isFinite(expected) &&
-          Math.abs(receivedRaw - expected) < 0.01;
-        if (matched) {
-          const settledAmount = expected;
-          const res = await recordEnrollmentDeposit(db, {
-            applicationId: depositApplicationId,
-            userId,
-            amount: settledAmount,
-            paymentReference: intent.reference || intent.id,
-          });
-          return { amountMatched: true, depositId: res.depositId };
-        }
-        console.warn(
-          `[payment] deposit amount mismatch: application ${depositApplicationId} expects ${expected}, gateway verified ${receivedRaw} (${intent.reference || intent.id}) — holding for review`
-        );
-        return { amountMatched: false };
-      }
-    }
+  try {
+    const { settlePayment } = await import('../lib/payment-settlement');
+    const res = await settlePayment(db, reference);
+    return { invoiceId: res.invoiceId, amountMatched: true, settled: res.settled };
+  } catch (err) {
+    // If not a v4 invoice or already settled, fall back to legacy handler
+    const res = await processSuccessfulPayment(env, intent, ctx);
+    return { invoiceId: res.invoiceId, amountMatched: res.amountMatched };
   }
-
-  // Settle invoice, record payment allocation and ledger entries via centralized payment service
-  const res = await processSuccessfulPayment(env, intent, ctx);
-  return { invoiceId: res.invoiceId, amountMatched: res.amountMatched };
 }

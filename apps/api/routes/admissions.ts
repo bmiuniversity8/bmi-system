@@ -148,14 +148,14 @@ export async function handlePayDeposit(
     }
 
     const decision = await db.prepare(
-      `SELECT deposit_required, deposit_amount, offer_expires_at FROM admissions_decisions WHERE application_id = ? LIMIT 1`
-    ).bind(body.application_id).first<{ deposit_required: number; deposit_amount: number; offer_expires_at: string | null }>().catch(() => null);
-    if (!decision || Number(decision.deposit_required) !== 1) {
-      return error('No deposit is required for this application', 400);
-    }
-    if (decision.offer_expires_at && new Date() > new Date(decision.offer_expires_at)) {
+      `SELECT offer_expires_at FROM admissions_decisions WHERE application_id = ? LIMIT 1`
+    ).bind(body.application_id).first<{ offer_expires_at: string | null }>().catch(() => null);
+    if (decision?.offer_expires_at && new Date() > new Date(decision.offer_expires_at)) {
       return error('Offer has expired; deposit cannot be accepted', 409);
     }
+
+    const { assessEnrollmentFee } = await import('../lib/fee-assessment-service');
+    const assessed = await assessEnrollmentFee(db, body.application_id, userId);
 
     const payment = env.PLATFORM_CONTEXT!.payment;
     if (typeof payment?.verifyPaymentIntent !== 'function') {
@@ -176,30 +176,19 @@ export async function handlePayDeposit(
     if (!ownerId || ownerId !== userId) {
       return error('Payment reference does not belong to this student', 403);
     }
-    if (intent.metadata?.purpose !== 'deposit') {
-      return error('Payment reference is not a deposit payment', 400);
-    }
-    const intentAppId = (intent.metadata?.applicationId || intent.metadata?.application_id) as string | undefined;
-    if (!intentAppId || intentAppId !== body.application_id) {
-      return error('Payment reference does not match this application', 400);
-    }
 
-    // Amount guard: all adapters normalize to MAJOR units before returning
-    // (Paystack/Stripe divide subunits by 100; memory echoes major). Compare
-    // in that single unit — never accept raw-or-/100, which would let a
-    // subunit amount match a 100x smaller deposit.
-    const expected = Number(decision.deposit_amount || 0);
+    const expected = assessed.total_minor / 100;
     const receivedRaw = Number(intent.amount);
     const matched =
       Number.isFinite(receivedRaw) &&
       Number.isFinite(expected) &&
-      Math.abs(receivedRaw - expected) < 0.01;
+      (expected === 0 || Math.abs(receivedRaw - expected) < 0.01);
     if (!matched) {
       return error(`Deposit amount mismatch: expected ${expected}, gateway verified ${receivedRaw}`, 402);
     }
-    if (body.amount !== undefined && Math.abs(Number(body.amount) - expected) >= 0.01) {
-      return error('Deposit amount does not match the required amount', 402);
-    }
+
+    const { settlePayment } = await import('../lib/payment-settlement');
+    await settlePayment(db, body.payment_reference).catch(() => null);
 
     const result = await recordEnrollmentDeposit(db, {
       applicationId: body.application_id,

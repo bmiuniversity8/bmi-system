@@ -5,7 +5,7 @@ import type { IDatabase } from '@bmi/ports';
 
 import type { Env } from './types';
 
-import { safeDispatchEmail, buildEmailLayout, invoiceCreatedEmail, lmsEnrollmentEmail, studentEmailProvisionedEmail, isValidEmail } from './email';
+import { safeDispatchEmail, buildEmailLayout, lmsEnrollmentEmail, studentEmailProvisionedEmail, isValidEmail } from './email';
 
 export type ProvisioningJobType = 'finance' | 'library' | 'lms' | 'portal' | 'email' | 'id_card';
 
@@ -13,7 +13,7 @@ export interface ProvisioningJob {
   id: string;
   uid: string;
   job_type: ProvisioningJobType;
-  status: 'pending' | 'processing' | 'completed' | 'failed' | 'dead';
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'dead' | 'blocked';
   attempts: number;
 }
 
@@ -212,64 +212,26 @@ async function executeJob(env: Env, job: ProvisioningJob): Promise<void> {
         degreeLevel = prog?.level;
       }
 
-      const { resolveTuitionForLevel, createInvoice } = await import('./finance/fee-engine');
-      const tuitionInfo = await resolveTuitionForLevel(ctx.db, degreeLevel || 'undergraduate');
-      const period1Installment = tuitionInfo.installments[0] || { amount_base: 89, period_number: 1 };
-      const invoiceDesc = `Tuition Installment (Period ${period1Installment.period_number}) — ${studentRow.program || 'Academic Program'}`;
+      const { resolveFeeLevel } = await import('./fee-assessment-service');
+      const level = await resolveFeeLevel(ctx.db, studentRow.program_id, degreeLevel);
 
-      const activeTerm = await ctx.db.prepare(
-        `SELECT id, academic_year FROM academic_terms WHERE status IN ('active', 'registration') ORDER BY start_date DESC LIMIT 1`
-      ).first<{ id: string; academic_year: string }>().catch(() => null);
+      // Verify or establish fee pin for this student
+      const activePlan = await ctx.db.prepare(
+        `SELECT id FROM fee_plans_v4 WHERE fee_level_id = ? AND status = 'active' ORDER BY effective_start DESC LIMIT 1`
+      ).bind(level.levelId).first<{ id: string }>().catch(() => null);
 
-      const createdInv = await createInvoice(ctx.db, {
-        studentId: studentRow.user_id,
-        uid,
-        programmeId: studentRow.program_id,
-        degreeLevel: tuitionInfo.feeItem.degree_level || 'undergraduate',
-        feeScheduleId: tuitionInfo.feeItem.fee_schedule_id,
-        periodNumber: period1Installment.period_number,
-        termId: activeTerm?.id || undefined,
-        academicYear: activeTerm?.academic_year || undefined,
-        lines: [
-          {
-            feeItemId: tuitionInfo.feeItem.id,
-            feeGroupId: tuitionInfo.feeItem.fee_group_id,
-            description: invoiceDesc,
-            amountBaseUsd: period1Installment.amount_base,
-            periodNumber: period1Installment.period_number,
-          },
-        ],
-      });
-
-      const invoiceId = createdInv.id;
-      const invoiceAmount = createdInv.total_billing;
+      if (activePlan) {
+        const pinId = `pin_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        await ctx.db.prepare(
+          `INSERT INTO fee_pins (id, user_id, student_id, uid, program_id, fee_level_id, fee_plan_id, pinned_at, notes)
+           VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), 'Finance provisioning pinned plan')
+           ON CONFLICT (id) DO NOTHING`
+        ).bind(pinId, studentRow.user_id, studentRow.user_id, uid, studentRow.program_id || 'general', level.levelId, activePlan.id).run().catch(() => null);
+      }
 
       await ctx.db.prepare(
-        `INSERT OR IGNORE INTO lifecycle_events
-         (id, uid, application_id, stage, status, idempotency_key, notes)
-         VALUES (lower(hex(randomblob(16))), ?, NULL, 'invoice_created', 'completed', ?, ?)`
-      ).bind(uid, `invoice:${invoiceId}`, `Invoice ${invoiceId.slice(0, 8)} created for ${invoiceDesc}`).run();
-
-      // RC #9: send invoice created notification email
-      if (env.RESEND_API_KEY) {
-        const userRec = await ctx.db.prepare(
-          `SELECT u.first_name, u.email FROM users u WHERE u.id = ?`
-        ).bind(studentRow.user_id).first<{ first_name: string; email: string }>();
-        if (userRec && userRec.email && isValidEmail(userRec.email)) {
-          await safeDispatchEmail(env, undefined, {
-            to: userRec.email,
-            subject: 'BMI University — Invoice Ready',
-            html: invoiceCreatedEmail(userRec.first_name, {
-              id: invoiceId,
-              amount: invoiceAmount,
-              description: invoiceDesc,
-              due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-            }),
-            templateName: 'invoice_created',
-            context: { action: 'invoice_created', uid, invoice_id: invoiceId },
-          });
-        }
-      }
+        `UPDATE provisioning_jobs SET status='completed', completed_at=datetime('now') WHERE id=?`
+      ).bind(job.id).run();
       break;
     }
 
@@ -289,6 +251,27 @@ async function executeJob(env: Env, job: ProvisioningJob): Promise<void> {
     }
 
     case 'id_card': {
+      // Fees System v4: Student ID is part of the Registration Fee.
+      // id_card job checks that registration fee is paid or deferred; if not, blocks until paid.
+      const regFee = await ctx.db.prepare(
+        `SELECT i.id, i.status, i.balance_minor, d.id as deferral_id
+         FROM invoices_v4 i
+         LEFT JOIN fee_gate_deferrals d ON d.invoice_id = i.id AND d.cleared_at IS NULL
+         WHERE i.user_id = (SELECT u.id FROM users u JOIN persons p ON u.person_id = p.id WHERE p.uid = ? LIMIT 1)
+           AND i.kind = 'enrollment'
+         ORDER BY i.created_at DESC LIMIT 1`
+      ).bind(uid).first<{ id: string; status: string; balance_minor: number; deferral_id: string | null }>().catch(() => null);
+
+      const isPaidOrDeferred = regFee && (regFee.status === 'paid' || regFee.balance_minor <= 0 || !!regFee.deferral_id);
+
+      if (!isPaidOrDeferred) {
+        // Registration fee not yet cleared — block job until settled
+        await ctx.db.prepare(
+          `UPDATE provisioning_jobs SET status = 'blocked', updated_at = datetime('now') WHERE id = ?`
+        ).bind(job.id).run();
+        return;
+      }
+
       const info = await ctx.db.prepare(
         `SELECT u.first_name, u.last_name, s.reg_no, s.program, p.uid
          FROM persons p
@@ -297,31 +280,22 @@ async function executeJob(env: Env, job: ProvisioningJob): Promise<void> {
          WHERE p.uid = ?`
       ).bind(uid).first<{ first_name: string; last_name: string; reg_no: string; program: string; uid: string }>();
 
-      if (info) {
-        if (ctx.document) {
-          await ctx.document.generateDocument({
-            type: 'id_card',
-            userId: uid,
-            metadata: {
-              name: `${info.first_name} ${info.last_name}`,
-              uid: info.uid,
-              regNo: info.reg_no,
-              program: info.program,
-            },
-          });
-        }
-
-        // Bill initial student ID fee component ($4 / KES equivalent)
-        const userRow = await ctx.db.prepare(
-          `SELECT u.id FROM users u JOIN persons p ON u.person_id = p.id WHERE p.uid = ? LIMIT 1`
-        ).bind(uid).first<{ id: string }>();
-        if (userRow?.id) {
-          const { createStudentIdFeeInvoice } = await import('./finance/fee-engine');
-          await createStudentIdFeeInvoice(ctx.db, userRow.id, uid).catch(e => {
-            console.warn('[provisioning] student ID fee creation failed:', e);
-          });
-        }
+      if (info && ctx.document) {
+        await ctx.document.generateDocument({
+          type: 'id_card',
+          userId: uid,
+          metadata: {
+            name: `${info.first_name} ${info.last_name}`,
+            uid: info.uid,
+            regNo: info.reg_no,
+            program: info.program,
+          },
+        });
       }
+
+      await ctx.db.prepare(
+        `UPDATE provisioning_jobs SET status = 'completed', completed_at = datetime('now') WHERE id = ?`
+      ).bind(job.id).run();
       break;
     }
 

@@ -4,7 +4,7 @@ import { handleSubmitApplication, handleGetMyApplication, handleListApplications
 import { handleUploadDocument, handleDownloadDocument, handleDeleteDocument, handleListDocuments, handleAdminUploadDocument, handleUpdateDocumentVerification } from './routes/documents';
 import { handleRequestRecommendation, handleGetRecommendationInfo, handleUploadRecommendation, handleListRecommendations } from './routes/recommendations';
 import { requireAuth, rateLimit, withCors, getCorsHeaders, createLogger, requestLogger } from '@bmi/api-middleware';
-import { handleGetDashboard, handleGetCourses, handleEnroll, handleGetFinances, handlePayInvoice, handleDropCourse, handleGetTranscript, handleGetSettings, handleUpdateSettings, handleUpdatePhoto, handleGetTickets, handleCreateTicket } from './routes/student';
+import { handleGetDashboard, handleGetCourses, handleEnroll, handleGetFinances, handlePayInvoice, handleDropCourse, handleGetTranscript, handleGetSettings, handleUpdateSettings, handleUpdatePhoto, handleGetTickets, handleCreateTicket, handleApplyGraduation } from './routes/student';
 import { handleAdminSetup, handleAdminSetupInfo, handleAdminSetupReset, handleListUsers, handleUpdateUserRole, handleDeleteUser, handleAdminResetPassword, handleGetAuditLogs, handleBulkEmails, handleListContactSubmissions, handleListNewsletterSubscribers } from './routes/admin';
 import { handleListTimetabling, handleCreateTimetabling, handleUpdateTimetabling, handleDeleteTimetabling } from './routes/ums-timetabling';
 import { handleListRubrics, handleCreateRubric, handleDeleteRubric } from './routes/ums-rubrics';
@@ -16,7 +16,7 @@ import type { Env } from './lib/types';
 import backupWorker from './backup';
 import { runArchivalJob } from './archival';
 // Integration routes
-import { handlePublicPrograms, handlePublicFaculties, handlePublicDepartments, handlePublicStats, handlePublicListPosts, handlePublicGetPost, handlePublicGetPage, handlePublicContact, handlePublicNewsletter, handlePublicVerifyDocument } from './routes/public';
+import { handlePublicPrograms, handlePublicFaculties, handlePublicDepartments, handlePublicStats, handlePublicListPosts, handlePublicGetPost, handlePublicGetPage, handlePublicContact, handlePublicNewsletter, handlePublicVerifyDocument, handlePublicFees } from './routes/public';
 import { handleListPosts, handleCreatePost, handleUpdatePost, handleDeletePost, handleListPages, handleCreatePage, handleDeletePage } from './routes/cms';
 import { handleInboundWebhook, handleListEvents, handleListDeadLetters, handleRetryDeadLetter } from './routes/webhooks';
 // UMS routes
@@ -179,6 +179,7 @@ export const ROUTES: Route[] = [
   { method: 'POST', path: /^\/api\/student\/support$/, roles: ['student'], handler: async (req, env, _p, auth) => handleCreateTicket(req, env, auth!.user.sub) },
   { method: 'GET', path: /^\/api\/student\/finances$/, roles: ['student'], handler: async (req, env, _p, auth) => handleGetFinances(req, env, auth!.user.sub) },
   { method: 'POST', path: /^\/api\/student\/invoices\/([^/]+)\/pay$/, roles: ['student'], handler: async (req, env, p, auth) => handlePayInvoice(req, env, auth!.user.sub, p[1]) },
+  { method: 'POST', path: /^\/api\/student\/graduation\/apply$/, roles: ['student'], handler: async (req, env, _p, auth) => handleApplyGraduation(req, env, auth!.user.sub) },
   { method: 'POST', path: /^\/api\/admin\/setup$/, roles: undefined, handler: async (req, env) => handleAdminSetup(req, env) },
   // Bootstrap-only helpers — remove after first admin login is confirmed
   { method: 'GET', path: /^\/api\/admin\/setup\/info$/, roles: undefined, handler: async (req, env) => handleAdminSetupInfo(req, env) },
@@ -232,6 +233,7 @@ export const ROUTES: Route[] = [
   { method: 'GET', path: /^\/api\/public\/faculties$/, cacheTTL: 300, roles: undefined, handler: async (req, env) => handlePublicFaculties(req, env) },
   { method: 'GET', path: /^\/api\/public\/departments$/, cacheTTL: 300, roles: undefined, handler: async (req, env) => handlePublicDepartments(req, env) },
   { method: 'GET', path: /^\/api\/public\/stats$/, cacheTTL: 300, roles: undefined, handler: async (req, env) => handlePublicStats(req, env) },
+  { method: 'GET', path: /^\/api\/public\/fees$/, cacheTTL: 300, roles: undefined, handler: async (req, env) => handlePublicFees(req, env) },
   { method: 'GET', path: /^\/api\/public\/cms\/posts$/, roles: undefined, handler: async (req, env) => handlePublicListPosts(req, env) },
   { method: 'GET', path: /^\/api\/public\/cms\/posts\/([^/]+)$/, roles: undefined, handler: async (req, env, p) => handlePublicGetPost(req, env, p[1]) },
   { method: 'GET', path: /^\/api\/public\/cms\/pages\/([^/]+)$/, roles: undefined, handler: async (req, env, p) => handlePublicGetPage(req, env, p[1]) },

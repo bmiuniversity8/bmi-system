@@ -504,3 +504,117 @@ export async function handlePublicVerifyDocument(request: Request, env: Env): Pr
   });
 }
 
+/**
+ * GET /api/public/fees — authoritative public fee schedule.
+ * Returns standard price book, general fees, transfer credit tiers, and aid bands.
+ */
+export async function handlePublicFees(_req: Request, env: Env): Promise<Response> {
+  const db = env.PLATFORM_CONTEXT!.db;
+
+  try {
+    const tuitionRows = await db.prepare(`
+      SELECT fl.level_key, fl.label, fl.public_label, fpl.amount_minor, fpl.charge_basis, fi.code, fi.name
+      FROM fee_levels fl
+      JOIN fee_plans_v4 fp ON fp.fee_level_id = fl.id AND fp.status = 'active'
+      JOIN fee_plan_lines_v4 fpl ON fpl.fee_plan_id = fp.id
+      JOIN fee_items_v4 fi ON fpl.fee_item_id = fi.id
+      ORDER BY fl.display_order ASC
+    `).all<{
+      level_key: string;
+      label: string;
+      public_label: string;
+      amount_minor: number;
+      charge_basis: string;
+      code: string;
+      name: string;
+    }>().catch(() => null);
+
+    const generalFees = await db.prepare(`
+      SELECT code, name, category, default_amount_minor, charge_basis
+      FROM fee_items_v4
+      WHERE published = 1 AND category IN ('general', 'statutory', 'service')
+      ORDER BY default_amount_minor ASC
+    `).all<{
+      code: string;
+      name: string;
+      category: string;
+      default_amount_minor: number;
+      charge_basis: string;
+    }>().catch(() => null);
+
+    const transferTiers = await db.prepare(`
+      SELECT tier_label, min_value, max_value, amount_minor
+      FROM fee_tiers_v4
+      WHERE fee_item_code = 'TFR-CREDIT'
+      ORDER BY min_value ASC
+    `).all<{
+      tier_label: string;
+      min_value: number;
+      max_value: number;
+      amount_minor: number;
+    }>().catch(() => null);
+
+    const aidBands = await db.prepare(`
+      SELECT band_key, name, discount_bps, min_efc_minor, max_efc_minor, rate_card_id
+      FROM aid_bands
+      ORDER BY band_key ASC
+    `).all<{
+      band_key: string;
+      name: string;
+      discount_bps: number;
+      min_efc_minor: number;
+      max_efc_minor: number;
+      rate_card_id: string | null;
+    }>().catch(() => null);
+
+    const tuition = (tuitionRows?.results || []).map(r => ({
+      level_key: r.level_key,
+      program: r.public_label || r.label,
+      code: r.code,
+      name: r.name,
+      amount_minor: r.amount_minor,
+      amount_formatted: `$${(r.amount_minor / 100).toFixed(2)}`,
+      cost: r.charge_basis === 'per_credit'
+        ? `$${(r.amount_minor / 100).toFixed(2)} / credit hour`
+        : r.charge_basis === 'flat_program'
+        ? `$${(r.amount_minor / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })} flat program ($2,500.00 / term)`
+        : `$${(r.amount_minor / 100).toFixed(2)}`,
+      charge_basis: r.charge_basis,
+    }));
+
+    const general = (generalFees?.results || []).map(r => ({
+      code: r.code,
+      label: r.name,
+      amount_minor: r.default_amount_minor,
+      amount: r.charge_basis === 'per_credit'
+        ? `$${(r.default_amount_minor / 100).toFixed(2)} / credit hour`
+        : r.charge_basis === 'per_course'
+        ? `$${(r.default_amount_minor / 100).toFixed(2)} / course`
+        : `$${(r.default_amount_minor / 100).toFixed(2)}`,
+      category: r.category,
+    }));
+
+    const transfer = (transferTiers?.results || []).map(r => ({
+      credits: r.tier_label,
+      fee: `$${(r.amount_minor / 100).toFixed(2)}`,
+      amount_minor: r.amount_minor,
+      min_credits: r.min_value,
+      max_credits: r.max_value,
+    }));
+
+    const responseData = {
+      base_currency: 'USD',
+      charge_currency: 'KES',
+      tuition,
+      fees: general,
+      transfer_fees: transfer,
+      aid_bands: aidBands?.results || [],
+    };
+
+    return cachedOk(responseData);
+  } catch (err) {
+    return error('Failed to retrieve fee schedule', 500);
+  }
+}
+
+

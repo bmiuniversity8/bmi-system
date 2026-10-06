@@ -1,7 +1,7 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-nocheck
 import { createWorker, Route } from './lib/worker-factory';
-import { handleGetDashboard, handleGetCourses, handleEnroll, handleGetFinances, handlePayInvoice, handleDropCourse, handleGetTranscript, handleGetSettings, handleUpdateSettings, handleUpdatePhoto, handleGetTickets, handleCreateTicket } from './routes/student';
+import { handleGetDashboard, handleGetCourses, handleEnroll, handleGetFinances, handlePayInvoice, handleDropCourse, handleGetTranscript, handleGetSettings, handleUpdateSettings, handleUpdatePhoto, handleGetTickets, handleCreateTicket, handleApplyGraduation } from './routes/student';
 import { handleGetOnboardingStatus, handleUploadStudentDocument } from './routes/onboarding';
 import { handleGetMyHolds, handleGetProgramCurriculum, handleAutoEnrollMandatory, handleGetElectiveGroups, handleSubmitElectives, handleGetRegistrationProgress, handleCompleteOrientation, handleGenerateProgramInvoice } from './routes/enrollment';
 
@@ -28,6 +28,7 @@ const routes: Route[] = [
   { method: 'POST', path: /^\/api\/student\/electives\/submit$/, roles: ['student'], handler: async (req, env, p, auth, ctx) => handleSubmitElectives(req, env, auth!.user.sub) },
   { method: 'POST', path: /^\/api\/student\/orientation\/complete$/, roles: ['student'], handler: async (req, env, p, auth, ctx) => handleCompleteOrientation(req, env, auth!.user.sub) },
   { method: 'POST', path: /^\/api\/student\/invoice\/generate$/, roles: ['student'], handler: async (req, env, p, auth, ctx) => handleGenerateProgramInvoice(req, env, auth!.user.sub) },
+  { method: 'POST', path: /^\/api\/student\/graduation\/apply$/, roles: ['student'], handler: async (req, env, p, auth, ctx) => handleApplyGraduation(req, env, auth!.user.sub) },
 ];
 
 export default createWorker(routes);

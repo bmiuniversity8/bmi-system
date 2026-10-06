@@ -400,3 +400,21 @@ export async function handleCreateTicket(request: Request, env: Env, userId: str
   
   return ok({ success: true, message: 'Support ticket created successfully', ticket_id: ticketId });
 }
+
+export async function handleApplyGraduation(request: Request, env: Env, userId: string): Promise<Response> {
+  const db = env.PLATFORM_CONTEXT!.db;
+  const { assessGraduationFee } = await import('../lib/fee-assessment-service');
+
+  try {
+    await request.json();
+  } catch {}
+
+  const assessed = await assessGraduationFee(db, userId);
+
+  return ok({
+    success: true,
+    message: 'Application for degree conferral received and graduation fee assessed',
+    invoice: assessed,
+  });
+}
+

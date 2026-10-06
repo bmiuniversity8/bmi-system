@@ -1,6 +1,7 @@
 import type { IDatabase } from '@bmi/ports';
 import { setEnrollmentStatus, getEnrollmentStatus, ENROLLMENT_STATUS } from './state-machine';
 import { appendLifecycleEvent, STAGES } from './lifecycle';
+import { hasTermFinancialClearance } from './finance-clearance';
 
 async function getEnrollmentStatusCompat(db: IDatabase, userId: string): Promise<string> {
   try {
@@ -131,25 +132,9 @@ export async function runTermCensusJob(
       continue;
     }
 
-    // 3. Financial clearance: term-scoped paid invoice (or approved aid/plan).
-    //    Invoices with NULL term_id do not satisfy clearance.
-    let cleared = false;
-    try {
-      const paidInvoice = await db.prepare(
-        `SELECT id FROM invoices WHERE student_id = ? AND term_id = ? AND status = 'paid' LIMIT 1`
-      ).bind(student.user_id, targetTerm.id).first().catch(() => null);
-      if (paidInvoice) {
-        cleared = true;
-      } else {
-        const aid = await db.prepare(
-          `SELECT id FROM financial_aid_awards WHERE student_id = ? AND term_id = ? AND status IN ('approved','awarded','disbursed') LIMIT 1`
-        ).bind(student.user_id, targetTerm.id).first().catch(() => null);
-        if (aid) cleared = true;
-      }
-    } catch {
-      cleared = false;
-    }
-    if (!cleared) {
+    // 3. Financial clearance (same clearance as registration finalize)
+    const clearance = await hasTermFinancialClearance(db, student.user_id, targetTerm.id);
+    if (!clearance.cleared) {
       skippedCount++;
       continue;
     }
