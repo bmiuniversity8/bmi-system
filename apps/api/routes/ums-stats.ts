@@ -28,7 +28,7 @@ export async function handleCatalogDepartments(request: Request, env: Env): Prom
 export async function handleCatalogPrograms(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const deptId = url.searchParams.get('deptId') || url.searchParams.get('department_id');
-  let level = url.searchParams.get('level');
+  const level = url.searchParams.get('level');
   // Accept legacy UI aliases ('bachelor'/'master') and match canonical rows too:
   // rows may predate the taxonomy backfill, so match either spelling.
   let levelValues: string[] | null = null;
