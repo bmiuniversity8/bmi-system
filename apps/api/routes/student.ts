@@ -405,9 +405,7 @@ export async function handleApplyGraduation(request: Request, env: Env, userId: 
   const db = env.PLATFORM_CONTEXT!.db;
   const { assessGraduationFee } = await import('../lib/fee-assessment-service');
 
-  try {
-    await request.json();
-  } catch {}
+  await request.json().catch(() => null);
 
   const assessed = await assessGraduationFee(db, userId);
 
