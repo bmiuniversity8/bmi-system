@@ -212,7 +212,56 @@ export default function About() {
               ))}
             </ul>
           </div>
+        </div>
+      </section>
 
+      {/* ── CONTINENTAL HUB & INSTITUTES ── */}
+      <section style={{ background: "#ffffff", padding: "5rem 2rem", borderTop: "1px solid #e2e8f0" }}>
+        <div style={{ maxWidth: "1280px", margin: "0 auto" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1.1fr 0.9fr", gap: "4rem", alignItems: "center" }} className="split-section">
+            <div>
+              <div className="gold-bar" style={{ marginBottom: "1.25rem" }} />
+              <h2 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: "clamp(1.8rem, 3vw, 2.4rem)", color: "#0f172a", marginBottom: "1.25rem" }}>
+                Continental Representation: BEMI Training Institute
+              </h2>
+              <p style={{ color: "#334155", fontSize: "1.02rem", lineHeight: 1.8, marginBottom: "1rem" }}>
+                To serve Kenya, East Africa, and the African continent at large, Bethel Ministries International operates through <strong>BEMI Training Institute</strong>, its legally registered educational institution based in Karen, Nairobi, Kenya.
+              </p>
+              <p style={{ color: "#64748b", fontSize: "0.95rem", lineHeight: 1.8, marginBottom: "1.5rem" }}>
+                BEMI Training Institute coordinates regional admissions, ministerial training cohorts, and financial administration—ensuring that students across Africa experience world-class academic support grounded in local African community impact.
+              </p>
+              <Link href="/institutes/bemi" className="btn btn-gold" style={{ display: "inline-block" }}>
+                Discover BEMI Training Institute →
+              </Link>
+            </div>
+            <div style={{ background: "#f8fafc", borderRadius: "20px", padding: "2rem", border: "1px solid #e2e8f0" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "1rem" }}>
+                <span style={{ fontSize: "1.8rem" }}>🌍</span>
+                <div>
+                  <h3 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: "1.15rem", color: "#0f172a", margin: 0 }}>
+                    Pan-African Campus & Operations
+                  </h3>
+                  <div style={{ fontSize: "0.8rem", color: "#c5a048", fontWeight: 700 }}>
+                    Karen, Nairobi, Kenya
+                  </div>
+                </div>
+              </div>
+              <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "0.75rem", fontSize: "0.9rem", color: "#475569" }}>
+                <li style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem" }}>
+                  <span style={{ color: "#c5a048", fontWeight: 900 }}>✓</span>
+                  <span>Registered Kenyan educational institute representing BMI across Africa</span>
+                </li>
+                <li style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem" }}>
+                  <span style={{ color: "#c5a048", fontWeight: 900 }}>✓</span>
+                  <span>Authorized corporate merchant for Paystack & M-Pesa regional fee clearance</span>
+                </li>
+                <li style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem" }}>
+                  <span style={{ color: "#c5a048", fontWeight: 900 }}>✓</span>
+                  <span>Direct articulation into QAHE-accredited BMI University degree pathways</span>
+                </li>
+              </ul>
+            </div>
+          </div>
         </div>
       </section>
 

@@ -20,6 +20,8 @@ const programCategories = [
 ];
 
 const institutionalPortals = [
+  { label: "BEMI Training Institute (Africa Hub)", href: "/institutes/bemi", external: false },
+  { label: "All BMI Institutes & Campuses", href: "/institutes", external: false },
   { label: "Student Portal Login", href: "https://portal.bmiuniversities.org", external: true },
   { label: "Document Verification Engine", href: "/verify", external: false },
   { label: "University Management System (UMS)", href: "https://ums.bmiuniversities.org", external: true },
@@ -238,6 +240,7 @@ export default function Footer() {
           <p style={{ color: "rgba(255,255,255,0.8)", fontSize: "0.88rem", lineHeight: 1.6, margin: 0 }}>
             Office of Admissions & Student Records<br />
             Bethel Ministries International University<br />
+            <strong>Africa Regional Hub:</strong> BEMI Training Institute, Karen, Nairobi, Kenya<br />
             <strong>Email:</strong> admin@bmiuniversities.org<br />
             <strong>Admissions:</strong> admissions@bmiuniversities.org
           </p>
@@ -278,12 +281,17 @@ export default function Footer() {
           textAlign: "center",
         }}
       >
-        <div style={{ maxWidth: "1280px", margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
-          <div>
-            © {new Date().getFullYear()} Bethel Ministries International University (BMI University). All rights reserved.
+        <div style={{ maxWidth: "1280px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
+            <div>
+              © {new Date().getFullYear()} Bethel Ministries International University (BMI University). All rights reserved.
+            </div>
+            <div>
+              Exempt from licensure under N.C.G.S. 116-15(d) for religious education • QAHE Accredited
+            </div>
           </div>
-          <div>
-            Exempt from licensure under N.C.G.S. 116-15(d) for religious education • QAHE Accredited
+          <div style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.45)", lineHeight: 1.5, borderTop: "1px solid rgba(255,255,255,0.05)", paddingTop: "0.5rem" }}>
+            In Africa, Bethel Ministries International operates through <strong>BEMI Training Institute</strong> (registered in Kenya, Karen Campus, Nairobi). All continental tuition payments and Paystack/M-Pesa settlements are legally receipted by BEMI Training Institute (trading as BMI University).
           </div>
         </div>
       </div>

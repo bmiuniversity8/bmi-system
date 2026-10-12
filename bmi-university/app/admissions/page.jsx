@@ -172,6 +172,50 @@ export default async function Admissions() {
               </ul>
             </div>
           </div>
+
+          {/* Official Payee & Transaction Verification Notice */}
+          <div
+            style={{
+              marginTop: "2.5rem",
+              background: "#ffffff",
+              borderRadius: "16px",
+              padding: "2rem",
+              border: "1.5px solid #e5c578",
+              boxShadow: "0 4px 20px rgba(0,0,0,0.05)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "flex-start", gap: "1.25rem", flexWrap: "wrap" }}>
+              <div style={{ fontSize: "2rem", lineHeight: 1 }}>🛡️</div>
+              <div style={{ flex: 1, minWidth: "280px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.35rem", flexWrap: "wrap" }}>
+                  <h4 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: "1.15rem", color: "#0f172a", margin: 0 }}>
+                    Official Fee Payment & Payee Notice (Africa & International)
+                  </h4>
+                  <span style={{ background: "#dcfce7", color: "#166534", fontSize: "0.72rem", fontWeight: 800, padding: "0.15rem 0.5rem", borderRadius: "4px" }}>
+                    TRANSACTION VERIFIED
+                  </span>
+                </div>
+                <p style={{ color: "#475569", fontSize: "0.92rem", lineHeight: 1.7, margin: "0 0 1rem" }}>
+                  When paying application or tuition fees online via Paystack, M-Pesa, card, or regional bank wire, your checkout merchant and bank statement will display our registered Kenyan educational institute: <strong>BEMI TRAINING INSTITUTE (trading as BMI University)</strong> with descriptor <code>BEMI*TRAINING</code>. Every transaction is directly credited to your official student account.
+                </p>
+                <Link
+                  href="/institutes/bemi#tuition-transparency"
+                  style={{
+                    color: "#996d19",
+                    fontWeight: 700,
+                    fontSize: "0.88rem",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.35rem",
+                    textDecoration: "underline",
+                    textUnderlineOffset: "3px",
+                  }}
+                >
+                  <span>→</span> View BEMI Training Institute & Payment Verification Guide
+                </Link>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
