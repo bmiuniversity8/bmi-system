@@ -225,7 +225,7 @@ export default function About() {
                 Continental Representation: BEMI Training Institute
               </h2>
               <p style={{ color: "#334155", fontSize: "1.02rem", lineHeight: 1.8, marginBottom: "1rem" }}>
-                To serve Kenya, East Africa, and the African continent at large, Bethel Ministries International operates through <strong>BEMI Training Institute</strong>, its legally registered educational institution based in Karen, Nairobi, Kenya.
+                To serve Kenya, East Africa, and the African continent at large, Bethel Ministries International operates through <strong>BEMI Training Institute</strong>, its legally registered educational institution based at Mukurweini Campus, Kenya.
               </p>
               <p style={{ color: "#64748b", fontSize: "0.95rem", lineHeight: 1.8, marginBottom: "1.5rem" }}>
                 BEMI Training Institute coordinates regional admissions, ministerial training cohorts, and financial administration—ensuring that students across Africa experience world-class academic support grounded in local African community impact.
@@ -242,7 +242,7 @@ export default function About() {
                     Pan-African Campus & Operations
                   </h3>
                   <div style={{ fontSize: "0.8rem", color: "#c5a048", fontWeight: 700 }}>
-                    Karen, Nairobi, Kenya
+                    Mukurweini Campus, Kenya
                   </div>
                 </div>
               </div>

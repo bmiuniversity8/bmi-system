@@ -28,7 +28,7 @@ describe('Institutes & BEMI Public Integration', () => {
 
     // Check African representation & Kenyan registration
     expect(screen.getByText(/Pan-African Continental Representation/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/Karen Campus, Nairobi, Kenya/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Mukurweini Campus, Kenya/i).length).toBeGreaterThan(0);
 
     // Check critical payment verification & fee transparency content
     expect(screen.getByText(/Why Does My Fee Payment Show “BEMI”?/i)).toBeInTheDocument();

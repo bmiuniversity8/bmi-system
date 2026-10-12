@@ -21,8 +21,8 @@ export default function BemiInstitutePage() {
     },
     {
       icon: "🏛️",
-      title: "Karen Campus & Online",
-      desc: "Situated in Karen, Nairobi, with blended physical workshops and hybrid digital classrooms for all African nations.",
+      title: "Mukurweini Campus & Online",
+      desc: "Situated at Mukurweini Campus, Kenya, with blended physical workshops and hybrid digital classrooms for all African nations.",
     },
     {
       icon: "💳",
@@ -121,7 +121,7 @@ export default function BemiInstitutePage() {
 
           <div style={{ display: "flex", alignItems: "center", gap: "1.25rem" }}>
             <span style={{ color: "#e5c578", fontWeight: 700, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-              <span>📍</span> Karen Campus, Nairobi, Kenya
+              <span>📍</span> Mukurweini Campus, Kenya
             </span>
             <span style={{ color: "rgba(255,255,255,0.3)" }}>|</span>
             <a
@@ -232,7 +232,7 @@ export default function BemiInstitutePage() {
               <strong>BEMI Training Institute</strong> is Bethel Ministries International’s official, legally registered educational institute in Kenya. Established to advance theological education and leadership training throughout the African continent, BEMI serves as the vital continental bridge between BMI’s global academic administration and African students, ministries, and communities.
             </p>
             <p style={{ color: "#64748b", fontSize: "0.98rem", lineHeight: 1.8, marginBottom: "1.75rem" }}>
-              From its Karen Campus in Nairobi, BEMI provides local administrative oversight, accredited vocational and theological training courses, and seamless articulation into BMI University degree programs. Whether you reside in Kenya, East Africa, West Africa, or Southern Africa, BEMI Training Institute ensures that your educational journey is supported locally with world-class integrity.
+              From its Mukurweini Campus in Kenya, BEMI provides local administrative oversight, accredited vocational and theological training courses, and seamless articulation into BMI University degree programs. Whether you reside in Kenya, East Africa, West Africa, or Southern Africa, BEMI Training Institute ensures that your educational journey is supported locally with world-class integrity.
             </p>
 
             <div
@@ -267,7 +267,7 @@ export default function BemiInstitutePage() {
                   Campus Headquarters
                 </span>
                 <div style={{ fontWeight: 800, color: "#0f172a", fontSize: "0.95rem", marginTop: "2px" }}>
-                  Karen, Nairobi, Kenya
+                  Mukurweini Campus, Kenya
                 </div>
               </div>
               <div>
@@ -706,23 +706,23 @@ export default function BemiInstitutePage() {
                   marginBottom: "1.25rem",
                 }}
               >
-                Visit Our Karen Campus in Nairobi
+                Visit Our Mukurweini Campus
               </h2>
               <p style={{ color: "rgba(255, 255, 255, 0.85)", fontSize: "0.98rem", lineHeight: 1.75, marginBottom: "1.75rem" }}>
-                Our Karen campus provides the regional headquarters for African student records, faculty coordination, in-person intensive residency sessions, and institutional leadership symposiums.
+                Our Mukurweini campus provides the regional headquarters for African student records, faculty coordination, in-person intensive residency sessions, and institutional leadership symposiums.
               </p>
 
               <div style={{ display: "flex", flexDirection: "column", gap: "1rem", fontSize: "0.92rem", color: "rgba(255,255,255,0.9)" }}>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem" }}>
                   <span style={{ fontSize: "1.2rem", color: "#e5c578" }}>📍</span>
                   <div>
-                    <strong>Campus Address:</strong> Karen Campus, Nairobi, Kenya
+                    <strong>Campus Address:</strong> Mukurweini Campus, Kenya
                   </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem" }}>
                   <span style={{ fontSize: "1.2rem", color: "#e5c578" }}>📮</span>
                   <div>
-                    <strong>Postal Correspondence:</strong> P.O. Box 24264 - 00502, Karen, Nairobi, Kenya
+                    <strong>Postal Correspondence:</strong> Mukurweini Campus, Kenya
                   </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem" }}>

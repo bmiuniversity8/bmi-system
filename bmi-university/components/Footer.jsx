@@ -240,7 +240,7 @@ export default function Footer() {
           <p style={{ color: "rgba(255,255,255,0.8)", fontSize: "0.88rem", lineHeight: 1.6, margin: 0 }}>
             Office of Admissions & Student Records<br />
             Bethel Ministries International University<br />
-            <strong>Africa Regional Hub:</strong> BEMI Training Institute, Karen, Nairobi, Kenya<br />
+            <strong>Africa Regional Hub:</strong> BEMI Training Institute, Mukurweini Campus, Kenya<br />
             <strong>Email:</strong> admin@bmiuniversities.org<br />
             <strong>Admissions:</strong> admissions@bmiuniversities.org
           </p>
@@ -291,7 +291,7 @@ export default function Footer() {
             </div>
           </div>
           <div style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.45)", lineHeight: 1.5, borderTop: "1px solid rgba(255,255,255,0.05)", paddingTop: "0.5rem" }}>
-            In Africa, Bethel Ministries International operates through <strong>BEMI Training Institute</strong> (registered in Kenya, Karen Campus, Nairobi). All continental tuition payments and Paystack/M-Pesa settlements are legally receipted by BEMI Training Institute (trading as BMI University).
+            In Africa, Bethel Ministries International operates through <strong>BEMI Training Institute</strong> (registered in Kenya, Mukurweini Campus). All continental tuition payments and Paystack/M-Pesa settlements are legally receipted by BEMI Training Institute (trading as BMI University).
           </div>
         </div>
       </div>

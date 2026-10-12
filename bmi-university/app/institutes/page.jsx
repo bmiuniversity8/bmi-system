@@ -22,7 +22,7 @@ export default function InstitutesDirectoryPage() {
       role: "Official Kenyan registered educational institute representing Bethel Ministries International across Africa at large. Oversees regional admissions, executive training, and tuition settlement via Paystack & M-Pesa.",
       features: [
         "Pan-African student representation and regional cohorts",
-        "Physical presence at Karen Campus, Nairobi, Kenya",
+        "Physical presence at Mukurweini Campus, Kenya",
         "Official Paystack & KES corporate settlement payee",
         "Direct articulation to BMI University degrees",
       ],
