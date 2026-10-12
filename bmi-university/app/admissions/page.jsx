@@ -196,7 +196,7 @@ export default async function Admissions() {
                   </span>
                 </div>
                 <p style={{ color: "#475569", fontSize: "0.92rem", lineHeight: 1.7, margin: "0 0 1rem" }}>
-                  When paying application or tuition fees online via Paystack, M-Pesa, card, or regional bank wire, your checkout merchant and bank statement will display our registered Kenyan educational institute: <strong>BEMI TRAINING INSTITUTE (trading as BMI University)</strong> with descriptor <code>BEMI*TRAINING</code>. Every transaction is directly credited to your official student account.
+                  When paying application or tuition fees online via our licensed processing partners (<strong>IntaSend</strong> for M-Pesa / Mobile Money and <strong>Paystack</strong> for Cards & Pan-African payments), your checkout merchant and bank statement will display our registered Kenyan educational institute: <strong>BEMI TRAINING INSTITUTE (trading as BMI University)</strong> with descriptor <code>BEMI*TRAINING</code>. Every transaction is directly credited to your official student account.
                 </p>
                 <Link
                   href="/institutes/bemi#tuition-transparency"

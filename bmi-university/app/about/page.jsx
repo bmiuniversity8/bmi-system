@@ -253,7 +253,7 @@ export default function About() {
                 </li>
                 <li style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem" }}>
                   <span style={{ color: "#c5a048", fontWeight: 900 }}>✓</span>
-                  <span>Authorized corporate merchant for Paystack & M-Pesa regional fee clearance</span>
+                  <span>Authorized corporate merchant for IntaSend, Paystack & M-Pesa regional fee clearance</span>
                 </li>
                 <li style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem" }}>
                   <span style={{ color: "#c5a048", fontWeight: 900 }}>✓</span>

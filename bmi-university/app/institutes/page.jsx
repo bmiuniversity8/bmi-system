@@ -19,11 +19,11 @@ export default function InstitutesDirectoryPage() {
       image: "/images/home-hero/home-hero-3-campus.jpg",
       href: "/institutes/bemi",
       status: "Active & Enrolling",
-      role: "Official Kenyan registered educational institute representing Bethel Ministries International across Africa at large. Oversees regional admissions, executive training, and tuition settlement via Paystack & M-Pesa.",
+      role: "Official Kenyan registered educational institute representing Bethel Ministries International across Africa at large. Oversees regional admissions, executive training, and tuition settlement via IntaSend, Paystack & M-Pesa.",
       features: [
         "Pan-African student representation and regional cohorts",
         "Physical presence at Mukurweini Campus, Kenya",
-        "Official Paystack & KES corporate settlement payee",
+        "Official IntaSend & Paystack KES corporate settlement payee",
         "Direct articulation to BMI University degrees",
       ],
       cta: "Explore BEMI Institute →",

@@ -27,7 +27,7 @@ export default function BemiInstitutePage() {
     {
       icon: "💳",
       title: "Official Settlement Entity",
-      desc: "Registered corporate merchant for Paystack, M-Pesa, and regional tuition payment clearances.",
+      desc: "Registered corporate merchant for IntaSend, Paystack, M-Pesa, and regional tuition payment clearances.",
     },
   ];
 
@@ -65,7 +65,7 @@ export default function BemiInstitutePage() {
     },
     {
       q: "Why do I see 'BEMI TRAINING INSTITUTE' on my fee payment checkout or bank statement?",
-      a: "BEMI Training Institute is the officially registered corporate and banking merchant in Kenya through which Bethel Ministries International processes all regional financial settlements, Paystack transactions, and M-Pesa school fee payments. In banking and gateway terms, the entity is registered as 'BEMI TRAINING INSTITUTE (trading as BMI University)' with the statement descriptor 'BEMI*TRAINING'. Every fee paid through this merchant is instantly credited directly to your official BMI University student account.",
+      a: "BEMI Training Institute is the officially registered corporate and banking merchant in Kenya through which Bethel Ministries International processes all regional financial settlements via licensed payment partners IntaSend and Paystack. In banking and gateway terms, the entity is registered as 'BEMI TRAINING INSTITUTE (trading as BMI University)' with the statement descriptor 'BEMI*TRAINING'. Every fee paid through these authorized gateways is instantly credited directly to your official BMI University student account.",
     },
     {
       q: "Can students from outside Kenya study through BEMI Training Institute?",
@@ -377,7 +377,7 @@ export default function BemiInstitutePage() {
               Why Does My Fee Payment Show &ldquo;BEMI&rdquo;?
             </h2>
             <p style={{ color: "rgba(255, 255, 255, 0.8)", fontSize: "1.05rem", maxWidth: "780px", margin: "0 auto", lineHeight: 1.7 }}>
-              When paying school fees, application fees, or graduation fees online via Paystack, M-Pesa, or bank transfer, you will see our official Kenyan corporate entity: <strong>BEMI TRAINING INSTITUTE</strong>. Here is why you can pay with 100% confidence.
+              When paying school fees, application fees, or graduation fees online via our licensed processing partners (<strong>IntaSend</strong> for M-Pesa / Mobile Money and <strong>Paystack</strong> for Cards & Pan-African rails), you will see our official Kenyan corporate entity: <strong>BEMI TRAINING INSTITUTE</strong>. Here is why you can pay with 100% confidence.
             </p>
           </div>
 
@@ -410,7 +410,7 @@ export default function BemiInstitutePage() {
                     </h3>
                   </div>
                   <p style={{ color: "rgba(255,255,255,0.78)", fontSize: "0.92rem", lineHeight: 1.7, margin: 0 }}>
-                    In compliance with the Central Bank of Kenya (CBK) and regional financial regulations, all continental banking rails, Paystack merchant profiles, and M-Pesa business accounts are legally registered under <strong>BEMI TRAINING INSTITUTE</strong>.
+                    In compliance with the Central Bank of Kenya (CBK) and regional financial regulations, all continental banking rails, IntaSend and Paystack merchant profiles, and M-Pesa business accounts are legally registered under <strong>BEMI TRAINING INSTITUTE</strong>.
                   </p>
                 </div>
 
@@ -452,7 +452,7 @@ export default function BemiInstitutePage() {
                     </h3>
                   </div>
                   <p style={{ color: "rgba(255,255,255,0.78)", fontSize: "0.92rem", lineHeight: 1.7, margin: 0 }}>
-                    Once payment clears, your student portal account updates automatically. You receive an official digital receipt carrying your unique Paystack reference and the BEMI institutional authorization code.
+                    Once payment clears, your student portal account updates automatically. You receive an official digital receipt carrying your unique gateway reference (IntaSend or Paystack) and the BEMI institutional authorization code.
                   </p>
                 </div>
               </div>
@@ -490,7 +490,7 @@ export default function BemiInstitutePage() {
                 {/* Simulated Payment Row 1 */}
                 <div style={{ background: "#f8fafc", borderRadius: "10px", padding: "1rem", marginBottom: "1rem", border: "1px solid #e2e8f0" }}>
                   <div style={{ fontSize: "0.75rem", color: "#64748b", marginBottom: "0.25rem" }}>
-                    Paystack Merchant / Payee:
+                    Authorized Gateway Merchant / Payee (IntaSend & Paystack):
                   </div>
                   <div style={{ fontSize: "1.05rem", fontWeight: 900, color: "#1e1b4b", fontFamily: "monospace" }}>
                     BEMI TRAINING INSTITUTE
@@ -716,13 +716,13 @@ export default function BemiInstitutePage() {
                 <div style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem" }}>
                   <span style={{ fontSize: "1.2rem", color: "#e5c578" }}>📍</span>
                   <div>
-                    <strong>Campus Address:</strong> Mukurweini Campus, Kenya
+                    <strong>Campus & Registered Office:</strong> Mukurwe-ini Plaza, Mukurweini Road, Nyeri County, Kenya
                   </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem" }}>
                   <span style={{ fontSize: "1.2rem", color: "#e5c578" }}>📮</span>
                   <div>
-                    <strong>Postal Correspondence:</strong> Mukurweini Campus, Kenya
+                    <strong>Postal Correspondence:</strong> P.O. Box 79534 - 00200, City Square, Kenya
                   </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem" }}>
@@ -734,7 +734,7 @@ export default function BemiInstitutePage() {
                 <div style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem" }}>
                   <span style={{ fontSize: "1.2rem", color: "#e5c578" }}>📞</span>
                   <div>
-                    <strong>Regional Support Line:</strong> +254 726 912 577 / +254 704 500 872
+                    <strong>Regional Support Line:</strong> +254 721 341 793 / +254 704 500 872
                   </div>
                 </div>
               </div>
