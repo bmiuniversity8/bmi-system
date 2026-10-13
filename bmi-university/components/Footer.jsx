@@ -25,6 +25,7 @@ const institutionalPortals = [
   { label: "Student Portal Login", href: "https://portal.bmiuniversities.org", external: true },
   { label: "Document Verification Engine", href: "/verify", external: false },
   { label: "University Management System (UMS)", href: "https://ums.bmiuniversities.org", external: true },
+  { label: "Terms & Student Refund Policy", href: "/terms", external: false },
   { label: "Privacy Policy & FERPA", href: "/privacy", external: false },
 ];
 

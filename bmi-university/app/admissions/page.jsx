@@ -198,21 +198,38 @@ export default async function Admissions() {
                 <p style={{ color: "#475569", fontSize: "0.92rem", lineHeight: 1.7, margin: "0 0 1rem" }}>
                   When paying application or tuition fees online via our licensed processing partners (<strong>IntaSend</strong> for M-Pesa / Mobile Money and <strong>Paystack</strong> for Cards & Pan-African payments), your checkout merchant and bank statement will display our registered Kenyan educational institute: <strong>BEMI TRAINING INSTITUTE (trading as BMI University)</strong> with descriptor <code>BEMI*TRAINING</code>. Every transaction is directly credited to your official student account.
                 </p>
-                <Link
-                  href="/institutes/bemi#tuition-transparency"
-                  style={{
-                    color: "#996d19",
-                    fontWeight: 700,
-                    fontSize: "0.88rem",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "0.35rem",
-                    textDecoration: "underline",
-                    textUnderlineOffset: "3px",
-                  }}
-                >
-                  <span>→</span> View BEMI Training Institute & Payment Verification Guide
-                </Link>
+                <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap", marginTop: "0.5rem" }}>
+                  <Link
+                    href="/institutes/bemi#tuition-transparency"
+                    style={{
+                      color: "#996d19",
+                      fontWeight: 700,
+                      fontSize: "0.88rem",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.35rem",
+                      textDecoration: "underline",
+                      textUnderlineOffset: "3px",
+                    }}
+                  >
+                    <span>→</span> BEMI Payment Verification Guide
+                  </Link>
+                  <Link
+                    href="/terms"
+                    style={{
+                      color: "#475569",
+                      fontWeight: 700,
+                      fontSize: "0.88rem",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.35rem",
+                      textDecoration: "underline",
+                      textUnderlineOffset: "3px",
+                    }}
+                  >
+                    <span>→</span> Student Terms &amp; Tuition Refund Policy
+                  </Link>
+                </div>
               </div>
             </div>
           </div>
