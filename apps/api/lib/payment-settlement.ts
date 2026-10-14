@@ -223,8 +223,8 @@ export async function settlePayment(
 
         const provTask = async () => {
           try {
-            const { runProvisioningOrchestration } = await import('./provisioning-orchestrator');
-            await runProvisioningOrchestration(db, {
+            const { runProvisioningAndEnqueue } = await import('./provisioning-orchestrator');
+            await runProvisioningAndEnqueue(db, {
               userId: invoice.user_id,
               applicationId: appId || '',
               actorId: 'payment_settlement',

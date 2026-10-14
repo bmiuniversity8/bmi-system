@@ -205,7 +205,7 @@ describe('Authoritative Enrollment State Machine & Provisioning Saga', () => {
   });
 
   describe('Provisioning Status Endpoint', () => {
-    it('returns provisioning steps and identities with honest IAM pending status', async () => {
+    it('returns provisioning steps and identities with deferred IAM status', async () => {
       const req = new Request('http://localhost/api/provisioning/status', {
         method: 'GET',
       });
@@ -217,10 +217,11 @@ describe('Authoritative Enrollment State Machine & Provisioning Saga', () => {
       expect(body.data.steps).toBeInstanceOf(Array);
       expect(body.data.steps.length).toBeGreaterThanOrEqual(4);
 
-      // B6 check: IAM provisioning reports 'pending' when external IdP is not confirmed
+      // IAM deferred: no institutional mailbox service — skipped by design,
+      // personal verified email via Resend is the contact channel.
       const iamStep = body.data.steps.find((s: any) => s.step === 'iam_provisioning');
       expect(iamStep).toBeDefined();
-      expect(iamStep.status).toBe('pending');
+      expect(iamStep.status).toBe('skipped');
     });
 
     it('supports async background provisioning via ctx.waitUntil', async () => {

@@ -5,7 +5,7 @@ import type { IDatabase } from '@bmi/ports';
 
 import type { Env } from './types';
 
-import { safeDispatchEmail, buildEmailLayout, lmsEnrollmentEmail, studentEmailProvisionedEmail, isValidEmail } from './email';
+import { safeDispatchEmail, buildEmailLayout, lmsEnrollmentEmail, isValidEmail } from './email';
 
 export type ProvisioningJobType = 'finance' | 'library' | 'lms' | 'portal' | 'email' | 'id_card';
 
@@ -21,8 +21,24 @@ export async function enqueueProvisioningJobs(db: IDatabase, uid: string): Promi
   const jobs: ProvisioningJobType[] = ['finance', 'library', 'lms', 'portal', 'email', 'id_card'];
   const now = new Date().toISOString();
 
+  // Idempotency: never duplicate an already-queued/active job for the same
+  // uid+type. Re-running provisioning (offer-accept retry, webhook replay,
+  // wizard + finalize double-path) must not fan out duplicate downstream work.
+  let existing: string[] = [];
+  try {
+    const rows = await db.prepare(
+      `SELECT job_type FROM provisioning_jobs WHERE uid = ? AND status IN ('pending', 'processing', 'blocked', 'failed')`
+    ).bind(uid).all<{ job_type: string }>().catch(() => null);
+    existing = (rows?.results || []).map(r => r.job_type);
+  } catch {
+    existing = [];
+  }
+
+  const missing = jobs.filter(t => !existing.includes(t));
+  if (missing.length === 0) return;
+
   await db.transaction(async (tx) => {
-    for (const jobType of jobs) {
+    for (const jobType of missing) {
       await tx.prepare(
         `INSERT INTO provisioning_jobs (id, uid, job_type, created_at)
          VALUES (lower(hex(randomblob(16))), ?, ?, ?)`
@@ -64,67 +80,17 @@ async function executeJob(env: Env, job: ProvisioningJob): Promise<void> {
 
   switch (job.job_type) {
     case 'email': {
-      const user = await ctx.db.prepare(
-        `SELECT u.id, u.first_name, u.last_name, u.email, p.uid
-         FROM users u
-         JOIN persons p ON u.person_id = p.id
-         WHERE p.uid = ?`
-      ).bind(uid).first<{ id: string; first_name: string; last_name: string; email: string; uid: string }>();
-      if (!user) throw new Error('User not found for email provisioning');
-
-      if (user.email && !isValidEmail(user.email)) {
-        console.warn('[provisioning:email] Invalid user.email for user', user.id, ':', user.email);
-      }
-
-      const emailLocal = (user.email || 'student' + uid.slice(0, 6)).split('@')[0] || 'student';
-      const studentEmail = `${emailLocal}@${env.STUDENT_EMAIL_DOMAIN || 'student.bmi.edu'}`;
-      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
-      const arr = new Uint8Array(16);
-      crypto.getRandomValues(arr);
-      const tempPassword = Array.from(arr, (byte) => chars[byte % chars.length]).join('') + 'Aa1!';
-
-      // RC-6: ctx.email may be unimplemented or absent — guard before calling createMailbox
-      let mailboxCreated = true;
-      if (!ctx.email || typeof ctx.email.createMailbox !== 'function') {
-        console.info('[provisioning:email] No email mailbox provider available — persisting student_email only');
-        mailboxCreated = false;
-      } else {
-        try {
-          await ctx.email.createMailbox(uid, studentEmail, tempPassword);
-        } catch (mbErr: unknown) {
-          const msg = mbErr instanceof Error ? mbErr.message : String(mbErr);
-          const unsupported = /(not implemented|not supported|not available|no.*mailbox|createMailbox)/i.test(msg);
-          if (unsupported) {
-            console.info('[provisioning:email] Mailbox provider does not support createMailbox; persisting student_email anyway. Reason:', msg);
-            mailboxCreated = false;
-          } else {
-            console.error('[provisioning:email] createMailbox failed:', mbErr);
-            throw mbErr;
-          }
-        }
-      }
-
-      await ctx.db.transaction(async (tx) => {
-        await tx.prepare(
-          `UPDATE users SET student_email = ?, updated_at = datetime('now') WHERE id = ?`
-        ).bind(studentEmail, user.id).run();
-
-        await tx.prepare(
-          `INSERT OR IGNORE INTO lifecycle_events
-           (id, uid, application_id, stage, status, idempotency_key, notes)
-           VALUES (lower(hex(randomblob(16))), ?, NULL, 'student_email', 'completed', ?, ?)`
-        ).bind(uid, `email:${uid}`, mailboxCreated ? 'Student mailbox provisioned' : 'Student email reserved (mailbox pending)').run();
-      });
-
-      if (env.RESEND_API_KEY && user.email && isValidEmail(user.email)) {
-        await safeDispatchEmail(env, undefined, {
-          to: user.email,
-          subject: 'BMI University — Your Student Email Account',
-          html: studentEmailProvisionedEmail(user.first_name, studentEmail, mailboxCreated, mailboxCreated ? tempPassword : undefined),
-          templateName: 'student_email_provisioned',
-          context: { action: 'student_email_provisioned', uid, student_email: studentEmail },
-        });
-      }
+      // DEFERRED: no institutional mailbox service exists. Student contact uses
+      // the verified personal email via Resend. This job records the deferral
+      // and completes without staging any institutional address or sending any
+      // mailbox credentials. Re-enable real provisioning behind the
+      // IdentityProviderAdapter when an IdP is wired.
+      console.info('[provisioning:email] Institutional mailbox deferred — using verified personal email.');
+      await ctx.db.prepare(
+        `INSERT OR IGNORE INTO lifecycle_events
+         (id, uid, application_id, stage, status, idempotency_key, notes)
+         VALUES (lower(hex(randomblob(16))), ?, NULL, 'student_email', 'completed', ?, ?)`
+      ).bind(uid, `email:${uid}`, 'Institutional mailbox deferred; verified personal email in use').run().catch(() => {});
       break;
     }
 

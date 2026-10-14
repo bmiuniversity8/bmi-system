@@ -301,12 +301,19 @@ export async function handleAutoEnrollMandatory(_req: Request, env: Env, userId:
           registration_type: 'auto',
           status: 'registered',
         }).onConflictDoNothing();
+        // Term-scoped mirror row: census-job only confers OFFICIALLY_ENROLLED
+        // for enrollments with an explicit term_id. Backfill NULL-term rows
+        // on conflict so legacy rows become census-visible.
         await tx.insert(enrollments).values({
           id: crypto.randomUUID(),
           student_id: userId,
           course_id: course.course_id!,
+          term_id: currentTerm.id,
           status: 'enrolled',
-        }).onConflictDoNothing();
+        }).onConflictDoUpdate({
+          target: [enrollments.student_id, enrollments.course_id],
+          set: { status: 'enrolled', term_id: currentTerm.id },
+        });
       }
     });
   }
@@ -553,8 +560,12 @@ export async function handleSubmitElectives(req: Request, env: Env, userId: stri
       id: crypto.randomUUID(),
       student_id: userId,
       course_id: courseId,
+      term_id: currentTerm.id,
       status: 'enrolled',
-    }).onConflictDoNothing();
+    }).onConflictDoUpdate({
+      target: [enrollments.student_id, enrollments.course_id],
+      set: { status: 'enrolled', term_id: currentTerm.id },
+    });
 
     enrolled++;
   }

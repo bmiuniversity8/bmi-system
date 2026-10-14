@@ -874,6 +874,7 @@ export const provisioningJobs = pgTable('provisioning_jobs', {
   last_error: text('last_error'),
   created_at: timestamp('created_at').notNull().defaultNow(),
   completed_at: timestamp('completed_at'),
+  updated_at: timestamp('updated_at'),
 }, (t) => [
   index('idx_provisioning_uid').on(t.uid),
   index('idx_provisioning_status').on(t.status),

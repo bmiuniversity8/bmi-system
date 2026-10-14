@@ -299,7 +299,9 @@ describe('Registration routes — handleCompleteRegistration', () => {
     const body = await res.json();
 
     expect(res.status).toBe(200);
-    expect(body.data.message).toBe('Registration completed successfully');
+    // Wizard completes the profile only — REGISTERED is owned by finalize.
+    expect(body.data.message).toMatch(/profile completed/i);
+    expect(body.data.next_steps).toEqual(['reserve_sections', 'sign_agreement', 'finalize_registration']);
   });
 });
 

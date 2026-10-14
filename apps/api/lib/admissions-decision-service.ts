@@ -5,7 +5,7 @@ import {
   ENROLLMENT_STATUS,
   ALLOWED_TRANSITIONS,
 } from './state-machine';
-import { runProvisioningOrchestration, OrchestratorResult } from './provisioning-orchestrator';
+import { runProvisioningAndEnqueue, OrchestratorResult } from './provisioning-orchestrator';
 
 export interface AdmissionDecisionInput {
   applicationId: string;
@@ -289,7 +289,7 @@ export async function acceptOfferAndProvision(
     });
 
     const provTask = async () => {
-      return await runProvisioningOrchestration(
+      return await runProvisioningAndEnqueue(
         db,
         {
           userId: params.userId,
@@ -337,7 +337,7 @@ export async function acceptOfferAndProvision(
     });
 
     const provTask = async () => {
-      return await runProvisioningOrchestration(
+      return await runProvisioningAndEnqueue(
         db,
         {
           userId: params.userId,

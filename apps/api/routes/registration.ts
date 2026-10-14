@@ -316,23 +316,75 @@ export async function handleCompleteRegistration(_req: Request, env: Env, userId
 
     const courses = currentData.modules?.selected_course_ids || [];
 
-    // ACID transaction: enrollments + student status update + metadata completion flag
+    // Resolve the active registration term (best-effort: wizard predates
+    // term-scoping; without a term we still complete the profile but skip
+    // term-bound course rows so census never sees NULL-term enrollments).
+    let wizardTermId: string | null = null;
+    try {
+      const t = await db.prepare(
+        `SELECT id FROM academic_terms WHERE status IN ('active', 'registration') ORDER BY start_date DESC LIMIT 1`
+      ).bind().first<{ id: string }>().catch(() => null);
+      wizardTermId = t?.id || null;
+    } catch {
+      wizardTermId = null;
+    }
+
+    // ACID transaction: student status + TERM-SCOPED course rows + metadata flag.
+    // NOTE: this legacy wizard step intentionally does NOT grant REGISTERED.
+    // The canonical POST /api/registration/finalize owns that transition after
+    // validating eligibility, financial clearance, and the e-signature together.
+    // Wizard course selections are staged as section-less registrations so the
+    // student still completes section reservation + finalize afterwards.
     await db.transaction(async (tx) => {
       await tx.prepare(
         `UPDATE students SET status = 'Active', updated_at = ? WHERE user_id = ?`
       ).bind(now, userId).run();
 
-      for (const courseId of courses) {
-        await tx.prepare(
-          // ON CONFLICT DO NOTHING is standard SQL (SQLite >= 3.24 / PostgreSQL) — portable across D1 and Neon
-          `INSERT INTO enrollments (id, student_id, course_id, status) VALUES (?, ?, ?, 'enrolled') ON CONFLICT DO NOTHING`
-        ).bind(crypto.randomUUID(), userId, courseId).run();
+      if (wizardTermId) {
+        for (const courseId of courses) {
+          await tx.prepare(
+            `INSERT INTO student_course_registrations (id, student_id, course_id, term_id, registration_type, status, registered_at)
+             VALUES (?, ?, ?, ?, 'elective', 'registered', ?)
+             ON CONFLICT(student_id, course_id, term_id) DO UPDATE SET status = 'registered'`
+          ).bind(crypto.randomUUID(), userId, courseId, wizardTermId, now).run().catch(() => {});
+          await tx.prepare(
+            `INSERT INTO enrollments (id, student_id, course_id, term_id, status, registration_date, enrolled_at)
+             VALUES (?, ?, ?, ?, 'enrolled', ?, ?)
+             ON CONFLICT(student_id, course_id) DO UPDATE SET status = 'enrolled', term_id = excluded.term_id`
+          ).bind(crypto.randomUUID(), userId, courseId, wizardTermId, now, now).run().catch(async () => {
+            // Fallback for DBs without term_id/registration_date columns (pre-migration).
+            await tx.prepare(
+              `INSERT INTO enrollments (id, student_id, course_id, status) VALUES (?, ?, ?, 'enrolled') ON CONFLICT DO NOTHING`
+            ).bind(crypto.randomUUID(), userId, courseId).run().catch(() => {});
+          });
+        }
+      } else {
+        console.warn('[registration] wizard complete without active term: course selections staged in metadata only, no enrollment rows written (census requires term_id).');
       }
 
       await tx.prepare(
         `UPDATE metadata SET value = ? WHERE id = ? AND key = 'registration_data'`
       ).bind(JSON.stringify({ ...currentData, _completed_at: now }), userId).run();
     });
+
+    // Best-effort state nudge: ELIGIBLE → IN_PROGRESS records "profile complete,
+    // awaiting section reservation + finalize" without ever granting REGISTERED
+    // here. Invalid transitions (e.g. PROSPECT in unmigrated test envs) are
+    // ignored — finalize remains the authoritative gate.
+    try {
+      const current = await getEnrollmentStatus(db, userId);
+      if (current.status === ENROLLMENT_STATUS.REGISTRATION_ELIGIBLE) {
+        await setEnrollmentStatus(db, {
+          userId,
+          status: ENROLLMENT_STATUS.REGISTRATION_IN_PROGRESS,
+          changedBy: userId,
+          termId: wizardTermId,
+          reason: 'Legacy registration wizard profile completed; awaiting section reservation and finalize',
+        });
+      }
+    } catch (e: unknown) {
+      console.warn('[registration] wizard status nudge skipped:', e instanceof Error ? e.message : String(e));
+    }
 
     const finalRegNo = result.regNo || userRow.reg_no;
 
@@ -397,7 +449,12 @@ export async function handleCompleteRegistration(_req: Request, env: Env, userId
       await runPostRegistrationTasks();
     }
 
-    return ok({ message: 'Registration completed successfully' });
+    return ok({
+      message: 'Registration profile completed. Reserve your sections, sign the enrollment agreement, then finalize registration.',
+      term_id: wizardTermId,
+      staged_courses: courses.length,
+      next_steps: ['reserve_sections', 'sign_agreement', 'finalize_registration'],
+    });
   } catch (e: unknown) {
     console.error('Failed to complete registration:', e);
     return error('Failed to complete registration', 500);

@@ -29,23 +29,21 @@ export interface OrchestratorResult {
 
 /**
  * Minimal institutional-identity adapter boundary.
- * Today BMI has no external IdP wired; the local adapter records the
- * institutional email as PENDING provisioning so downstream systems never
- * mistake a DB string for a real Google Workspace / Entra account.
+ * DEFERRED: BMI has no external IdP wired and no institutional mailbox service.
+ * All student contact uses the verified personal email (via Resend). No
+ * institutional address is staged or surfaced anywhere until an IdP is wired.
  * Swap LocalIdentityAdapter for a real provider without touching the saga.
  */
 export interface IdentityProviderAdapter {
   createStudentIdentity(input: { userId: string; email: string; firstName: string; lastName: string }): Promise<{ provisioned: boolean; externalId?: string }>;
 }
 
-class LocalIdentityAdapter implements IdentityProviderAdapter {
+export class LocalIdentityAdapter implements IdentityProviderAdapter {
   async createStudentIdentity(_input: { userId: string; email: string; firstName: string; lastName: string }): Promise<{ provisioned: boolean }> {
-    // No external IdP configured — email string is staged, IAM still pending.
+    // No external IdP configured — institutional email deferred entirely.
     return { provisioned: false };
   }
 }
-
-const identityAdapter: IdentityProviderAdapter = new LocalIdentityAdapter();
 
 /**
  * Executes the full Section 2 auto-provisioning saga triggered upon OFFER_ACCEPTED.
@@ -290,46 +288,19 @@ export async function runProvisioningOrchestration(
     errors.push(`Registrar record creation error: ${err}`);
   }
 
-  // ─── Step 5: IAM / Institutional Email Setup ───────────────────────────────
+  // ─── Step 5: IAM / Institutional Email — DEFERRED ─────────────────────────
+  // No institutional mailbox service exists. All contact uses the verified
+  // personal email (via Resend). Nothing is staged in users.student_email and
+  // nothing institutional is surfaced to the student. This step is skipped by
+  // design until a real IdP adapter is wired; it never blocks REGISTRATION_ELIGIBLE.
   try {
-    stepsMap.iam_provisioning.status = 'in_progress';
-    stepsMap.iam_provisioning.label = 'Institutional Email & IAM Account (pending external IdP)';
-    if (!studentEmail) {
-      const sanitizedFirst = userRow.first_name.toLowerCase().replace(/[^a-z0-9]/g, '');
-      const sanitizedLast = userRow.last_name.toLowerCase().replace(/[^a-z0-9]/g, '');
-      const cleanSerial = uid.replace(/[^0-9]/g, '').slice(-4) || Math.floor(1000 + Math.random() * 9000);
-      const candidate = `${sanitizedFirst}.${sanitizedLast}${cleanSerial}@student.bmi.edu.lr`;
-
-      await db.prepare(
-        `UPDATE users SET student_email = ?, updated_at = ? WHERE id = ?`
-      ).bind(candidate, now, input.userId).run();
-      studentEmail = candidate;
-
-      // Attempt external provisioning; local adapter reports pending so the
-      // orchestrator never claims IAM is complete before a real IdP confirms.
-      const iam = await identityAdapter.createStudentIdentity({
-        userId: input.userId, email: candidate,
-        firstName: userRow.first_name, lastName: userRow.last_name,
-      }).catch(() => ({ provisioned: false as boolean }));
-      if (!iam.provisioned) {
-        // Honest status: email string is staged in DB but no real mailbox exists yet.
-        // 'pending' (not 'completed') so ops dashboards accurately reflect IAM state.
-        // IAM is deliberately NOT in the critical-steps list, so this never blocks
-        // the REGISTRATION_ELIGIBLE transition.
-        stepsMap.iam_provisioning.status = 'pending';
-        stepsMap.iam_provisioning.error = 'institutional_email_pending: staged in DB, external IdP not yet provisioned';
-      } else {
-        stepsMap.iam_provisioning.status = 'completed';
-        stepsMap.iam_provisioning.completedAt = new Date().toISOString();
-      }
-    } else {
-      stepsMap.iam_provisioning.status = 'completed';
-      stepsMap.iam_provisioning.completedAt = new Date().toISOString();
-    }
+    stepsMap.iam_provisioning.label = 'Institutional Email & IAM Account (deferred — personal email in use)';
+    stepsMap.iam_provisioning.status = 'skipped';
+    stepsMap.iam_provisioning.error = 'institutional_email_deferred: no IdP/mailbox service; using verified personal email via Resend';
+    stepsMap.iam_provisioning.completedAt = new Date().toISOString();
   } catch (err) {
-    stepsMap.iam_provisioning.status = 'failed';
+    stepsMap.iam_provisioning.status = 'skipped';
     stepsMap.iam_provisioning.error = String(err);
-    errors.push(`IAM provisioning error: ${err}`);
   }
 
   // ─── Step 6: Academic Advisor Assignment & Initial Advising Hold ───────────
@@ -446,6 +417,8 @@ export async function getProvisioningStatus(
   regNo: string | null;
   studentEmail: string | null;
   catalogYearId: string | null;
+  iamProvisioned: boolean;
+  iamPendingReason: string | null;
   steps: ProvisioningStepResult[];
 }> {
   const user = await db.prepare(
@@ -463,16 +436,20 @@ export async function getProvisioningStatus(
     student_status: string | null;
   }>();
 
-  const isCompleted = Boolean(user?.uid && user?.reg_no && user?.student_email);
+  // Provisioning is complete once identity + registration number exist.
+  // users.student_email is NOT part of completion: no institutional mailbox
+  // service exists and nothing is staged there (personal email via Resend only).
+  const isCompleted = Boolean(user?.uid && user?.reg_no);
+  const iamProvisioned = false;
+  const iamPendingReason = 'institutional_email_deferred: no IdP/mailbox service; using verified personal email via Resend';
 
   const steps: ProvisioningStepResult[] = [
     { step: 'identity_resolution', label: 'Identity & Duplicate Resolution', status: user?.person_id ? 'completed' : 'pending' },
     { step: 'uid_generation', label: 'System UID Generation', status: user?.uid ? 'completed' : 'pending' },
     { step: 'reg_number', label: 'Registration Number Generation', status: user?.reg_no ? 'completed' : 'pending' },
     { step: 'registrar_record', label: 'Registrar Record & Locked Catalog Year', status: user?.catalog_year_id ? 'completed' : 'pending' },
-    // IAM is always 'pending' until a real external IdP adapter confirms provisioning.
-    // The student_email string is staged in the DB but the mailbox does not exist yet.
-    { step: 'iam_provisioning', label: 'Institutional Email & IAM Account (pending activation)', status: 'pending', error: user?.student_email ? 'institutional_email_pending: staged in DB, external IdP not yet provisioned' : undefined },
+    // Deferred by design: skipped, never pending/completed, until an IdP is wired.
+    { step: 'iam_provisioning', label: 'Institutional Email & IAM Account (deferred — personal email in use)', status: 'skipped', error: iamPendingReason, completedAt: new Date().toISOString() },
     { step: 'advisor_assignment', label: 'Academic Advisor Assignment', status: isCompleted ? 'completed' : 'pending' },
     { step: 'document_issuance', label: 'Admission Letter & Provisional ID', status: isCompleted ? 'completed' : 'pending' },
   ];
@@ -483,6 +460,37 @@ export async function getProvisioningStatus(
     regNo: user?.reg_no || null,
     studentEmail: user?.student_email || null,
     catalogYearId: user?.catalog_year_id || null,
+    iamProvisioned,
+    iamPendingReason,
     steps,
   };
+}
+
+/**
+ * Canonical post-acceptance helper: runs the orchestrator saga, then enqueues
+ * the async downstream jobs (LMS, library, email, finance, portal, id_card).
+ * Downstream dispatch stays async via provisioning_jobs + dispatchPendingJobs,
+ * so slow external systems never block the accept-offer request or webhook.
+ * Idempotent: re-running never mints a second UID and never duplicates jobs
+ * (enqueue is idempotent per uid+job_type).
+ */
+export async function runProvisioningAndEnqueue(
+  db: IDatabase,
+  input: {
+    userId: string;
+    applicationId?: string;
+    actorId?: string;
+    programId?: string;
+    programName?: string;
+  },
+  document?: IDocumentGenerator
+): Promise<OrchestratorResult> {
+  const result = await runProvisioningOrchestration(db, input, document);
+  try {
+    const { enqueueProvisioningJobs } = await import('./provisioning');
+    await enqueueProvisioningJobs(db, result.uid);
+  } catch (e: unknown) {
+    console.warn('[provisioning] downstream enqueue skipped:', e instanceof Error ? e.message : String(e));
+  }
+  return result;
 }

@@ -204,6 +204,8 @@ export const api = {
         regNo: string | null;
         studentEmail: string | null;
         catalogYearId: string | null;
+        iamProvisioned?: boolean;
+        iamPendingReason?: string | null;
         steps: Array<{ step: string; label: string; status: string; completedAt?: string; error?: string }>;
       }>('/provisioning/status'),
   },

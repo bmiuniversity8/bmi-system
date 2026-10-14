@@ -35,6 +35,8 @@ export default function Status() {
     uid: string | null;
     regNo: string | null;
     studentEmail: string | null;
+    iamProvisioned?: boolean;
+    iamPendingReason?: string | null;
     steps: Array<{ step: string; label: string; status: string; completedAt?: string; error?: string }>;
   } | null>(null);
   const [acceptingOffer, setAcceptingOffer] = useState(false);
@@ -402,7 +404,7 @@ export default function Status() {
                     <div key={s.step} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0.75rem', background: 'white', borderRadius: 6, border: '1px solid var(--border)' }}>
                       <span style={{ fontSize: '0.875rem', color: 'var(--navy)', fontWeight: 600 }}>{s.label}</span>
                       <span style={{ fontSize: '0.8rem', fontWeight: 700, color: s.status === 'completed' ? 'var(--success)' : s.status === 'in_progress' ? 'var(--gold)' : 'var(--slate)' }}>
-                        {s.status === 'completed' ? '✓ Ready' : s.status === 'in_progress' ? '⏳ In progress...' : 'Pending'}
+                        {s.status === 'completed' ? '✓ Ready' : s.status === 'in_progress' ? '⏳ In progress...' : s.status === 'skipped' ? '⊘ Deferred' : 'Pending'}
                       </span>
                     </div>
                   ))}
@@ -439,9 +441,9 @@ export default function Status() {
                   </div>
 
                   <div style={{ background: 'white', padding: '0.75rem 1rem', borderRadius: 8, border: '1px solid #bbf7d0' }}>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Institutional Email</span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Contact Email</span>
                     <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#1e40af', marginTop: '0.25rem', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {provisioningData?.studentEmail || `${user?.first_name?.toLowerCase()}.${user?.last_name?.toLowerCase()}@student.bmi.edu.lr`}
+                      {user?.email || '—'}
                     </div>
                   </div>
                 </div>
