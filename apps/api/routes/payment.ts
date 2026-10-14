@@ -39,7 +39,17 @@ export async function handleCreatePaymentIntent(req: Request, env: Env, userId: 
 
     const db = env.PLATFORM_CONTEXT!.db;
     let targetInvoiceId = invoiceId;
-    if (purpose === 'deposit' || (applicationId && !invoiceId)) {
+    if (purpose === 'application_fee') {
+      if (!applicationId) return error('applicationId is required for application fee payments', 400);
+      const app = await db.prepare(
+        `SELECT id, user_id, status FROM applications WHERE id = ? LIMIT 1`
+      ).bind(applicationId).first<{ id: string; user_id: string; status: string }>().catch(() => null);
+      if (!app || app.user_id !== userId) return error('Application not found', 404);
+
+      const { assessApplicationFee } = await import('../lib/fee-assessment-service');
+      const assessed = await assessApplicationFee(db, applicationId, userId);
+      targetInvoiceId = assessed.id;
+    } else if (purpose === 'deposit' || (applicationId && !invoiceId)) {
       if (!applicationId) return error('applicationId is required for enrollment payments', 400);
       const app = await db.prepare(
         `SELECT id, user_id, status FROM applications WHERE id = ? LIMIT 1`

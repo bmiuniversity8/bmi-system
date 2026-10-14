@@ -83,7 +83,36 @@ export async function handleGetDecision(
       return ok({ decision: null, status: 'pending' });
     }
 
-    return ok(decision);
+    // Enrich with the canonical assessed registration/enrollment fee so the
+    // portal can surface a "Pay fee" action off the fee engine (not just the
+    // admissions deposit_required flag). The assessment is idempotent.
+    const enriched: any = { ...decision };
+    try {
+      const { assessEnrollmentFee } = await import('../lib/fee-assessment-service');
+      const assessed: any = await assessEnrollmentFee(db, decision.application_id, userId);
+      const waived = Number(decision.deposit_required) === 0;
+      const paid = assessed.status === 'paid' || Number(assessed.total_minor) <= 0;
+      enriched.payment = {
+        required: !waived && !assessed.deferred && Number(assessed.total_minor) > 0 && !paid,
+        amount_minor: assessed.total_minor,
+        charge_currency: assessed.charge_currency,
+        formatted: assessed.formatted_dual,
+        deferred: assessed.deferred,
+        paid,
+      };
+    } catch {
+      // v4 assessment unavailable (e.g. unseeded mock) — fall back to legacy flag.
+      enriched.payment = {
+        required: Number(decision.deposit_required) === 1,
+        amount_minor: Math.round(Number(decision.deposit_amount || 0) * 100),
+        charge_currency: 'KES',
+        formatted: decision.deposit_amount ? `${decision.deposit_amount}` : '',
+        deferred: false,
+        paid: false,
+      };
+    }
+
+    return ok(enriched);
   } catch (err: unknown) {
     return error('Failed to retrieve admissions decision', 500);
   }

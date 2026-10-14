@@ -816,6 +816,10 @@ export async function handleGenerateProgramInvoice(_req: Request, env: Env, user
     id: invoiceId,
     student_id: userId,
     amount: Math.round(fee.amount),
+    total_billing: Math.round(fee.amount),
+    balance: Math.round(fee.amount),
+    academic_year: currentTerm.academic_year,
+    term_id: currentTerm.id,
     status: 'unpaid',
     due_date: dueDate,
   });

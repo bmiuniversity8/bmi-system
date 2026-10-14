@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { api } from '../lib/api';
+import { api, ApiError } from '../lib/api';
 import { useAuth } from '../hooks/useAuth';
 import { PROGRAMS as FALLBACK_PROGRAMS, API_WORKER_URL } from '@bmi/shared';
 import { z } from 'zod';
@@ -108,6 +108,8 @@ export default function Apply() {
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [paymentDue, setPaymentDue] = useState<{ applicationId: string; invoiceNumber?: string; formatted?: string } | null>(null);
+  const [payingFee, setPayingFee] = useState(false);
   const [existingApp, setExistingApp] = useState<any>(null);
   const [_checkingExisting, setCheckingExisting] = useState(true);
   const [stagedDocs, setStagedDocs] = useState<StagedDoc[]>([]);
@@ -319,7 +321,7 @@ export default function Apply() {
   const filteredPrograms = useMemo(() => {
     return programs.filter(p => {
       const matchesLevel = selectedLevel === 'all' || p.level.toLowerCase() === selectedLevel.toLowerCase();
-      const matchesSearch = programSearch.trim() === '' || 
+      const matchesSearch = programSearch.trim() === '' ||
         p.label.toLowerCase().includes(programSearch.toLowerCase()) ||
         (p.description && p.description.toLowerCase().includes(programSearch.toLowerCase()));
       return matchesLevel && matchesSearch;
@@ -363,7 +365,7 @@ export default function Apply() {
   const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    
+
     setError('');
     const validation = await validateDocument(file, selectedDocType);
     if (!validation.valid) {
@@ -431,15 +433,48 @@ export default function Apply() {
       localStorage.removeItem(STORAGE_KEY);
       navigate('/status?submitted=1');
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Submission failed. Please try again.';
-      if (msg.toLowerCase().includes('already have an active application') || msg.includes('409')) {
-        setError('You already have an active application submitted. Redirecting to your status tracker...');
-        setTimeout(() => navigate('/status'), 1800);
+      const apiErr = err instanceof ApiError ? err : null;
+      if (apiErr && apiErr.status === 402 && apiErr.data?.invoice_id) {
+        const inv = apiErr.data.invoice || {};
+        setPaymentDue({
+          applicationId: apiErr.data.application_id,
+          invoiceNumber: apiErr.data.invoice_number || inv.invoice_number,
+          formatted: inv.formatted_dual || (inv.total_minor != null ? `${(Number(inv.total_minor) / 100).toFixed(2)} ${inv.charge_currency ?? ''}`.trim() : undefined),
+        });
       } else {
-        setError(msg);
+        const msg = err instanceof Error ? err.message : 'Submission failed. Please try again.';
+        if (msg.toLowerCase().includes('already have an active application') || msg.includes('409')) {
+          setError('You already have an active application submitted. Redirecting to your status tracker...');
+          setTimeout(() => navigate('/status'), 1800);
+        } else {
+          setError(msg);
+        }
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePayApplicationFee = async () => {
+    if (!paymentDue) return;
+    setPayingFee(true);
+    setError('');
+    try {
+      const intent = await api.applications.payApplicationFee(paymentDue.applicationId);
+      if (intent.authorizationUrl) {
+        window.location.href = intent.authorizationUrl;
+        return;
+      }
+      if (intent.reference) {
+        // Test/no-redirect gateway: confirm inline then retry submission.
+        await api.payments.verify(intent.reference);
+        setPaymentDue(null);
+        setError('Payment received. Click "Submit Application" again to finalize.');
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to start fee payment.');
+    } finally {
+      setPayingFee(false);
     }
   };
 
@@ -719,8 +754,8 @@ export default function Apply() {
                         </div>
                       ) : (
                         filteredCountries.map(c => {
-                          const isMatch = form.nationality?.toLowerCase() === c.name.toLowerCase() || 
-                                          form.nationality?.toLowerCase() === c.nationality.toLowerCase();
+                          const isMatch = form.nationality?.toLowerCase() === c.name.toLowerCase() ||
+                            form.nationality?.toLowerCase() === c.nationality.toLowerCase();
                           return (
                             <div
                               key={c.name}
@@ -959,6 +994,19 @@ export default function Apply() {
               <div className="alert alert-warning" style={{ marginTop: '1.5rem', fontSize: '0.875rem' }} role="note">
                 ⚠️ Once submitted, you cannot edit your application directly. Any additional documents can be uploaded on your status page.
               </div>
+            </div>
+          )}
+
+          {paymentDue && (
+            <div className="alert alert-info" style={{ marginTop: '1.5rem', borderLeft: '4px solid #f59e0b', padding: '1rem' }}>
+              <strong style={{ display: 'block', marginBottom: '0.25rem' }}>💳 Application fee payment required</strong>
+              <p style={{ margin: '0 0 0.75rem', fontSize: '0.9rem' }}>
+                A non-refundable application fee{paymentDue.formatted ? ` of ${paymentDue.formatted}` : ''} must be paid before your application can be submitted.
+                {paymentDue.invoiceNumber ? ` Invoice: ${paymentDue.invoiceNumber}` : ''}
+              </p>
+              <button className="btn btn-navy" onClick={handlePayApplicationFee} disabled={payingFee} style={{ padding: '0.6rem 1.25rem', fontWeight: 700 }}>
+                {payingFee ? '⏳ Processing…' : 'Pay Application Fee'}
+              </button>
             </div>
           )}
 

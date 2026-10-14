@@ -349,10 +349,10 @@ export default function Status() {
                   </div>
                 )}
 
-                {Number(decision?.deposit_required) === 1 && (
+                {decision?.payment?.required && (
                   <div className="alert alert-info" style={{ marginBottom: '1rem' }}>
-                    <strong>Enrollment deposit required:</strong>{' '}
-                    {decision?.deposit_amount ?? ''} — pay securely via the gateway before accepting.
+                    <strong>Registration fee required:</strong>{' '}
+                    {decision?.payment?.formatted || decision?.deposit_amount || ''} — pay securely via the gateway before accepting.
                     <div style={{ marginTop: '0.75rem' }}>
                       <button
                         className="btn btn-navy"
@@ -360,7 +360,7 @@ export default function Status() {
                         disabled={depositBusy}
                         style={{ padding: '0.6rem 1.25rem', fontWeight: 700 }}
                       >
-                        {depositBusy ? '⏳ Processing…' : 'Pay Deposit via Gateway'}
+                        {depositBusy ? '⏳ Processing…' : 'Pay Registration Fee via Gateway'}
                       </button>
                     </div>
                   </div>

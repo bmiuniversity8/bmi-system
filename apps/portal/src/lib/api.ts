@@ -25,8 +25,8 @@ function clearCsrfToken() {
   _memoryToken = null;
 }
 
-class ApiError extends Error {
-  constructor(public status: number, message: string) {
+export class ApiError extends Error {
+  constructor(public status: number, message: string, public data?: any) {
     super(message);
     this.name = 'ApiError';
   }
@@ -66,7 +66,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
       if (res.status === 401) {
         clearCsrfToken();
       }
-      throw new ApiError(res.status, data?.error || `Request failed (${res.status})`);
+      throw new ApiError(res.status, data?.error || `Request failed (${res.status})`, data);
     }
     return data.data ?? data;
   } catch (err: unknown) {
@@ -141,6 +141,17 @@ export const api = {
       gpa?: number;
     }) =>
       request<{ application_id: string; status: string }>('/applications', { method: 'POST', body: JSON.stringify(body) }),
+
+    payApplicationFee: (applicationId: string) =>
+      request<{
+        intentId: string;
+        reference: string;
+        authorizationUrl?: string;
+        accessCode?: string;
+      }>('/payment/create-intent', {
+        method: 'POST',
+        body: JSON.stringify({ purpose: 'application_fee', applicationId }),
+      }),
 
     getMyApplication: () =>
       request<Application>('/applications/me'),
@@ -322,7 +333,8 @@ export const api = {
   },
 
   student: {
-    getRegistrationEligibility: (termId?: string) => {      const qs = termId ? `?term_id=${encodeURIComponent(termId)}` : '';
+    getRegistrationEligibility: (termId?: string) => {
+      const qs = termId ? `?term_id=${encodeURIComponent(termId)}` : '';
       return request<{
         eligible: boolean;
         status: string;
@@ -482,6 +494,14 @@ export interface AdmissionsDecision {
   program?: string;
   degree_level?: string;
   application_status?: string;
+  payment?: {
+    required: boolean;
+    amount_minor: number;
+    charge_currency: string;
+    formatted: string;
+    deferred: boolean;
+    paid: boolean;
+  };
 }
 
 export interface User {
