@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { handleRecordDecision, handleAcceptOffer, handlePayDeposit } from './admissions';
-import { handleGetRegistrationEligibility, handleReserveSeat, handleWaitlistSeat, handleSignEnrollmentAgreement, handleRunCensusJob } from './registration';
+import { handleGetRegistrationEligibility, handleReserveSeat, handleWaitlistSeat, handleSignEnrollmentAgreement, handleRunCensusJob, handleReleaseAdvisingHold } from './registration';
 import { handleGetProvisioningStatus } from './provisioning';
 import { setEnrollmentStatus, getEnrollmentStatus, ENROLLMENT_STATUS } from '../lib/state-machine';
 
@@ -205,7 +205,7 @@ describe('Authoritative Enrollment State Machine & Provisioning Saga', () => {
   });
 
   describe('Provisioning Status Endpoint', () => {
-    it('returns provisioning steps and identities', async () => {
+    it('returns provisioning steps and identities with honest IAM pending status', async () => {
       const req = new Request('http://localhost/api/provisioning/status', {
         method: 'GET',
       });
@@ -216,6 +216,54 @@ describe('Authoritative Enrollment State Machine & Provisioning Saga', () => {
       expect(res.status).toBe(200);
       expect(body.data.steps).toBeInstanceOf(Array);
       expect(body.data.steps.length).toBeGreaterThanOrEqual(4);
+
+      // B6 check: IAM provisioning reports 'pending' when external IdP is not confirmed
+      const iamStep = body.data.steps.find((s: any) => s.step === 'iam_provisioning');
+      expect(iamStep).toBeDefined();
+      expect(iamStep.status).toBe('pending');
+    });
+
+    it('supports async background provisioning via ctx.waitUntil', async () => {
+      const req = new Request('http://localhost/api/admissions/accept', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          application_id: 'app-1',
+        }),
+      });
+
+      const waitUntilSpy = vi.fn();
+      const mockCtx = { waitUntil: waitUntilSpy };
+
+      const res = await handleAcceptOffer(req, mockEnv, 'student-user-1', mockCtx as any);
+      const body = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(body.success).toBe(true);
+      expect(waitUntilSpy).toHaveBeenCalled();
+      expect(body.data.provisioningResult).toEqual({ status: 'in_progress' });
+    });
+  });
+
+  describe('Advising Hold Release Endpoint', () => {
+    it('releases advising hold and records advising clearance', async () => {
+      const req = new Request('http://localhost/api/registration/advising-release', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          student_id: 'student-user-1',
+          term_id: 'term-2026-fall',
+        }),
+      });
+
+      const res = await handleReleaseAdvisingHold(req, mockEnv, 'advisor-1');
+      const body = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(body.success).toBe(true);
+      expect(body.data.studentId).toBe('student-user-1');
+      expect(body.data.termId).toBe('term-2026-fall');
+      expect(body.data.advisorId).toBe('advisor-1');
     });
   });
 

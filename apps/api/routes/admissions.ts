@@ -138,7 +138,8 @@ export async function handleAcceptOffer(
         applicationId: body.application_id,
         userId,
       },
-      env.PLATFORM_CONTEXT?.document
+      env.PLATFORM_CONTEXT?.document,
+      _ctx
     );
 
     return ok(result);

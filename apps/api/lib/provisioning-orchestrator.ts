@@ -312,8 +312,11 @@ export async function runProvisioningOrchestration(
         firstName: userRow.first_name, lastName: userRow.last_name,
       }).catch(() => ({ provisioned: false as boolean }));
       if (!iam.provisioned) {
-        stepsMap.iam_provisioning.status = 'completed';
-        stepsMap.iam_provisioning.completedAt = new Date().toISOString();
+        // Honest status: email string is staged in DB but no real mailbox exists yet.
+        // 'pending' (not 'completed') so ops dashboards accurately reflect IAM state.
+        // IAM is deliberately NOT in the critical-steps list, so this never blocks
+        // the REGISTRATION_ELIGIBLE transition.
+        stepsMap.iam_provisioning.status = 'pending';
         stepsMap.iam_provisioning.error = 'institutional_email_pending: staged in DB, external IdP not yet provisioned';
       } else {
         stepsMap.iam_provisioning.status = 'completed';
@@ -467,7 +470,9 @@ export async function getProvisioningStatus(
     { step: 'uid_generation', label: 'System UID Generation', status: user?.uid ? 'completed' : 'pending' },
     { step: 'reg_number', label: 'Registration Number Generation', status: user?.reg_no ? 'completed' : 'pending' },
     { step: 'registrar_record', label: 'Registrar Record & Locked Catalog Year', status: user?.catalog_year_id ? 'completed' : 'pending' },
-    { step: 'iam_provisioning', label: 'Institutional Email & IAM Account', status: user?.student_email ? 'completed' : 'pending' },
+    // IAM is always 'pending' until a real external IdP adapter confirms provisioning.
+    // The student_email string is staged in the DB but the mailbox does not exist yet.
+    { step: 'iam_provisioning', label: 'Institutional Email & IAM Account (pending activation)', status: 'pending', error: user?.student_email ? 'institutional_email_pending: staged in DB, external IdP not yet provisioned' : undefined },
     { step: 'advisor_assignment', label: 'Academic Advisor Assignment', status: isCompleted ? 'completed' : 'pending' },
     { step: 'document_issuance', label: 'Admission Letter & Provisional ID', status: isCompleted ? 'completed' : 'pending' },
   ];

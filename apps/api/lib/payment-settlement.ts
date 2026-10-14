@@ -18,11 +18,12 @@ export interface SettlementResult {
 }
 
 export async function settlePayment(
-  env: any,
-  gatewayReference: string
+  envOrDb: any,
+  gatewayReference: string,
+  ctx?: { waitUntil: (promise: Promise<any>) => void }
 ): Promise<SettlementResult> {
-  const db = env.PLATFORM_CONTEXT!.db;
-  const paymentService = env.PLATFORM_CONTEXT!.payment;
+  const db = envOrDb?.PLATFORM_CONTEXT?.db || envOrDb?.db || envOrDb;
+  const paymentService = envOrDb?.PLATFORM_CONTEXT?.payment || envOrDb?.payment;
   const now = new Date();
   const nowIso = now.toISOString();
 
@@ -220,16 +221,28 @@ export async function settlePayment(
           `SELECT program, program_id FROM applications WHERE id = ?`
         ).bind(appId).first() as Promise<{ program: string; program_id: string } | null>).catch(() => null);
 
-        const { runProvisioningOrchestration } = await import('./provisioning-orchestrator');
-        await runProvisioningOrchestration(db, {
-          userId: invoice.user_id,
-          applicationId: appId || '',
-          actorId: 'payment_settlement',
-          programName: appRow?.program || 'Academic Program',
-          programId: appRow?.program_id,
-        });
-      } catch (provErr) {
-        console.error('[settlePayment] Error triggering provisioning on registration fee settlement:', provErr);
+        const provTask = async () => {
+          try {
+            const { runProvisioningOrchestration } = await import('./provisioning-orchestrator');
+            await runProvisioningOrchestration(db, {
+              userId: invoice.user_id,
+              applicationId: appId || '',
+              actorId: 'payment_settlement',
+              programName: appRow?.program || 'Academic Program',
+              programId: appRow?.program_id,
+            });
+          } catch (provErr) {
+            console.error('[settlePayment] Error triggering provisioning on registration fee settlement:', provErr);
+          }
+        };
+
+        if (ctx && typeof ctx.waitUntil === 'function') {
+          ctx.waitUntil(provTask());
+        } else {
+          await provTask();
+        }
+      } catch (statusErr) {
+        console.error('[settlePayment] Error setting enrollment status on fee settlement:', statusErr);
       }
     }
 

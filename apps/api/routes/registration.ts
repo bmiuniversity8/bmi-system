@@ -1094,3 +1094,81 @@ export async function handleRunCensusJob(
   }
 }
 
+// ─── Advising Hold Release ─────────────────────────────────────────────────
+
+/**
+ * POST /api/registration/advising-release
+ * Allows a staff member, advisor, or admin to release a student's advising hold
+ * for a specific term. This creates an advising_releases row (so eligibility-service
+ * recognises the clearance) and deactivates the student_holds entry.
+ *
+ * Body: { student_id: string, term_id?: string, notes?: string }
+ * Roles: staff, admin, advisor, faculty
+ */
+export async function handleReleaseAdvisingHold(
+  req: Request,
+  env: Env,
+  advisorId: string
+): Promise<Response> {
+  if (req.method !== 'POST') return error('Method not allowed', 405);
+  try {
+    const body = await typedJson<{
+      student_id: string;
+      term_id?: string;
+      notes?: string;
+      pin?: string;
+    }>(req);
+
+    if (!body.student_id) return error('student_id is required', 400);
+
+    const db = env.PLATFORM_CONTEXT!.db;
+
+    // Resolve the target term (explicit or active)
+    let termId = body.term_id;
+    if (!termId) {
+      const activeTerm = await db.prepare(
+        `SELECT id FROM academic_terms WHERE status IN ('active', 'registration') ORDER BY start_date DESC LIMIT 1`
+      ).first<{ id: string }>().catch(() => null);
+      termId = activeTerm?.id;
+    }
+    if (!termId) return error('No active term found and no term_id provided', 400);
+
+    // Verify the student exists in users
+    const user = await db.prepare(
+      `SELECT id FROM users WHERE id = ? LIMIT 1`
+    ).bind(body.student_id).first<{ id: string }>().catch(() => null);
+    if (!user) return error('Student not found', 404);
+
+    const now = new Date().toISOString();
+    const releaseId = crypto.randomUUID();
+
+    // 1. Insert advising_releases row (idempotent via ON CONFLICT)
+    await db.prepare(
+      `INSERT INTO advising_releases (id, student_id, term_id, advisor_id, released_at, pin)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT (student_id, term_id) DO UPDATE SET
+         advisor_id = excluded.advisor_id,
+         released_at = excluded.released_at,
+         pin = excluded.pin`
+    ).bind(releaseId, body.student_id, termId, advisorId, now, body.pin || null).run();
+
+    // 2. Deactivate the advising hold in student_holds
+    await db.prepare(
+      `UPDATE student_holds
+       SET is_active = 0, resolved_at = ?
+       WHERE student_id = ? AND hold_type = 'advising' AND is_active = 1`
+    ).bind(now, body.student_id).run().catch(() => null);
+
+    return ok({
+      success: true,
+      releaseId,
+      studentId: body.student_id,
+      termId,
+      advisorId,
+      message: 'Advising hold released. Student may now proceed with course registration.',
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to release advising hold';
+    return error(message, 500);
+  }
+}

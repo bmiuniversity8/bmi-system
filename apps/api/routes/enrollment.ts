@@ -27,7 +27,7 @@ import { eq, and, count, lte, gte } from 'drizzle-orm';
 
 interface Hold {
   id: string;
-  hold_type: 'document' | 'orientation' | 'course_selection' | 'payment';
+  hold_type: 'document' | 'orientation' | 'course_selection' | 'payment' | 'advising' | string;
   reason: string;
   is_active: number;
   created_at: string;
@@ -650,6 +650,20 @@ export async function handleGetRegistrationProgress(_req: Request, env: Env, use
 
   const hasOrientationCompleted = holds.some(h => h.hold_type === 'orientation' && !h.is_active);
 
+  // Advising hold + release check — provisioning auto-places an 'advising' hold
+  // that blocks registration until the advisor releases it for the current term.
+  const hasAdvisingHold = holds.some(h => h.hold_type === 'advising' && h.is_active);
+  let hasAdvisingRelease = false;
+  if (currentTerm) {
+    // Use raw query for advising_releases (not in Drizzle schema)
+    const releaseRow = await env.PLATFORM_CONTEXT!.db.prepare(
+      `SELECT 1 FROM advising_releases WHERE student_id = ? AND term_id = ? LIMIT 1`
+    ).bind(userId, currentTerm.id).first().catch(() => null);
+    hasAdvisingRelease = !!releaseRow;
+  }
+  // If there was never an advising hold placed, consider advising satisfied
+  const advisingCompleted = hasAdvisingRelease || !holds.some(h => h.hold_type === 'advising');
+
   const tasks = [
     {
       id: 'upload_id',
@@ -675,11 +689,13 @@ export async function handleGetRegistrationProgress(_req: Request, env: Env, use
       completed: hasActiveEnrollments,
       locked: !hasOrientationCompleted,
       sub_tasks: [
+        { id: 'academic_advising', title: 'Complete Academic Advising', completed: advisingCompleted },
         { id: 'enroll_mandatory', title: 'Auto-Enroll in Mandatory Courses', completed: hasEnrolledMandatory },
         { id: 'select_electives', title: 'Select Elective Courses', completed: hasSelectedElectives },
       ],
       hold_type: 'course_selection',
-      hold_active: holds.some(h => h.hold_type === 'course_selection' && h.is_active),
+      hold_active: holds.some(h => (h.hold_type === 'course_selection' || h.hold_type === 'advising') && h.is_active),
+      advising_hold_active: hasAdvisingHold && !hasAdvisingRelease,
       action_url: '/student/academics',
     },
     {
@@ -700,6 +716,8 @@ export async function handleGetRegistrationProgress(_req: Request, env: Env, use
     tasks,
     progress: Math.round((completed / total) * 100),
     is_complete: completed === total,
+    advising_completed: advisingCompleted,
+    advising_hold_active: hasAdvisingHold && !hasAdvisingRelease,
   });
 }
 
@@ -736,6 +754,35 @@ export async function handleCompleteOrientation(req: Request, env: Env, userId: 
       metadata: JSON.stringify({ completed_via: completionMethod, content_version: contentVersion, completed_at: completedAt }),
     })
     .where(eq(studentHolds.id, hold.id));
+
+  // Auto-release auto-placed advising hold on orientation completion (best effort)
+  await db.update(studentHolds)
+    .set({
+      is_active: 0,
+      resolved_at: new Date(),
+      metadata: JSON.stringify({ completed_via: 'orientation_completion', auto_released: true }),
+    })
+    .where(and(
+      eq(studentHolds.student_id, userId),
+      eq(studentHolds.hold_type, 'advising'),
+      eq(studentHolds.is_active, 1)
+    ))
+    .execute()
+    .catch(() => null);
+
+  if (env.PLATFORM_CONTEXT?.db) {
+    const rawDb = env.PLATFORM_CONTEXT.db;
+    const activeTerm = await rawDb.prepare(
+      `SELECT id FROM academic_terms WHERE status IN ('active', 'registration') ORDER BY start_date DESC LIMIT 1`
+    ).first<{ id: string }>().catch(() => null);
+    if (activeTerm?.id) {
+      await rawDb.prepare(
+        `INSERT INTO advising_releases (id, student_id, term_id, advisor_id, released_at)
+         VALUES (?, ?, ?, 'auto:orientation', datetime('now'))
+         ON CONFLICT (student_id, term_id) DO NOTHING`
+      ).bind(`rel_${Date.now()}_${userId.slice(0, 8)}`, userId, activeTerm.id).run().catch(() => null);
+    }
+  }
 
   return ok({ message: 'Orientation completed successfully. Course registration is now available.', content_version: contentVersion });
 }

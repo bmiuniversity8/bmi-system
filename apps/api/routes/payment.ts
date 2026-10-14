@@ -186,6 +186,7 @@ export async function handleVerifyPayment(
   env: Env,
   userId: string,
   referenceParam?: string,
+  ctx?: ExecutionContext,
 ): Promise<Response> {
   try {
     const url = new URL(req.url);
@@ -212,7 +213,7 @@ export async function handleVerifyPayment(
       return ok({ verified: false, status: intent.status, reference: intent.reference || reference });
     }
 
-    const fulfilled = await fulfillSuccessfulPayment(env, intent);
+    const fulfilled = await fulfillSuccessfulPayment(env, intent, ctx);
     return ok({
       verified: true,
       status: intent.status,
@@ -258,11 +259,10 @@ export async function fulfillSuccessfulPayment(
   ctx?: ExecutionContext,
 ): Promise<{ invoiceId?: string; amountMatched?: boolean; settled?: boolean }> {
   const reference = intent.reference || intent.id;
-  const db = env.PLATFORM_CONTEXT!.db;
 
   try {
     const { settlePayment } = await import('../lib/payment-settlement');
-    const res = await settlePayment(db, reference);
+    const res = await settlePayment(env, reference, ctx);
     return { invoiceId: res.invoiceId, amountMatched: true, settled: res.settled };
   } catch (err) {
     // If not a v4 invoice or already settled, fall back to legacy handler

@@ -76,6 +76,7 @@ import {
   handleFinalizeRegistration,
   handleGetCanonicalEnrollmentStatus,
   handleRunCensusJob,
+  handleReleaseAdvisingHold,
 } from './routes/registration';
 import {
   handleRecordDecision,
@@ -360,12 +361,13 @@ export const ROUTES: Route[] = [
   // are paid while the user role is still 'applicant'). Ownership, purpose and
   // amount are enforced inside handleCreatePaymentIntent itself.
   { method: 'POST', path: /^\/api\/payment\/create-intent$/, roles: ['applicant', 'student'], handler: async (req, env, _p, auth) => handleCreatePaymentIntent(req, env, auth!.user.sub) },
-  { method: 'GET', path: /^\/api\/payment\/verify(?:\/([^/]+))?$/, roles: ['student'], handler: async (req, env, p, auth) => handleVerifyPayment(req, env, auth!.user.sub, p[1]) },
-  { method: 'POST', path: /^\/api\/payment\/webhook$/, roles: undefined, handler: async (req, env) => handlePaymentWebhook(req, env) },
+  { method: 'GET', path: /^\/api\/payment\/verify(?:\/([^/]+))?$/, roles: ['applicant', 'student'], handler: async (req, env, p, auth, ctx) => handleVerifyPayment(req, env, auth!.user.sub, p[1], ctx) },
+  { method: 'POST', path: /^\/api\/payment\/webhook$/, roles: undefined, handler: async (req, env, _p, _a, ctx) => handlePaymentWebhook(req, env, ctx) },
   { method: 'GET', path: /^\/api\/registration\/status$/, roles: ['student'], handler: async (req, env, _p, auth) => handleGetRegistrationStatus(req, env, auth!.user.sub) },
   { method: 'POST', path: /^\/api\/registration\/complete$/, roles: ['student'], handler: async (req, env, _p, auth, ctx) => handleCompleteRegistration(req, env, auth!.user.sub, ctx) },
   { method: 'GET', path: /^\/api\/registration\/modules$/, roles: ['student'], handler: async (req, env, _p, auth) => handleGetAvailableModules(req, env, auth!.user.sub) },
   { method: 'POST', path: /^\/api\/registration\/([^/]+)$/, roles: ['student'], handler: async (req, env, p, auth) => handleSaveRegistrationStep(req, env, auth!.user.sub, p[1]) },
+  { method: 'POST', path: /^\/api\/registration\/advising-release$/, roles: ['admin', 'staff', 'faculty'], handler: async (req, env, _p, auth) => handleReleaseAdvisingHold(req, env, auth!.user.sub) },
   // Admissions & Decision Routes
   { method: 'POST', path: /^\/api\/admissions\/decide$/, roles: ['admin', 'staff', 'admissions', 'registrar', 'superadmin'], handler: async (req, env, _p, auth) => handleRecordDecision(req, env, auth!.user.sub) },
   { method: 'GET', path: /^\/api\/admissions\/decision(?:\/([^/]+))?$/, roles: ['applicant', 'student', 'admin', 'staff', 'admissions', 'registrar', 'superadmin'], handler: async (req, env, _p, auth) => handleGetDecision(req, env, auth!.user.sub) },

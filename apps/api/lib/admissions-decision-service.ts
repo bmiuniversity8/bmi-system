@@ -206,8 +206,9 @@ export async function acceptOfferAndProvision(
     applicationId: string;
     userId: string;
   },
-  document?: IDocumentGenerator
-): Promise<{ success: boolean; provisioningResult: OrchestratorResult }> {
+  document?: IDocumentGenerator,
+  ctx?: { waitUntil: (promise: Promise<any>) => void }
+): Promise<{ success: boolean; provisioningResult: OrchestratorResult; message?: string }> {
   const app = await db.prepare(
     `SELECT a.id, a.user_id, a.program, a.program_id, a.degree_level, a.status
      FROM applications a WHERE a.id = ? AND a.user_id = ?`
@@ -287,22 +288,36 @@ export async function acceptOfferAndProvision(
         : 'Applicant accepted admission offer (registration fee waived/deferred)',
     });
 
-    const result = await runProvisioningOrchestration(
-      db,
-      {
-        userId: params.userId,
-        applicationId: params.applicationId,
-        actorId: params.userId,
-        programName: app.program,
-        programId: app.program_id || undefined,
-      },
-      document
-    );
-
-    return {
-      success: true,
-      provisioningResult: result,
+    const provTask = async () => {
+      return await runProvisioningOrchestration(
+        db,
+        {
+          userId: params.userId,
+          applicationId: params.applicationId,
+          actorId: params.userId,
+          programName: app.program,
+          programId: app.program_id || undefined,
+        },
+        document
+      );
     };
+
+    if (ctx && typeof ctx.waitUntil === 'function') {
+      ctx.waitUntil(provTask().catch(err => {
+        console.error('[acceptOfferAndProvision] Background provisioning error:', err);
+      }));
+      return {
+        success: true,
+        message: 'Offer accepted. Account provisioning initiated in background.',
+        provisioningResult: { status: 'in_progress' } as any,
+      };
+    } else {
+      const result = await provTask();
+      return {
+        success: true,
+        provisioningResult: result,
+      };
+    }
   }
 
   // Check if invoice was already paid
@@ -321,22 +336,36 @@ export async function acceptOfferAndProvision(
       reason: 'Applicant accepted admission offer (registration fee paid)',
     });
 
-    const result = await runProvisioningOrchestration(
-      db,
-      {
-        userId: params.userId,
-        applicationId: params.applicationId,
-        actorId: params.userId,
-        programName: app.program,
-        programId: app.program_id || undefined,
-      },
-      document
-    );
-
-    return {
-      success: true,
-      provisioningResult: result,
+    const provTask = async () => {
+      return await runProvisioningOrchestration(
+        db,
+        {
+          userId: params.userId,
+          applicationId: params.applicationId,
+          actorId: params.userId,
+          programName: app.program,
+          programId: app.program_id || undefined,
+        },
+        document
+      );
     };
+
+    if (ctx && typeof ctx.waitUntil === 'function') {
+      ctx.waitUntil(provTask().catch(err => {
+        console.error('[acceptOfferAndProvision] Background provisioning error:', err);
+      }));
+      return {
+        success: true,
+        message: 'Offer accepted. Account provisioning initiated in background.',
+        provisioningResult: { status: 'in_progress' } as any,
+      };
+    } else {
+      const result = await provTask();
+      return {
+        success: true,
+        provisioningResult: result,
+      };
+    }
   }
 
   // Not yet paid and not deferred: record acceptance intent and return payment requirement
